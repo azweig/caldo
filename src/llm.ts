@@ -40,7 +40,12 @@ export async function autoDetect(): Promise<boolean> {
   for (const url of [location.origin + "/ollama", "http://localhost:11434"]) {
     try {
       const r = await fetch(url + "/api/tags", { signal: AbortSignal.timeout(2500) })
-      if (r.ok) { setLlm(url, llmModel()); return true }
+      if (!r.ok) continue
+      const models: string[] = ((await r.json())?.models || []).map((m: { name?: string; model?: string }) => m.name || m.model).filter(Boolean)
+      if (!models.length) continue // Ollama is up but has NO model pulled — don't pretend we're connected
+      const model = models.find((m) => /qwen2\.5:7b/.test(m)) || models.find((m) => /qwen|llama|gemma|mistral/i.test(m)) || models[0]
+      setLlm(url, model)
+      return true
     } catch { /* try the next */ }
   }
   return false
