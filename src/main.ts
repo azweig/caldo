@@ -161,6 +161,60 @@ document.getElementById("chronicle-close")!.addEventListener("click", () => chro
 document.getElementById("cron")!.addEventListener("click", () => { toggleChronicle(); (document.getElementById("cron") as HTMLElement).blur() })
 document.getElementById("menubtn")!.addEventListener("click", () => { paused = true; pauseBtn.textContent = "▶"; saveGame(); showMenu(); (document.getElementById("menubtn") as HTMLElement).blur() })
 
+// ── "ver más": full statistics panel ──
+const statsEl = document.getElementById("stats") as HTMLDivElement
+const statsBody = document.getElementById("stats-body")!
+function statsHTML(): string {
+  const wild = world.creatures.filter((c) => !c.isAvatar)
+  const n = wild.length || 1
+  const kids = wild.filter((c) => !isMature(c)).length
+  const elders = wild.filter((c) => ageYears(c) > 65).length
+  const adults = n - kids - elders
+  const pregnant = wild.filter((c) => c.pregnant > 0).length
+  const couples = Math.round(wild.filter((c) => c.partner).length / 2)
+  const families = wild.filter((c) => c.children > 0).length
+  const sick = wild.filter((c) => c.sick).length
+  const hungry = wild.filter((c) => c.energy < 35).length
+  const avgAge = Math.round(wild.reduce((s, c) => s + ageYears(c), 0) / n)
+  const avgKids = (wild.reduce((s, c) => s + c.children, 0) / n).toFixed(1)
+  const K = Math.min(280, 80 + world.era * 7)
+  const rel: Record<string, number> = {}; for (const c of wild) if (c.religion) rel[c.religion] = (rel[c.religion] || 0) + 1
+  const cat: Record<string, number> = {}; for (const c of wild) if (c.profCat) cat[c.profCat] = (cat[c.profCat] || 0) + 1
+  const topics: Record<string, number> = {}
+  for (const c of wild) for (const s of c.social) { const m = s.match(/(?:sobre|de) (.+)$/); const t = m?.[1]?.trim(); if (t && t.length < 30) topics[t] = (topics[t] || 0) + 1 }
+  const ambitious = wild.filter((c) => c.powerHungry).length
+  const despot = world.monarch?.powerHungry ? 1 : 0
+  const crime = Math.round(100 * Math.min(1, world.violence * (1 + world.psychopathy * 2) * (world.gov === "monarquía" ? 1.2 : 1)))
+  const war = Math.round(100 * Math.min(1, world.violence * 0.6 + world.psychopathy + despot * 0.25))
+  const top = (o: Record<string, number>, fmt: (k: string, v: number) => string, lim = 6) =>
+    Object.entries(o).sort((a, b) => b[1] - a[1]).slice(0, lim).map(([k, v]) => fmt(k, v)).join(" · ") || "—"
+  const row = (label: string, val: string) => `<div class="srow"><span>${label}</span><b>${val}</b></div>`
+  return `
+    <h3>Población</h3>
+    ${row("total / capacidad", `${n} / ${K}`)}
+    ${row("niños · adultos · ancianos", `${kids} · ${adults} · ${elders}`)}
+    ${row("edad media", `${avgAge} años`)}
+    ${row("estado", `${sick} enfermos · ${hungry} con hambre`)}
+    <h3>Familias y nacimientos</h3>
+    ${row("parejas · familias", `${couples} · ${families}`)}
+    ${row("embarazos ahora", `${pregnant}`)}
+    ${row("nacimientos · muertes (histórico)", `${world.births} · ${world.deaths}`)}
+    ${row("hijos por persona", avgKids)}
+    <h3>Ideologías / religiones</h3>
+    <div class="sline">${top(rel, (k, v) => `${k} ${Math.round(100 * v / n)}%`)}</div>
+    <h3>Oficios (por categoría)</h3>
+    <div class="sline">${top(cat, (k, v) => `${k} ${v}`)}</div>
+    <h3>De qué hablan</h3>
+    <div class="sline">${Object.keys(topics).length ? Object.entries(topics).sort((a, b) => b[1] - a[1]).slice(0, 6).map(([k]) => k).join(" · ") : "todavía nada"}</div>
+    <h3>Conflictividad</h3>
+    ${row("ambiciosos (sed de poder)", `${ambitious}`)}
+    ${row("nivel de crimen", `${crime}%`)}
+    ${row("riesgo de guerra", `${war}%`)}`
+}
+function toggleStats() { if (statsEl.classList.contains("hidden")) statsBody.innerHTML = statsHTML(); statsEl.classList.toggle("hidden") }
+document.getElementById("stats-close")!.addEventListener("click", () => statsEl.classList.add("hidden"))
+document.getElementById("statsbtn")!.addEventListener("click", () => { toggleStats(); (document.getElementById("statsbtn") as HTMLElement).blur() })
+
 function nearestTalkable(): Creature | null { return avatar ? world.nearestCreature(avatar, CHAT_RANGE, (o) => !o.isAvatar) : null }
 function openChat() {
   const t = nearestTalkable()
@@ -265,6 +319,7 @@ function updateHud() {
   `
   clockEl.textContent = formatClock(world.clockMinutes)
   for (let i = 0; i < tabsEl.children.length; i++) if (countries[i]) (tabsEl.children[i] as HTMLElement).title = `${eraName(countries[i].world.era)} · ${countries[i].world.creatures.filter((c) => !c.isAvatar).length} hab.`
+  if (!statsEl.classList.contains("hidden") && frame % 15 === 0) statsBody.innerHTML = statsHTML()
 }
 
 function buildTabs() {

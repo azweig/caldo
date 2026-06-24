@@ -70,6 +70,25 @@ body { font-family: ui-monospace, "SF Mono", Menlo, monospace; color: #dfe7ee; }
   width: 28px; height: 26px; cursor: pointer; font-size: 13px;
 }
 #timebar #menubtn:hover { background: rgba(120, 200, 255, 0.22); }
+#timebar #statsbtn {
+  background: rgba(255, 255, 255, 0.08); color: #cfe0ee;
+  border: 1px solid rgba(255, 255, 255, 0.14); border-radius: 7px;
+  width: 28px; height: 26px; cursor: pointer; font-size: 13px;
+}
+#timebar #statsbtn:hover { background: rgba(143, 227, 160, 0.2); }
+
+/* stats panel (right) */
+#stats {
+  position: fixed; top: 92px; right: 14px; width: 320px; max-height: 78vh; overflow-y: auto;
+  background: rgba(10, 17, 24, 0.95); border: 1px solid rgba(143, 227, 160, 0.3);
+  border-radius: 14px; padding: 16px 18px; backdrop-filter: blur(4px); z-index: 9;
+}
+#stats h2 { font-size: 15px; color: #8fe3a0; margin-bottom: 8px; }
+#stats h3 { font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: #7d93a6; margin: 13px 0 5px; }
+#stats .srow { display: flex; justify-content: space-between; gap: 12px; font-size: 12.5px; line-height: 1.7; }
+#stats .srow span { color: #9fb2c2; }
+#stats .srow b { color: #e6f0fa; text-align: right; }
+#stats .sline { font-size: 12px; color: #c2d0dc; line-height: 1.6; }
 
 /* start menu + new-civilisation form */
 #menu, #newciv {
