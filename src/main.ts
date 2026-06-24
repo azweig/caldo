@@ -13,13 +13,15 @@ import { eraName, professionSpace, ERAS } from "./civ"
 import { ENNEAGRAM } from "./psyche"
 import { LangCode, WRITE_LANG, langName, heard } from "./i18n"
 import { CivConfig, RELIGIONS, buildCountries, foodSystem, transportOf, transportLevel } from "./civconfig"
+import { init3D, resize3D, render3D } from "./three3d"
 
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v))
 
 const canvas = document.getElementById("world") as HTMLCanvasElement
 const ctx = canvas.getContext("2d")!
+const canvas3d = document.getElementById("world3d") as HTMLCanvasElement
 
-function resize() { canvas.width = window.innerWidth; canvas.height = window.innerHeight }
+function resize() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; resize3D(window.innerWidth, window.innerHeight) }
 resize()
 window.addEventListener("resize", resize)
 
@@ -225,15 +227,16 @@ document.getElementById("statsbtn")!.addEventListener("click", () => { toggleSta
 const possessEl = document.getElementById("possess") as HTMLDivElement
 const possessBody = document.getElementById("possess-body")!
 function togglePossess() {
-  if (possessed) { // release → zoom back out, restore the general HUD
+  if (possessed) { // release → back to the 2D god-view
     possessed.controlled = false; possessed = null; possessTarget = null
-    possessEl.classList.add("hidden"); hud.classList.remove("hidden"); targetZoom = 1
+    possessEl.classList.add("hidden"); hud.classList.remove("hidden"); canvas3d.classList.add("hidden")
     return
   }
   const t = nearestTalkable()
   if (!t) return
   possessed = t; t.controlled = true; possessTarget = null
-  possessEl.classList.remove("hidden"); hud.classList.add("hidden"); targetZoom = 2.4 // cinematic zoom-in
+  init3D(canvas3d, assets.creatures); resize3D(canvas.width, canvas.height) // real 3D, only while possessing
+  canvas3d.classList.remove("hidden"); possessEl.classList.remove("hidden"); hud.classList.add("hidden")
   renderPossess()
 }
 function renderPossess() {
@@ -514,28 +517,28 @@ function loop() {
   else tryAmbient()
   chatTarget = chatting ? chatTarget : nearestTalkable()
 
-  // camera: follow the avatar, clamped to the world (centre it on any axis smaller than the view)
-  const halfW = canvas.width / (2 * zoom), halfH = canvas.height / (2 * zoom)
-  const camMe = possessed || avatar
-  let cx = camMe ? camMe.x : WORLD_W / 2
-  let cy = camMe ? camMe.y : WORLD_H / 2
-  cx = WORLD_W <= 2 * halfW ? WORLD_W / 2 : clamp(cx, halfW, WORLD_W - halfW)
-  cy = WORLD_H <= 2 * halfH ? WORLD_H / 2 : clamp(cy, halfH, WORLD_H - halfH)
-  lastCam = { x: cx, y: cy, zoom }
-  hovered = chatting ? null : creatureAt(mouseX, mouseY)
-
-  const speech: { x: number; y: number; tag: string; text: string; understood: boolean }[] = []
-  const ov = possessed || avatar
-  if (ambient && ov) {
-    const line = ambient.lines[ambient.idx]
-    if (line && (line.who.x - ov.x) ** 2 + (line.who.y - ov.y) ** 2 < OVERHEAR * OVERHEAR) {
-      const h = heard(line.text, countries[active].lang)
-      speech.push({ x: line.who.x, y: line.who.y, tag: h.tag, text: h.text, understood: h.understood })
+  if (possessed) {
+    render3D(world, possessed) // immersive 3D while you live a life
+  } else {
+    // 2D camera: follow the avatar, clamped to the world (centre an axis smaller than the view)
+    const halfW = canvas.width / (2 * zoom), halfH = canvas.height / (2 * zoom)
+    let cx = avatar ? avatar.x : WORLD_W / 2
+    let cy = avatar ? avatar.y : WORLD_H / 2
+    cx = WORLD_W <= 2 * halfW ? WORLD_W / 2 : clamp(cx, halfW, WORLD_W - halfW)
+    cy = WORLD_H <= 2 * halfH ? WORLD_H / 2 : clamp(cy, halfH, WORLD_H - halfH)
+    lastCam = { x: cx, y: cy, zoom }
+    hovered = chatting ? null : creatureAt(mouseX, mouseY)
+    const speech: { x: number; y: number; tag: string; text: string; understood: boolean }[] = []
+    if (ambient && avatar) {
+      const line = ambient.lines[ambient.idx]
+      if (line && (line.who.x - avatar.x) ** 2 + (line.who.y - avatar.y) ** 2 < OVERHEAR * OVERHEAR) {
+        const h = heard(line.text, countries[active].lang)
+        speech.push({ x: line.who.x, y: line.who.y, tag: h.tag, text: h.text, understood: h.understood })
+      }
     }
+    drawWorld(ctx, world, assets, avatar, chatTarget, !!chatTarget && !chatting, lastCam, hovered, speech)
+    drawChart(ctx, world, canvas.width - 230, 16, 214, 116)
   }
-
-  drawWorld(ctx, world, assets, possessed || avatar, chatTarget, !!chatTarget && !chatting, lastCam, hovered, speech)
-  if (!possessed) drawChart(ctx, world, canvas.width - 230, 16, 214, 116) // hide the genome chart when immersed in a life
 
   if (isAvatarDead()) {
     const old = avatar!.ageDays > avatar!.lifespanDays

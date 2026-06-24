@@ -3,6 +3,7 @@ html, body { height: 100%; overflow: hidden; background: #0a0f14; }
 body { font-family: ui-monospace, "SF Mono", Menlo, monospace; color: #dfe7ee; }
 
 #world { position: fixed; inset: 0; display: block; }
+#world3d { position: fixed; inset: 0; display: block; z-index: 2; }
 
 .hidden { display: none !important; }
 
