@@ -15,6 +15,7 @@ let pool: THREE.Sprite[] = []
 let rings: THREE.Mesh[] = []
 let town: THREE.Group | null = null
 let builtFor: World | null = null
+let builtEra = -1 // rebuild the town when the era (architecture) changes
 let ready = false
 
 export function init3D(canvas: HTMLCanvasElement, creatureImgs: HTMLImageElement[]) {
@@ -55,43 +56,82 @@ function relColor(me: Creature, o: Creature): number {
   return 0x55657a // desconocido — gris
 }
 
-function boxBuilding(x: number, y: number, w: number, h: number, height: number, color: number): THREE.Mesh {
-  const m = new THREE.Mesh(new THREE.BoxGeometry(w * S, height, h * S), new THREE.MeshLambertMaterial({ color }))
+// ── textures (generated on the pod with SDXL, served from /tex). Loaded once + cached. ──
+const loader = new THREE.TextureLoader()
+const texCache = new Map<string, THREE.Texture>()
+function tex(name: string, repeat = 1): THREE.Texture {
+  const key = `${name}@${repeat}`
+  let t = texCache.get(key)
+  if (!t) {
+    t = loader.load(`/tex/${name}.png`)
+    t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(repeat, repeat); t.colorSpace = THREE.SRGBColorSpace
+    texCache.set(key, t)
+  }
+  return t
+}
+// era → which wall / roof / ground material the architecture uses (mud huts → glass towers → neon)
+function eraTex(era: number) {
+  if (era <= 1) return { wall: "wall_mud", roof: "roof_thatch", ground: "ground_grass" }
+  if (era <= 4) return { wall: "wall_wood", roof: "roof_thatch", ground: "ground_dirt" }
+  if (era <= 6) return { wall: "wall_stone", roof: "roof_clay", ground: "ground_cobble" }
+  if (era <= 8) return { wall: "wall_plaster", roof: "roof_slate", ground: "ground_cobble" }
+  if (era <= 9) return { wall: "wall_brick", roof: "roof_slate", ground: "ground_cobble" }
+  if (era <= 11) return { wall: "wall_concrete", roof: "roof_metal", ground: "ground_cobble" }
+  if (era <= 14) return { wall: "wall_glass", roof: "roof_metal", ground: "ground_marble" }
+  return { wall: "wall_neon", roof: "roof_metal", ground: "ground_neon" }
+}
+const hashf = (n: number) => { const x = Math.sin(n * 12.9898) * 43758.5453; return x - Math.floor(x) } // stable per-house pseudo-random
+
+function boxBuilding(x: number, y: number, w: number, h: number, height: number, mat: THREE.Material): THREE.Mesh {
+  const m = new THREE.Mesh(new THREE.BoxGeometry(w * S, height, h * S), mat)
   m.position.set((x + w / 2) * S, height / 2, (y + h / 2) * S); return m
 }
 
 function buildTown(world: World) {
   if (town) { scene.remove(town); town.traverse((o) => { (o as THREE.Mesh).geometry?.dispose() }) }
   town = new THREE.Group()
-  const ground = new THREE.Mesh(new THREE.PlaneGeometry(WORLD_W * S, WORLD_H * S), new THREE.MeshLambertMaterial({ color: 0x0e1822 }))
+  const E = eraTex(world.era)
+  // textured ground (tiled)
+  const ground = new THREE.Mesh(new THREE.PlaneGeometry(WORLD_W * S, WORLD_H * S), new THREE.MeshLambertMaterial({ map: tex(E.ground, 42) }))
   ground.rotation.x = -Math.PI / 2; ground.position.set(WORLD_W * S / 2, 0, WORLD_H * S / 2); town.add(ground)
-  // neon street grid
+  // streets: subtle in old eras, glowing neon grid in the far future
   const pts: number[] = []
   for (let x = BLOCK; x < WORLD_W; x += BLOCK) pts.push(x * S, 0.03, 0, x * S, 0.03, WORLD_H * S)
   for (let y = BLOCK; y < WORLD_H; y += BLOCK) pts.push(0, 0.03, y * S, WORLD_W * S, 0.03, y * S)
   const gg = new THREE.BufferGeometry(); gg.setAttribute("position", new THREE.Float32BufferAttribute(pts, 3))
-  town.add(new THREE.LineSegments(gg, new THREE.LineBasicMaterial({ color: 0x3a78ff, transparent: true, opacity: 0.4 })))
+  town.add(new THREE.LineSegments(gg, new THREE.LineBasicMaterial({ color: world.era >= 15 ? 0x3a78ff : 0x101820, transparent: true, opacity: world.era >= 15 ? 0.45 : 0.18 })))
   for (const gd of world.gardens) {
-    const disc = new THREE.Mesh(new THREE.CircleGeometry(95 * S, 18), new THREE.MeshBasicMaterial({ color: 0x2c5a38, transparent: true, opacity: 0.5 }))
-    disc.rotation.x = -Math.PI / 2; disc.position.set(gd.x * S, 0.04, gd.y * S); town.add(disc)
+    const disc = new THREE.Mesh(new THREE.CircleGeometry(95 * S, 18), new THREE.MeshBasicMaterial({ color: 0x2c5a38, transparent: true, opacity: 0.4 }))
+    disc.rotation.x = -Math.PI / 2; disc.position.set(gd.x * S, 0.05, gd.y * S); town.add(disc)
   }
-  // houses — BIG voxel buildings (a person is ~⅓ their height) with a pyramid roof, tinted by lineage
+  // textured houses with per-house VARIETY in height + roof style (deterministic by position → stable)
+  const wallMat = new THREE.MeshLambertMaterial({ map: tex(E.wall, 2) })
+  const roofMat = new THREE.MeshLambertMaterial({ map: tex(E.roof, 2) })
   for (const h of world.houses) {
-    const col = new THREE.Color().setHSL((h.hue % 360) / 360, 0.42, 0.5)
-    const bh = 3.6
-    const body = new THREE.Mesh(new THREE.BoxGeometry(h.w * S * 1.15, bh, h.h * S * 1.15), new THREE.MeshLambertMaterial({ color: col }))
-    body.position.set((h.x + h.w / 2) * S, bh / 2, (h.y + h.h / 2) * S); town.add(body)
-    const roof = new THREE.Mesh(new THREE.ConeGeometry(h.w * S * 0.98, 2.2, 4), new THREE.MeshLambertMaterial({ color: col.clone().multiplyScalar(0.6) }))
-    roof.position.set((h.x + h.w / 2) * S, bh + 1.1, (h.y + h.h / 2) * S); roof.rotation.y = Math.PI / 4; town.add(roof)
+    const r = hashf(h.x + h.y * 0.7)
+    const bh = 3.0 + r * 3.6 // some squat, some tall
+    const w = h.w * S * (1.0 + hashf(h.x) * 0.45), d = h.h * S * (1.0 + hashf(h.y) * 0.45)
+    const cx = (h.x + h.w / 2) * S, cz = (h.y + h.h / 2) * S
+    const body = new THREE.Mesh(new THREE.BoxGeometry(w, bh, d), wallMat)
+    body.position.set(cx, bh / 2, cz); town.add(body)
+    if (world.era < 12 || r < 0.5) { // pitched roof (old eras + some moderns)
+      const roof = new THREE.Mesh(new THREE.ConeGeometry(Math.max(w, d) * 0.78, 1.6 + r, 4), roofMat)
+      roof.position.set(cx, bh + (0.8 + r * 0.5), cz); roof.rotation.y = Math.PI / 4; town.add(roof)
+    } else { // flat slab roof for tall modern buildings
+      const slab = new THREE.Mesh(new THREE.BoxGeometry(w * 1.02, 0.3, d * 1.02), roofMat)
+      slab.position.set(cx, bh + 0.15, cz); town.add(slab)
+    }
   }
-  for (const s of world.schools) town.add(boxBuilding(s.x, s.y, s.w, s.h, 5.0, 0x3a5a78))
-  for (const u of world.universities) town.add(boxBuilding(u.x, u.y, u.w, u.h, 6.2, 0xb8a060))
-  scene.add(town); builtFor = world
+  // civic buildings (distinct material, taller)
+  const civicMat = new THREE.MeshLambertMaterial({ map: tex(world.era >= 12 ? "wall_glass" : "wall_stone", 2) })
+  for (const s of world.schools) town.add(boxBuilding(s.x, s.y, s.w, s.h, 5.0, civicMat))
+  for (const u of world.universities) town.add(boxBuilding(u.x, u.y, u.w, u.h, 6.5, civicMat))
+  scene.add(town); builtFor = world; builtEra = world.era
 }
 
 export function render3D(world: World, me: Creature, yaw: number) {
   if (!ready) return
-  if (builtFor !== world) buildTown(world)
+  if (builtFor !== world || builtEra !== world.era) buildTown(world)
 
   const near = world.creatures
     .filter((c) => c !== me && !c.isAvatar)
