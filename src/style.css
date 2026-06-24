@@ -143,6 +143,7 @@ body { font-family: ui-monospace, "SF Mono", Menlo, monospace; color: #dfe7ee; }
 #chat-log .line { margin: 3px 0; }
 #chat-log .me b { color: #ffd76a; }
 #chat-log .them b { color: #7bd0ff; }
+#chat-log .tag { color: #7d93a6; font-size: 11px; }
 #chat-input {
   width: 100%; background: rgba(255, 255, 255, 0.06);
   border: 1px solid rgba(255, 255, 255, 0.14); border-radius: 8px;

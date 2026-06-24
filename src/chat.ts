@@ -32,6 +32,36 @@ export async function respond(c: Creature, message: string, history: Msg[] = [],
   return templated(c, message)
 }
 
+// ── ambient creature-to-creature chatter (the player can overhear it, not intervene) ──
+function templatedDialogue(a: Creature, b: Creature): { who: Creature; text: string }[] {
+  return [
+    { who: a, text: `Buen día, ${b.name}.` },
+    { who: b, text: `Hola, ${a.name}. ¿Cómo viene la cosecha?` },
+    { who: a, text: `El caldo provee, por ahora.` },
+    { who: b, text: `Ojalá los jardines aguanten otra estación.` },
+  ]
+}
+export async function ambientDialogue(a: Creature, b: Creature, writeLang: string): Promise<{ who: Creature; text: string }[]> {
+  if (llmConfigured()) {
+    try {
+      const pa = `${a.name} (${psycheLabel(a.psyche)}${a.profession ? ", " + a.profession : ""})`
+      const pb = `${b.name} (${psycheLabel(b.psyche)}${b.profession ? ", " + b.profession : ""})`
+      const sys = `Escribí un diálogo MUY corto y natural (exactamente 4 líneas, alternando hablante) entre dos vecinos del "caldo", un pueblo donde la vida evoluciona sola. Idioma: ${writeLang}. Formato EXACTO, una por renglón: "NOMBRE: línea". Que su carácter y oficio se noten. Sin comillas, sin explicaciones, sin acotaciones.`
+      const usr = `${pa} conversa con ${pb} sobre la vida del pueblo, su oficio, su familia o sus creencias. No saben que alguien los escucha.`
+      const out = await llmChat([{ role: "system", content: sys }, { role: "user", content: usr }])
+      const lines = out.split("\n").map((s) => s.trim()).filter(Boolean).slice(0, 4).map((line) => {
+        const m = line.match(/^[-*]?\s*([^:]{1,28}):\s*(.+)$/)
+        const text = (m ? m[2] : line.replace(/^[-*]\s*/, "")).trim()
+        const nm = (m?.[1] || "").trim().toLowerCase().split(/\s+/)[0]
+        const who = nm && b.name.toLowerCase().startsWith(nm) ? b : a
+        return { who, text }
+      })
+      if (lines.length >= 2) return lines
+    } catch { /* fall through */ }
+  }
+  return templatedDialogue(a, b)
+}
+
 // after a conversation, fold what the player talked about into the creature's lasting memory
 export function remember(c: Creature, session: Msg[]) {
   const said = session.filter((m) => m.role === "user").map((m) => m.content)

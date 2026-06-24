@@ -7,10 +7,11 @@ import "./style.css"
 import { World, Creature, formatClock, ageYears, isMature, seasonOf, SEASONS, WORLD_W, WORLD_H, SPEED_SCALE } from "./world"
 import { loadAssets } from "./sprites"
 import { drawWorld, drawChart } from "./render"
-import { respond, greeting, remember } from "./chat"
+import { respond, greeting, remember, ambientDialogue } from "./chat"
 import { Msg, setLlm, pingLLM, llmConfigured, llmUrl, llmModel } from "./llm"
 import { eraName, professionSpace } from "./civ"
 import { ENNEAGRAM } from "./psyche"
+import { LangCode, WRITE_LANG, langName, heard } from "./i18n"
 
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v))
 
@@ -39,16 +40,20 @@ const SCALES = [
 
 // the world is split into COUNTRIES — each its own simulation, biome and language; airports + migration
 // connect them, and the tabs let you embed yourself in a different one.
-interface Country { world: World; name: string; flag: string; lang: string }
-const COUNTRY_DEFS = [
-  { name: "Solandia", flag: "🟧", lang: "español rioplatense" },
-  { name: "Norvik", flag: "🔵", lang: "English" },
-  { name: "Akahara", flag: "⛩️", lang: "日本語 (japonés)" },
-  { name: "Verdane", flag: "🟢", lang: "português do Brasil" },
+interface Country { world: World; name: string; flag: string; lang: LangCode }
+const COUNTRY_DEFS: { name: string; flag: string; lang: LangCode }[] = [
+  { name: "Solandia", flag: "🟧", lang: "es" },
+  { name: "Norvik", flag: "🔵", lang: "en" },
+  { name: "Akahara", flag: "🟣", lang: "en" },
+  { name: "Verdane", flag: "🟢", lang: "es" },
 ]
 let countries: Country[] = []
 let active = 0
 let migrateAcc = 0
+let frame = 0
+let ambient: { lines: { who: Creature; text: string }[]; idx: number; nextAt: number } | null = null
+let ambientCool = 0
+const OVERHEAR = 240
 
 const keys = new Set<string>()
 let world: World
@@ -160,7 +165,7 @@ function openChat() {
   chatTarget = t; chatting = true; session = []
   if (!paused) { paused = true; pausedByChat = true; pauseBtn.textContent = "▶" }
   chatBox.classList.remove("hidden")
-  chatWho.textContent = greeting(t) + (llmConfigured() ? " 🧠" : "")
+  chatWho.textContent = `${greeting(t)} · habla ${langName(countries[active].lang)}${llmConfigured() ? " 🧠" : ""}`
   chatLog.innerHTML = ""
   addLine(t.name, t.memory.length ? "Te reconoce. ¿Qué le decís?" : "Te mira. ¿Querés decirle algo?", "them")
   chatInput.value = ""; chatInput.focus()
@@ -187,8 +192,9 @@ chatInput.addEventListener("keydown", async (e) => {
     addLine("Tú", msg, "me"); chatInput.value = ""
     session.push({ role: "user", content: msg })
     const typing = addLine(who.name, "<i>…</i>", "them")
-    const reply = await respond(who, msg, session, eraName(world.era), countries[active].lang)
-    typing.innerHTML = `<b>${who.name}:</b> ${reply}`
+    const reply = await respond(who, msg, session, eraName(world.era), WRITE_LANG)
+    const h = heard(reply, countries[active].lang)
+    typing.innerHTML = `<b>${who.name}:</b> <span class="tag">${h.tag}</span> ${h.text}`
     chatLog.scrollTop = chatLog.scrollHeight
     session.push({ role: "assistant", content: reply })
   }
@@ -287,7 +293,29 @@ function maybeMigrate(ticks: number) {
   to.world.chronicle.push({ day: to.world.clockDays, text: `llegó ${c.name} ${c.surname} desde ${from.name} (${c.profession || "forastero"}) ✈` })
 }
 
+// overheard AI-to-AI chatter near the avatar (you can listen, not intervene)
+function nearAvatarPair(): [Creature, Creature] | null {
+  if (!avatar) return null
+  const av = avatar
+  const near = world.creatures.filter((c) => !c.isAvatar && isMature(c) && (c.x - av.x) ** 2 + (c.y - av.y) ** 2 < OVERHEAR * OVERHEAR)
+  for (const a of near) {
+    const b = world.nearestCreature(a, 66, (o) => !o.isAvatar && isMature(o))
+    if (b && near.includes(b)) return [a, b]
+  }
+  return null
+}
+function tryAmbient() {
+  if (ambient || chatting || frame < ambientCool || !avatar) return
+  const pair = nearAvatarPair()
+  if (!pair) return
+  ambientCool = frame + 99999 // lock while generating
+  ambientDialogue(pair[0], pair[1], WRITE_LANG)
+    .then((lines) => { ambient = lines.length ? { lines, idx: 0, nextAt: frame + 165 } : null; if (!lines.length) ambientCool = frame + 300 })
+    .catch(() => { ambientCool = frame + 300 })
+}
+
 function loop() {
+  frame++
   if (!paused) {
     tickAcc += SCALES[scaleIndex].tpf
     let n = Math.floor(tickAcc)
@@ -299,6 +327,9 @@ function loop() {
     }
     maybeMigrate(n)
   }
+  // advance / start overheard chatter
+  if (ambient) { if (frame >= ambient.nextAt) { ambient.idx++; if (ambient.idx >= ambient.lines.length) { ambient = null; ambientCool = frame + 480 } else ambient.nextAt = frame + 165 } }
+  else tryAmbient()
   chatTarget = chatting ? chatTarget : nearestTalkable()
 
   // camera: follow the avatar, clamped to the world (centre it on any axis smaller than the view)
@@ -310,7 +341,16 @@ function loop() {
   lastCam = { x: cx, y: cy, zoom }
   hovered = chatting ? null : creatureAt(mouseX, mouseY)
 
-  drawWorld(ctx, world, assets, avatar, chatTarget, !!chatTarget && !chatting, lastCam, hovered)
+  const speech: { x: number; y: number; tag: string; text: string; understood: boolean }[] = []
+  if (ambient && avatar) {
+    const line = ambient.lines[ambient.idx]
+    if (line && (line.who.x - avatar.x) ** 2 + (line.who.y - avatar.y) ** 2 < OVERHEAR * OVERHEAR) {
+      const h = heard(line.text, countries[active].lang)
+      speech.push({ x: line.who.x, y: line.who.y, tag: h.tag, text: h.text, understood: h.understood })
+    }
+  }
+
+  drawWorld(ctx, world, assets, avatar, chatTarget, !!chatTarget && !chatting, lastCam, hovered, speech)
   drawChart(ctx, world, canvas.width - 230, 16, 214, 116)
 
   if (isAvatarDead()) {

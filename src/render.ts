@@ -29,6 +29,7 @@ export function drawWorld(
   promptTalk: boolean,
   cam: Cam,
   hovered: Creature | null = null,
+  speech: { x: number; y: number; tag: string; text: string; understood: boolean }[] = [],
 ) {
   const cw = ctx.canvas.width, ch = ctx.canvas.height
   ctx.fillStyle = "#06090d"
@@ -158,6 +159,21 @@ export function drawWorld(
     ctx.beginPath(); ctx.arc(avatar.x, avatar.y, 20 + avatar.genome.size * 8, 0, Math.PI * 2); ctx.stroke()
     drawCreature(ctx, avatar, assets)
     label(ctx, "Tú", avatar.x, avatar.y - 24 - avatar.genome.size * 10, "#ffe6a3")
+  }
+
+  // overheard chatter — floating speech bubbles (visible only when you're near)
+  for (const s of speech) {
+    ctx.font = "12px ui-monospace, monospace"
+    const full = `${s.tag} ${s.text}`
+    const tw = Math.min(280, ctx.measureText(full).width)
+    const bw = tw + 18, bx = s.x - bw / 2, by = s.y - 54
+    ctx.fillStyle = "rgba(12,18,26,0.92)"
+    ctx.strokeStyle = s.understood ? "rgba(150,200,255,0.5)" : "rgba(150,160,170,0.35)"; ctx.lineWidth = 1
+    ctx.beginPath(); ctx.roundRect(bx, by, bw, 24, 8); ctx.fill(); ctx.stroke()
+    ctx.beginPath(); ctx.moveTo(s.x - 5, by + 24); ctx.lineTo(s.x + 5, by + 24); ctx.lineTo(s.x, by + 31); ctx.closePath(); ctx.fill()
+    ctx.textAlign = "center"; ctx.fillStyle = s.understood ? "#e6f0fa" : "#8a98a6"
+    ctx.fillText(full, s.x, by + 16, tw)
+    ctx.textAlign = "left"
   }
 
   // hover label (quick identity without clicking)

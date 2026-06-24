@@ -12,6 +12,16 @@ MODEL="${CALDO_MODEL:-qwen2.5:7b}"
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$ROOT"
 
+# base language: everything the player understands + what the creatures' LLM writes (the OTHER tongue
+# stays foreign and incomprehensible in-world). The world always has both Spanish + English countries.
+BASE="${CALDO_LANG:-}"
+if [ -z "$BASE" ]; then
+  printf "\n  Idioma base / base language?  [1] Español   [2] English   > "
+  read -r ans </dev/tty 2>/dev/null || ans=1
+  [ "$ans" = "2" ] && BASE=en || BASE=es
+fi
+[ "$BASE" = "en" ] || BASE=es
+
 g(){ printf "\n\033[1;32m▶ %s\033[0m\n" "$1"; }
 y(){ printf "\033[1;33m  %s\033[0m\n" "$1"; }
 
@@ -26,7 +36,7 @@ echo "  $(node -v 2>/dev/null) · npm $(npm -v 2>/dev/null)"
 # ── 2) build caldo ──
 g "Dependencias + build"
 npm install --no-audit --no-fund >/tmp/caldo-install.log 2>&1 && echo "  deps ok" || { y "falló npm install (ver /tmp/caldo-install.log)"; exit 1; }
-npm run build >/tmp/caldo-build.log 2>&1 && echo "  dist/ listo" || { y "falló el build (ver /tmp/caldo-build.log)"; exit 1; }
+VITE_BASE_LANG="$BASE" npm run build >/tmp/caldo-build.log 2>&1 && echo "  dist/ listo (idioma base: $BASE)" || { y "falló el build (ver /tmp/caldo-build.log)"; exit 1; }
 
 # ── 3) Ollama + chat model (server-side proxy → no CORS, no restart of a running Ollama) ──
 g "Ollama"
@@ -35,8 +45,9 @@ if ! command -v ollama >/dev/null 2>&1; then
 fi
 MODELS_DIR="$HOME/.ollama"; [ -d /workspace ] && MODELS_DIR="/workspace/.ollama"
 if ! pgrep -f "ollama serve" >/dev/null 2>&1; then
-  y "arrancando ollama serve…"
-  OLLAMA_MODELS="$MODELS_DIR" nohup ollama serve >/tmp/caldo-ollama.log 2>&1 &
+  y "arrancando ollama serve (GPU en paralelo para las conversaciones)…"
+  OLLAMA_MODELS="$MODELS_DIR" OLLAMA_NUM_PARALLEL="${OLLAMA_NUM_PARALLEL:-4}" OLLAMA_MAX_LOADED_MODELS="${OLLAMA_MAX_LOADED_MODELS:-2}" \
+    OLLAMA_KEEP_ALIVE="${OLLAMA_KEEP_ALIVE:-30m}" OLLAMA_FLASH_ATTENTION=1 nohup ollama serve >/tmp/caldo-ollama.log 2>&1 &
   sleep 4
 else
   echo "  ollama ya corriendo (no lo toco)"
