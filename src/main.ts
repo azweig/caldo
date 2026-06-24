@@ -23,10 +23,10 @@ function resize() { canvas.width = window.innerWidth; canvas.height = window.inn
 resize()
 window.addEventListener("resize", resize)
 
-let zoom = 1
+let zoom = 1, targetZoom = 1 // zoom eases toward targetZoom for a cinematic possess zoom-in
 window.addEventListener("wheel", (e) => {
   e.preventDefault()
-  zoom = clamp(zoom * (e.deltaY < 0 ? 1.12 : 0.89), 0.35, 2.6)
+  targetZoom = clamp(targetZoom * (e.deltaY < 0 ? 1.12 : 0.89), 0.35, 2.8)
 }, { passive: false })
 
 // time scale = in-world MINUTES per real second. Default 1 s = 1 min (calm, conversational world);
@@ -225,11 +225,16 @@ document.getElementById("statsbtn")!.addEventListener("click", () => { toggleSta
 const possessEl = document.getElementById("possess") as HTMLDivElement
 const possessBody = document.getElementById("possess-body")!
 function togglePossess() {
-  if (possessed) { possessed.controlled = false; possessed = null; possessTarget = null; possessEl.classList.add("hidden"); return }
+  if (possessed) { // release → zoom back out, restore the general HUD
+    possessed.controlled = false; possessed = null; possessTarget = null
+    possessEl.classList.add("hidden"); hud.classList.remove("hidden"); targetZoom = 1
+    return
+  }
   const t = nearestTalkable()
   if (!t) return
   possessed = t; t.controlled = true; possessTarget = null
-  possessEl.classList.remove("hidden"); renderPossess()
+  possessEl.classList.remove("hidden"); hud.classList.add("hidden"); targetZoom = 2.4 // cinematic zoom-in
+  renderPossess()
 }
 function renderPossess() {
   const c = possessed; if (!c) return
@@ -480,6 +485,7 @@ function tryAmbient() {
 
 function loop() {
   frame++
+  zoom += (targetZoom - zoom) * 0.12 // smooth cinematic zoom toward the target
   // you control your avatar OR the creature you possess, in REAL TIME (smooth) regardless of world speed
   const me = possessed || avatar
   if (me && !chatting && !paused) {
@@ -529,7 +535,7 @@ function loop() {
   }
 
   drawWorld(ctx, world, assets, possessed || avatar, chatTarget, !!chatTarget && !chatting, lastCam, hovered, speech)
-  drawChart(ctx, world, canvas.width - 230, 16, 214, 116)
+  if (!possessed) drawChart(ctx, world, canvas.width - 230, 16, 214, 116) // hide the genome chart when immersed in a life
 
   if (isAvatarDead()) {
     const old = avatar!.ageDays > avatar!.lifespanDays
