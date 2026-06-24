@@ -16,6 +16,7 @@
       <span id="scale-label">1 s = 1 min</span>
       <span class="sep">·</span>
       <span id="clock">Día 1 · 00:00</span>
+      <button id="cron" title="crónica del pueblo (C)">📜</button>
       <button id="cfg" title="conectar IA (voz de las criaturas)">⚙</button>
     </div>
 
@@ -23,6 +24,34 @@
       <div id="chat-who"></div>
       <div id="chat-log"></div>
       <input id="chat-input" type="text" placeholder="escribí y Enter… (Esc cierra)" autocomplete="off" />
+    </div>
+
+    <div id="inspect" class="hidden">
+      <button id="inspect-close" class="x">✕</button>
+      <div id="inspect-body"></div>
+    </div>
+
+    <div id="chronicle" class="hidden">
+      <button id="chronicle-close" class="x">✕</button>
+      <h2>📜 Crónica del pueblo</h2>
+      <div id="chronicle-body"></div>
+    </div>
+
+    <div id="help" class="hidden">
+      <div class="help-card">
+        <button id="help-close" class="x">✕</button>
+        <h2>caldo — controles</h2>
+        <ul>
+          <li><b>WASD / flechas</b> — mover tu avatar</li>
+          <li><b>E</b> — hablar con quien tengas cerca (pausa el mundo)</li>
+          <li><b>click</b> en una criatura — inspeccionarla (genoma, personalidad, creencias)</li>
+          <li><b>scroll</b> — zoom · <b>espacio</b> — pausa</li>
+          <li><b>slider</b> — velocidad del tiempo · <b>+/-</b> también</li>
+          <li><b>C</b> — crónica (descubrimientos, pestes, eras) · <b>H</b> / <b>?</b> — esta ayuda</li>
+          <li><b>⚙</b> — conectar la voz IA de las criaturas</li>
+          <li><b>R</b> — re-entrar si moriste</li>
+        </ul>
+      </div>
     </div>
 
     <div id="settings" class="hidden">

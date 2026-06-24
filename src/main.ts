@@ -4,12 +4,13 @@
 // Conversation pauses the world automatically, so you can talk at any time scale.
 
 import "./style.css"
-import { World, Creature, formatClock, ageYears, WORLD_W, WORLD_H, SPEED_SCALE } from "./world"
+import { World, Creature, formatClock, ageYears, seasonOf, SEASONS, WORLD_W, WORLD_H, SPEED_SCALE } from "./world"
 import { loadAssets } from "./sprites"
 import { drawWorld, drawChart } from "./render"
 import { respond, greeting, remember } from "./chat"
 import { Msg, setLlm, pingLLM, llmConfigured, llmUrl, llmModel } from "./llm"
 import { eraName, professionSpace } from "./civ"
+import { ENNEAGRAM } from "./psyche"
 
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v))
 
@@ -90,6 +91,54 @@ document.getElementById("cfg-test")!.addEventListener("click", async () => {
 })
 ;[cfgUrl, cfgModel].forEach((inp) => inp.addEventListener("keydown", (e) => e.stopPropagation()))
 
+// ── mouse: hover + click-to-inspect ──
+let mouseX = -1, mouseY = -1
+let lastCam = { x: WORLD_W / 2, y: WORLD_H / 2, zoom: 1 }
+let hovered: Creature | null = null
+canvas.addEventListener("mousemove", (e) => { mouseX = e.clientX; mouseY = e.clientY })
+canvas.addEventListener("mouseleave", () => { mouseX = -1; mouseY = -1 })
+function screenToWorld(sx: number, sy: number) { return { x: (sx - canvas.width / 2) / lastCam.zoom + lastCam.x, y: (sy - canvas.height / 2) / lastCam.zoom + lastCam.y } }
+function creatureAt(sx: number, sy: number): Creature | null {
+  if (sx < 0) return null
+  const w = screenToWorld(sx, sy)
+  let best: Creature | null = null, bd = (30 / lastCam.zoom) ** 2
+  for (const c of world.creatures) { if (c.isAvatar) continue; const d = (c.x - w.x) ** 2 + (c.y - w.y) ** 2; if (d < bd) { bd = d; best = c } }
+  return best
+}
+canvas.addEventListener("click", () => { const c = creatureAt(mouseX, mouseY); if (c) showInspect(c) })
+
+const inspect = document.getElementById("inspect") as HTMLDivElement
+const inspectBody = document.getElementById("inspect-body")!
+document.getElementById("inspect-close")!.addEventListener("click", () => inspect.classList.add("hidden"))
+function pbar(v: number, color: string) { return `<span class="pbar"><i style="width:${Math.round(v * 100)}%;background:${color}"></i></span>` }
+function showInspect(c: Creature) {
+  const p = c.psyche, t = ENNEAGRAM[p.type]
+  const five: [string, number][] = [["apertura", p.five.o], ["responsab.", p.five.c], ["extrav.", p.five.e], ["amabilidad", p.five.a], ["neurot.", p.five.n]]
+  inspectBody.innerHTML = `
+    <h2>${c.name} ${c.surname}</h2>
+    <div class="row dim">${c.profession || "sin oficio"} · ${Math.round(ageYears(c))} años · gen ${c.generation}</div>
+    <div class="row">${c.children} ${c.children === 1 ? "hijo" : "hijos"} · saber ${Math.round(c.knowledge)} · ${c.sick ? '<b style="color:#8fe39a">enfermo ✚</b>' : "sano"}</div>
+    <h3>núcleo · ${t.name}</h3><div class="row dim">anhela ${t.desire}; teme ${t.fear}</div>
+    <h3>personalidad</h3>${five.map(([l, v]) => `<div class="prow"><span>${l}</span>${pbar(v, "#9bb8ff")}</div>`).join("")}
+    <h3>creencias</h3><div class="row dim">${[t.belief, ...p.beliefs].map((b) => `“${b}”`).join("<br>")}</div>
+    <h3>genoma</h3><div class="row dim">vel ${c.genome.speed.toFixed(1)} · visión ${Math.round(c.genome.vision)} · longevidad ${Math.round(c.genome.longevity)}a · intelecto ${c.genome.intellect.toFixed(2)} · resistencia ${c.genome.resistance.toFixed(2)}</div>`
+  inspect.classList.remove("hidden")
+}
+
+// ── help + chronicle overlays ──
+const help = document.getElementById("help") as HTMLDivElement
+const chronicleEl = document.getElementById("chronicle") as HTMLDivElement
+const chronicleBody = document.getElementById("chronicle-body")!
+function toggleHelp() { help.classList.toggle("hidden") }
+function toggleChronicle() {
+  if (chronicleEl.classList.contains("hidden"))
+    chronicleBody.innerHTML = world.chronicle.length ? world.chronicle.slice().reverse().map((e) => `<div class="row"><b>${formatClock(e.day)}</b> — ${e.text}</div>`).join("") : "<div class='row dim'>aún no pasó nada digno de registro…</div>"
+  chronicleEl.classList.toggle("hidden")
+}
+document.getElementById("help-close")!.addEventListener("click", () => help.classList.add("hidden"))
+document.getElementById("chronicle-close")!.addEventListener("click", () => chronicleEl.classList.add("hidden"))
+document.getElementById("cron")!.addEventListener("click", () => { toggleChronicle(); (document.getElementById("cron") as HTMLElement).blur() })
+
 function nearestTalkable(): Creature | null { return avatar ? world.nearestCreature(avatar, CHAT_RANGE, (o) => !o.isAvatar) : null }
 function openChat() {
   const t = nearestTalkable()
@@ -138,6 +187,8 @@ window.addEventListener("keydown", (e) => {
   if (e.key === " ") { togglePause(); e.preventDefault() }
   if (e.key === "+" || e.key === "=") setScale(scaleIndex + 1)
   if (e.key === "-" || e.key === "_") setScale(scaleIndex - 1)
+  if (e.key === "h" || e.key === "?") toggleHelp()
+  if (e.key === "c" || e.key === "C") toggleChronicle()
   if ((e.key === "r" || e.key === "R") && avatar && isAvatarDead()) respawn()
 })
 window.addEventListener("keyup", (e) => keys.delete(e.key.toLowerCase()))
@@ -168,13 +219,15 @@ function updateHud() {
   const e = avatar ? Math.max(0, avatar.energy) : 0
   const aAge = avatar ? Math.round(ageYears(avatar)) : 0
   const bar = "█".repeat(Math.round(e / 10)).padEnd(13, "·")
+  const rp = world.researchProgress()
   hud.innerHTML = `
     <div class="stat"><span>población</span> ${wild.length} · <span>familias</span> ${families}</div>
     <div class="stat"><span>edad media</span> ${avgAge}a · <span>enfermos ✚</span> ${sick}</div>
     <div class="stat"><span>generación</span> ${world.peakGen} · <span>nac</span> ${world.births} · <span>muertes</span> ${world.deaths}</div>
-    <div class="stat"><span>saber del pueblo 📚</span> ${Math.round(world.wisdom)} · <span>era</span> <b style="color:#bcd9ff">${eraName(world.era)}</b></div>
-    <div class="stat"><span>oficios posibles</span> ${professionSpace().toLocaleString()} · <span>universidades</span> ${world.universities.length}</div>
-    ${world.recentTech ? `<div class="stat"><span>💡 último invento</span> ${world.recentTech}</div>` : ""}
+    <div class="stat"><span>era</span> <b style="color:#bcd9ff">${eraName(world.era)}</b> · ${SEASONS[seasonOf(world.clockDays)]}</div>
+    <div class="stat"><span>saber 📚</span> ${Math.round(world.wisdom)} · <span>oficios</span> ${professionSpace().toLocaleString()} · <span>univ.</span> ${world.universities.length}</div>
+    <div class="stat"><span>investigando</span> ${rp.name} <span class="rbar"><i style="width:${Math.round(rp.frac * 100)}%"></i></span></div>
+    ${world.recentTech ? `<div class="stat"><span>💡 último</span> ${world.recentTech}</div>` : ""}
     <div class="stat energy"><span>vos</span> ${aAge}a · ${bar} ${Math.round(e)}</div>
     <div class="hint">${(!chatting && chatTarget) ? `▸ apretá <b>E</b> para hablar con ${chatTarget.name}` : "WASD moverte · E hablar · espacio pausa"}</div>
   `
@@ -197,8 +250,10 @@ function loop() {
   let cy = avatar ? avatar.y : WORLD_H / 2
   cx = WORLD_W <= 2 * halfW ? WORLD_W / 2 : clamp(cx, halfW, WORLD_W - halfW)
   cy = WORLD_H <= 2 * halfH ? WORLD_H / 2 : clamp(cy, halfH, WORLD_H - halfH)
+  lastCam = { x: cx, y: cy, zoom }
+  hovered = chatting ? null : creatureAt(mouseX, mouseY)
 
-  drawWorld(ctx, world, assets, avatar, chatTarget, !!chatTarget && !chatting, { x: cx, y: cy, zoom })
+  drawWorld(ctx, world, assets, avatar, chatTarget, !!chatTarget && !chatting, lastCam, hovered)
   drawChart(ctx, world, canvas.width - 230, 16, 214, 116)
 
   if (isAvatarDead()) {

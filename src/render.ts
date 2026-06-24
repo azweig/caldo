@@ -2,11 +2,18 @@
 // creatures; plus a screen-space HUD chart. The camera transform is applied for the world, then
 // reset so the chart/labels-overlay draw in screen pixels.
 
-import { World, Creature, House, ageYears, isMature, WORLD_W, WORLD_H, BLOCK, ROAD_HALF } from "./world"
+import { World, Creature, House, ageYears, isMature, seasonOf, WORLD_W, WORLD_H, BLOCK, ROAD_HALF } from "./world"
 import { Assets } from "./sprites"
 import { TRAIT_BOUNDS } from "./genome"
 
 export interface Cam { x: number; y: number; zoom: number }
+
+const SEASON_GROUND = ["#0f1d1a", "#121d16", "#1b1810", "#0c131b"] // primavera/verano/otoño/invierno
+const CAT_COLOR: Record<string, string> = {
+  comida: "#9cff7b", salud: "#ff8c8c", saber: "#9bb8ff", enseñanza: "#7bd0ff", construcción: "#c9a06a",
+  oficio: "#d9b25a", arte: "#ff9bdd", liderazgo: "#ffd166", comercio: "#7be0c0", exploración: "#8fd6ff",
+  defensa: "#ff7b7b", espíritu: "#c79bff", ingeniería: "#aebfff", cuidado: "#ffb3c9",
+}
 
 export function drawWorld(
   ctx: CanvasRenderingContext2D,
@@ -16,6 +23,7 @@ export function drawWorld(
   chatTarget: Creature | null,
   promptTalk: boolean,
   cam: Cam,
+  hovered: Creature | null = null,
 ) {
   const cw = ctx.canvas.width, ch = ctx.canvas.height
   ctx.fillStyle = "#06090d"
@@ -26,8 +34,8 @@ export function drawWorld(
   ctx.scale(cam.zoom, cam.zoom)
   ctx.translate(-cam.x, -cam.y)
 
-  // ground
-  ctx.fillStyle = "#0e1822"
+  // ground — tinted by season
+  ctx.fillStyle = SEASON_GROUND[seasonOf(world.clockDays)]
   ctx.fillRect(0, 0, WORLD_W, WORLD_H)
 
   // gardens (where food grows)
@@ -136,7 +144,34 @@ export function drawWorld(
     label(ctx, "Tú", avatar.x, avatar.y - 24 - avatar.genome.size * 10, "#ffe6a3")
   }
 
+  // hover label (quick identity without clicking)
+  if (hovered && hovered !== chatTarget && !hovered.isAvatar) {
+    const t = `${hovered.name} · ${hovered.profession || "sin oficio"} · ${Math.round(ageYears(hovered))}a`
+    label(ctx, t, hovered.x, hovered.y - 28 - hovered.genome.size * 10, "#e6f0fa")
+  }
+
   ctx.restore()
+
+  drawMinimap(ctx, world, avatar, cam, cw, ch)
+}
+
+function drawMinimap(ctx: CanvasRenderingContext2D, world: World, avatar: Creature | null, cam: Cam, cw: number, ch: number) {
+  const mw = 178, mh = Math.round(mw * (WORLD_H / WORLD_W))
+  const ox = cw - mw - 16, oy = ch - mh - 16
+  const sx = mw / WORLD_W, sy = mh / WORLD_H
+  ctx.fillStyle = "rgba(6,10,14,0.82)"; ctx.fillRect(ox, oy, mw, mh)
+  ctx.strokeStyle = "rgba(255,255,255,0.12)"; ctx.strokeRect(ox + 0.5, oy + 0.5, mw, mh)
+  ctx.fillStyle = "rgba(80,160,100,0.45)"
+  for (const g of world.gardens) ctx.fillRect(ox + g.x * sx - 1, oy + g.y * sy - 1, 3, 3)
+  for (const c of world.creatures) {
+    if (c.isAvatar) continue
+    ctx.fillStyle = `hsl(${c.genome.hue},65%,62%)`
+    ctx.fillRect(ox + c.x * sx, oy + c.y * sy, 1.6, 1.6)
+  }
+  if (avatar) { ctx.fillStyle = "#ffd76a"; ctx.fillRect(ox + avatar.x * sx - 1.5, oy + avatar.y * sy - 1.5, 3, 3) }
+  const halfW = cw / (2 * cam.zoom), halfH = ch / (2 * cam.zoom)
+  ctx.strokeStyle = "rgba(255,231,106,0.7)"; ctx.lineWidth = 1
+  ctx.strokeRect(ox + (cam.x - halfW) * sx, oy + (cam.y - halfH) * sy, 2 * halfW * sx, 2 * halfH * sy)
 }
 
 function drawCreature(ctx: CanvasRenderingContext2D, c: Creature, assets: Assets) {
@@ -161,6 +196,12 @@ function drawCreature(ctx: CanvasRenderingContext2D, c: Creature, assets: Assets
   if (img && img.naturalWidth > 0) { ctx.imageSmoothingEnabled = false; ctx.drawImage(img, -w / 2, -w, w, w) }
   else { ctx.fillStyle = `hsl(${c.genome.hue}, 60%, 60%)`; ctx.beginPath(); ctx.arc(0, -w / 2, w / 2, 0, Math.PI * 2); ctx.fill() }
   ctx.restore()
+
+  // profession-category arc at the feet (see the social fabric at a glance)
+  if (!c.isAvatar && c.profCat && CAT_COLOR[c.profCat] && !indoors) {
+    ctx.strokeStyle = CAT_COLOR[c.profCat]; ctx.globalAlpha = 0.75; ctx.lineWidth = 2
+    ctx.beginPath(); ctx.arc(c.x, c.y - 1, w * 0.52, 0.18 * Math.PI, 0.82 * Math.PI); ctx.stroke(); ctx.globalAlpha = 1
+  }
 
   if (c.sick) {
     ctx.font = "bold 12px ui-monospace, monospace"; ctx.textAlign = "center"

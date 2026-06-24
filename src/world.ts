@@ -5,7 +5,10 @@
 
 import { Genome, randomGenome, recombine } from "./genome"
 import { Psyche, randomPsyche, inheritPsyche } from "./psyche"
-import { Cat, Boosts, Prof, PROFS, availableProfs, nextTech, economyOf, professionTitle } from "./civ"
+import { Cat, Boosts, Prof, PROFS, availableProfs, nextTech, economyOf, professionTitle, eraName } from "./civ"
+
+export const SEASONS = ["primavera", "verano", "otoño", "invierno"] as const
+export function seasonOf(days: number): number { return Math.floor((Math.floor(days) % DAYS_PER_YEAR) / (DAYS_PER_YEAR / 4)) }
 
 export const DAYS_PER_YEAR = 360
 export const WORLD_W = 2800
@@ -111,6 +114,8 @@ export class World {
   econ: Boosts = { food: 0, health: 0, research: 0, learn: 0, life: 0 }
   profCounts: Partial<Record<Cat, number>> = {}
   profPop: Record<string, number> = {}
+  chronicle: { day: number; text: string }[] = []
+  plagueUntil = 0
   tick = 0
   clockDays = 0
   spriteCount: number
@@ -190,6 +195,12 @@ export class World {
     for (let i = 0; i < pool.length; i++) { r -= weights[i]; if (r <= 0) { chosen = pool[i]; break } }
     c.profBase = chosen.n; c.profCat = chosen.c
     c.profession = professionTitle(chosen, this.era, c.id)
+  }
+
+  private logEvent(text: string) { this.chronicle.push({ day: this.clockDays, text }); if (this.chronicle.length > 80) this.chronicle.shift() }
+  researchProgress(): { name: string; frac: number } {
+    const nt = nextTech(this.discovered, this.era)
+    return nt ? { name: nt.n, frac: Math.max(0, Math.min(1, this.research / nt.cost)) } : { name: "—", frac: 1 }
   }
 
   private spawn(genome: Genome, generation: number, home: House, x?: number, y?: number, psyche?: Psyche): Creature {
@@ -280,10 +291,25 @@ export class World {
     while (nt && this.research >= nt.cost) {
       this.research -= nt.cost; this.discovered.add(nt.n); this.recentTech = nt.n
       if (nt.b) { const tb = this.techBoost as unknown as Record<string, number>, nb = nt.b as Record<string, number>; for (const k of Object.keys(nt.b)) tb[k] += nb[k] }
+      const prevEra = this.era
       if (nt.e > this.era) this.era = nt.e
       if (nt.n === "Universidad" && !this.universities.length) this.universities.push({ x: WORLD_W * 0.5 - 64, y: WORLD_H * 0.5 - 54, w: 128, h: 104 })
+      // credit a living scholar as the named inventor, and chronicle it
+      let inv: Creature | null = null
+      for (const c of this.creatures) {
+        if (c.isAvatar || (c.profCat !== "saber" && c.profCat !== "ingeniería" && c.profCat !== "enseñanza")) continue
+        if (!inv || c.knowledge > inv.knowledge) inv = c
+      }
+      this.logEvent(`${inv ? `${inv.name} ${inv.surname} (${inv.profession})` : "el pueblo"} descubrió ${nt.n}`)
+      if (this.era > prevEra) this.logEvent(`✦ amanece la era ${eraName(this.era)}`)
       nt = nextTech(this.discovered, this.era)
     }
+    // plague: a rare epidemic that can take the wise and tip the village into a dark age
+    if (this.clockDays > this.plagueUntil + 1500 && Math.random() < 0.00012) {
+      this.plagueUntil = this.clockDays + 130 + Math.floor(Math.random() * 160)
+      this.logEvent("⚠ una peste cayó sobre el pueblo")
+    }
+    const plague = this.clockDays < this.plagueUntil ? 3.4 : 1
     const healthM = 1 + this.econ.health + this.techBoost.health
     const learnM = 1 + this.econ.learn + this.techBoost.learn
 
@@ -348,7 +374,7 @@ export class World {
 
       const ay = ageYears(c)
       const ageRisk = 1 + Math.max(0, ay - 45) / 40
-      if (!c.sick) { if (Math.random() < 0.00009 * (1.25 - g.resistance) * ageRisk / healthM) { c.sick = true; c.sickDays = 0 } }
+      if (!c.sick) { if (Math.random() < 0.00009 * (1.25 - g.resistance) * ageRisk * plague / healthM) { c.sick = true; c.sickDays = 0 } }
       else {
         c.sickDays++
         if (Math.random() < 0.016 * (0.5 + g.resistance) * healthM) { c.sick = false; c.sickDays = 0 }
@@ -400,6 +426,8 @@ export class World {
       this.profCounts = counts; this.profPop = pop
       this.econ = economyOf(counts, wild.length)
       this.foodTarget = Math.min(720, Math.round(230 * (1 + this.econ.food + this.techBoost.food)))
+      if (wild.length < 14) this.foodTarget = Math.max(this.foodTarget, 300) // homeostasis: help a tiny village recover
+      this.foodTarget = Math.max(150, this.foodTarget)
     }
 
     if (this.creatures.filter((c) => !c.isAvatar).length < 4) {
