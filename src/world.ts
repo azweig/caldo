@@ -80,6 +80,8 @@ export interface Creature {
   heritProf: string  // a parent's base profession — biases the child's choice (apprenticeship)
   religion: string   // belief system (heritable; the mix is set when the civ is born)
   powerHungry: boolean // a power-obsessed "psychopath" — drifts toward rule + raises violence
+  money: number      // earned by working (you can SEE + spend it when you possess them)
+  controlled: boolean // true while the PLAYER is possessing this creature (transient, not saved)
 }
 
 export interface WorldOpts { startEra: number; religions: { name: string; pct: number }[]; violence: number; psychopathy: number; gov: "monarquía" | "república" }
@@ -255,7 +257,7 @@ export class World {
   // ── persistence: a civilisation survives reloads until you start a new one ──
   toState() {
     const hi = new Map<House, number>(); this.houses.forEach((h, i) => hi.set(h, i))
-    const C = (c: Creature) => ({ id: c.id, x: c.x, y: c.y, e: c.energy, ad: c.ageDays, ls: c.lifespanDays, gen: c.generation, nm: c.name, sn: c.surname, h: hi.get(c.home) ?? 0, k: c.knowledge, pf: c.profession, pb: c.profBase, pc: c.profCat, hp: c.heritProf, sick: c.sick, ch: c.children, par: c.parents, rel: c.religion, pw: c.powerHungry, g: c.genome, ps: c.psyche, mem: c.memory, soc: c.social, gh: c.goingHome, pt: c.partner, pg: c.pregnant })
+    const C = (c: Creature) => ({ id: c.id, x: c.x, y: c.y, e: c.energy, ad: c.ageDays, ls: c.lifespanDays, gen: c.generation, nm: c.name, sn: c.surname, h: hi.get(c.home) ?? 0, k: c.knowledge, pf: c.profession, pb: c.profBase, pc: c.profCat, hp: c.heritProf, sick: c.sick, ch: c.children, par: c.parents, rel: c.religion, pw: c.powerHungry, g: c.genome, ps: c.psyche, mem: c.memory, soc: c.social, gh: c.goingHome, pt: c.partner, pg: c.pregnant, mny: c.money })
     return { region: this.region, gov: this.gov, era: this.era, clockDays: this.clockDays, clockMinutes: this.clockMinutes, tick: this.tick, research: this.research, discovered: [...this.discovered], techBoost: this.techBoost, wisdom: this.wisdom, births: this.births, deaths: this.deaths, peakGen: this.peakGen, plagueUntil: this.plagueUntil, violence: this.violence, psychopathy: this.psychopathy, religionsCfg: this.religionsCfg, chronicle: this.chronicle.slice(-60), houses: this.houses, gardens: this.gardens, schools: this.schools, universities: this.universities, airport: this.airport, monarch: this.monarch?.id ?? null, creatures: this.creatures.filter((c) => !c.isAvatar).map(C) }
   }
   static fromState(s: any, spriteCount: number): World {
@@ -269,7 +271,7 @@ export class World {
     const byId = new Map<number, Creature>(); let maxId = 0
     w.creatures = (s.creatures || []).map((c: any) => {
       maxId = Math.max(maxId, c.id)
-      const cr: Creature = { id: c.id, x: c.x, y: c.y, vx: 0, vy: 0, energy: c.e, ageDays: c.ad, lifespanDays: c.ls, genome: c.g, generation: c.gen, name: c.nm, surname: c.sn, home: w.houses[c.h] || w.houses[0], goingHome: !!c.gh, parents: c.par, children: c.ch, sick: c.sick, sickDays: 0, lastRepro: -99999, partner: c.pt || 0, pregnant: c.pg || 0, isAvatar: false, facing: 1, psyche: c.ps, memory: c.mem || [], social: c.soc || [], knowledge: c.k, profession: c.pf, profBase: c.pb, profCat: c.pc, heritProf: c.hp || "", religion: c.rel || "", powerHungry: !!c.pw }
+      const cr: Creature = { id: c.id, x: c.x, y: c.y, vx: 0, vy: 0, energy: c.e, ageDays: c.ad, lifespanDays: c.ls, genome: c.g, generation: c.gen, name: c.nm, surname: c.sn, home: w.houses[c.h] || w.houses[0], goingHome: !!c.gh, parents: c.par, children: c.ch, sick: c.sick, sickDays: 0, lastRepro: -99999, partner: c.pt || 0, pregnant: c.pg || 0, isAvatar: false, facing: 1, psyche: c.ps, memory: c.mem || [], social: c.soc || [], knowledge: c.k, profession: c.pf, profBase: c.pb, profCat: c.pc, heritProf: c.hp || "", religion: c.rel || "", powerHungry: !!c.pw, money: c.mny || 0, controlled: false }
       byId.set(cr.id, cr); return cr
     })
     w.monarch = s.monarch != null ? byId.get(s.monarch) || null : null
@@ -290,7 +292,7 @@ export class World {
       isAvatar: false, facing: 1,
       psyche: psyche ?? randomPsyche(), memory: [], social: [], knowledge: 0,
       profession: "", profBase: "", profCat: "", heritProf: "",
-      religion: "", powerHungry: false,
+      religion: "", powerHungry: false, money: 0, controlled: false,
     }
   }
 
@@ -440,7 +442,7 @@ export class World {
     for (const c of this.creatures) {
       c.ageDays++
 
-      if (!c.isAvatar) {
+      if (!c.isAvatar && !c.controlled) {
         let tx: number, ty: number
         if (!isMature(c)) {
           // CHILDREN live with their family — they never roam the world alone. Toddlers stay home;
@@ -457,7 +459,7 @@ export class World {
         c.vx = vx; c.vy = vy
       }
 
-      if (!c.isAvatar) { // the avatar moves in REAL TIME (per frame, in main), not at the world's clock rate
+      if (!c.isAvatar && !c.controlled) { // the avatar/possessed move in REAL TIME (per frame, in main), not at the clock rate
         c.x += c.vx; c.y += c.vy
         if (c.vx > 0.05) c.facing = 1; else if (c.vx < -0.05) c.facing = -1
         c.x = clampn(c.x, MARGIN, WORLD_W - MARGIN)
@@ -505,10 +507,10 @@ export class World {
       else {
         c.sickDays++
         if (Math.random() < 0.016 * (0.5 + g.resistance) * healthM) { c.sick = false; c.sickDays = 0 }
-        else if (Math.random() < 0.012 * (1.3 - g.resistance) * ageRisk / healthM) { if (!c.isAvatar) { this.deaths++; continue } else c.energy = 0 }
+        else if (Math.random() < 0.012 * (1.3 - g.resistance) * ageRisk / healthM) { if (!c.isAvatar && !c.controlled) { this.deaths++; continue } }
       }
 
-      if (!c.isAvatar) {
+      if (!c.isAvatar && !c.controlled) {
         if (c.energy <= 0) { this.deaths++; continue }
         if (c.ageDays > c.lifespanDays && Math.random() < (c.ageDays - c.lifespanDays) / (0.18 * c.lifespanDays)) { this.deaths++; continue }
         if (isMature(c) && Math.random() < 0.0000052 * violenceRate) { this.deaths++; this.logEvent(`${c.name} ${c.surname} murió en un acto de violencia`); continue }
@@ -569,6 +571,13 @@ export class World {
       if (wild.length < 14) this.foodTarget = Math.max(this.foodTarget, 300) // homeostasis: help a tiny village recover
       this.foodTarget = Math.max(150, this.foodTarget)
       this.socialTick(wild) // creatures chat amongst themselves + remember it
+
+      // income: working adults earn money from their trade (visible + spendable when you possess them)
+      const eraPay = 1 + this.era * 0.12
+      for (const c of wild) if (c.profCat && isMature(c)) {
+        const pay = c.profCat === "comercio" || c.profCat === "liderazgo" ? 6 : c.profCat === "saber" || c.profCat === "ingeniería" ? 5 : c.profCat === "salud" ? 4 : 2.5
+        c.money += pay * eraPay
+      }
 
       // ── demographics: form couples, then conceive (logistic growth toward a tech-scaled capacity) ──
       for (const c of wild) if (c.partner && !byId.has(c.partner)) { c.partner = 0; c.pregnant = 0 } // widowed → free again

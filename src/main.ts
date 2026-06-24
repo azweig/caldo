@@ -60,6 +60,8 @@ const OVERHEAR = 240
 const keys = new Set<string>()
 let world: World
 let avatar: Creature | null = null
+let possessed: Creature | null = null // the creature you've taken over (P) — you play AS them
+let possessTarget: { x: number; y: number } | null = null
 let chatTarget: Creature | null = null
 let paused = false
 let scaleIndex = 0
@@ -219,7 +221,45 @@ function toggleStats() { if (statsEl.classList.contains("hidden")) statsBody.inn
 document.getElementById("stats-close")!.addEventListener("click", () => statsEl.classList.add("hidden"))
 document.getElementById("statsbtn")!.addEventListener("click", () => { toggleStats(); (document.getElementById("statsbtn") as HTMLElement).blur() })
 
-function nearestTalkable(): Creature | null { return avatar ? world.nearestCreature(avatar, CHAT_RANGE, (o) => !o.isAvatar) : null }
+// ── possession (P): take over a creature and play AS them, Sims-style ──
+const possessEl = document.getElementById("possess") as HTMLDivElement
+const possessBody = document.getElementById("possess-body")!
+function togglePossess() {
+  if (possessed) { possessed.controlled = false; possessed = null; possessTarget = null; possessEl.classList.add("hidden"); return }
+  const t = nearestTalkable()
+  if (!t) return
+  possessed = t; t.controlled = true; possessTarget = null
+  possessEl.classList.remove("hidden"); renderPossess()
+}
+function renderPossess() {
+  const c = possessed; if (!c) return
+  const e = Math.round(Math.max(0, c.energy))
+  const bar = "█".repeat(Math.max(0, Math.round(e / 12))).padEnd(12, "·")
+  const partner = c.partner ? world.creatures.find((o) => o.id === c.partner) : null
+  possessBody.innerHTML = `
+    <div class="pname">🎭 ${c.name} ${c.surname}</div>
+    <div class="prow2">${c.profession || "sin oficio"} · ${Math.round(ageYears(c))} años · gen ${c.generation}</div>
+    <div class="prow2">💰 <b>${Math.round(c.money)}</b> · 🍔 ${bar} ${e}${c.pregnant > 0 ? " · 🤰" : ""}</div>
+    <div class="prow2">${partner ? "❤️ " + partner.name : "💔 sin pareja"} · 👶 ${c.children} · 🧠 ${Math.round(c.knowledge)}</div>
+    <div class="prow2">${c.religion || "sin credo"}${c.sick ? " · <b style='color:#8fe39a'>enfermo ✚</b>" : ""}${c.powerHungry ? " · 👑 ambicioso" : ""}</div>`
+}
+function doAction(act: string) {
+  const c = possessed; if (!c) return
+  const pay = 1 + world.era * 0.12
+  if (act === "eat") { c.energy = Math.min(150, c.energy + 50); c.money = Math.max(0, c.money - 4) }
+  else if (act === "work") { c.money += 12 * pay; c.energy = Math.max(0, c.energy - 12); c.knowledge = Math.min(100, c.knowledge + 0.5) }
+  else if (act === "study") { c.knowledge = Math.min(100, c.knowledge + 8); c.energy = Math.max(0, c.energy - 6) }
+  else if (act === "home") { possessTarget = { x: c.home.x + c.home.w / 2, y: c.home.y + c.home.h } }
+  else if (act === "talk") { openChat() }
+  else if (act === "court") {
+    const t = world.nearestCreature(c, 90, (o) => !o.isAvatar && isMature(o) && !o.partner && o !== c && ageYears(o) <= 50)
+    if (t && !c.partner) { c.partner = t.id; t.partner = c.id; world.chronicle.push({ day: world.clockDays, text: `${c.name} y ${t.name} se enamoraron ❤️` }) }
+  } else if (act === "child") { if (c.partner && c.energy > 55 && c.pregnant <= 0) c.pregnant = 210 + Math.floor(Math.random() * 60) }
+  renderPossess()
+}
+possessEl.querySelectorAll("button[data-act]").forEach((b) => b.addEventListener("click", () => { doAction((b as HTMLElement).dataset.act!); (b as HTMLElement).blur() }))
+
+function nearestTalkable(): Creature | null { const me = possessed || avatar; return me ? world.nearestCreature(me, CHAT_RANGE, (o) => !o.isAvatar && o !== possessed) : null }
 function openChat() {
   const t = nearestTalkable()
   if (!t) return
@@ -272,6 +312,7 @@ window.addEventListener("keydown", (e) => {
   if (e.key === "-" || e.key === "_") setScale(scaleIndex - 1)
   if (e.key === "h" || e.key === "?") toggleHelp()
   if (e.key === "c" || e.key === "C") toggleChronicle()
+  if (e.key === "p" || e.key === "P") togglePossess()
   if ((e.key === "r" || e.key === "R") && avatar && isAvatarDead()) respawn()
 })
 window.addEventListener("keyup", (e) => keys.delete(e.key.toLowerCase()))
@@ -279,16 +320,19 @@ window.addEventListener("keyup", (e) => keys.delete(e.key.toLowerCase()))
 function isAvatarDead(): boolean { return false } // you age, but as a visitor you never die
 function respawn() { avatar = world.addAvatar(); deathScreen.classList.add("hidden") }
 
-function driveAvatar() {
-  if (!avatar) return
+function driveControlled(me: Creature) {
   let dx = 0, dy = 0
   if (keys.has("w") || keys.has("arrowup")) dy -= 1
   if (keys.has("s") || keys.has("arrowdown")) dy += 1
   if (keys.has("a") || keys.has("arrowleft")) dx -= 1
   if (keys.has("d") || keys.has("arrowright")) dx += 1
   const m = Math.hypot(dx, dy)
-  if (m > 0) { avatar.vx = (dx / m) * AV_SPEED; avatar.vy = (dy / m) * AV_SPEED } // real-time px/frame
-  else { avatar.vx *= 0.6; avatar.vy *= 0.6 }
+  if (m > 0) { possessTarget = null; me.vx = (dx / m) * AV_SPEED; me.vy = (dy / m) * AV_SPEED } // manual
+  else if (possessTarget) { // auto-walk to an action destination (home, work…)
+    const tx = possessTarget.x - me.x, ty = possessTarget.y - me.y, d = Math.hypot(tx, ty)
+    if (d < 16) { possessTarget = null; me.vx *= 0.5; me.vy *= 0.5 }
+    else { me.vx = (tx / d) * AV_SPEED; me.vy = (ty / d) * AV_SPEED }
+  } else { me.vx *= 0.6; me.vy *= 0.6 }
 }
 const AV_SPEED = 4.2
 
@@ -319,11 +363,12 @@ function updateHud() {
     <div class="stat"><span>investigando</span> ${rp.name} <span class="rbar"><i style="width:${Math.round(rp.frac * 100)}%"></i></span></div>
     ${world.recentTech ? `<div class="stat"><span>💡 último</span> ${world.recentTech}</div>` : ""}
     <div class="stat energy"><span>vos</span> ${aAge}a · ${bar} ${Math.round(e)}</div>
-    <div class="hint">${(!chatting && chatTarget) ? `▸ apretá <b>E</b> para hablar con ${chatTarget.name}` : "WASD moverte · E hablar · espacio pausa"}</div>
+    <div class="hint">${possessed ? `🎭 poseés a <b>${possessed.name}</b> · P para soltar` : (!chatting && chatTarget) ? `▸ <b>E</b> hablar · <b>P</b> poseer a ${chatTarget.name}` : "WASD moverte · E hablar · P poseer · espacio pausa"}</div>
   `
   clockEl.textContent = formatClock(world.clockMinutes)
   for (let i = 0; i < tabsEl.children.length; i++) if (countries[i]) (tabsEl.children[i] as HTMLElement).title = `${eraName(countries[i].world.era)} · ${countries[i].world.creatures.filter((c) => !c.isAvatar).length} hab.`
   if (!statsEl.classList.contains("hidden") && frame % 15 === 0) statsBody.innerHTML = statsHTML()
+  if (possessed && frame % 8 === 0) renderPossess()
 }
 
 function buildTabs() {
@@ -408,8 +453,8 @@ function worldAffairs(steps: number) {
 
 // overheard AI-to-AI chatter near the avatar (you can listen, not intervene)
 function nearAvatarPair(): [Creature, Creature] | null {
-  if (!avatar) return null
-  const av = avatar
+  const av = possessed || avatar
+  if (!av) return null
   const near = world.creatures.filter((c) => !c.isAvatar && isMature(c) && (c.x - av.x) ** 2 + (c.y - av.y) ** 2 < OVERHEAR * OVERHEAR)
   for (const a of near) {
     const b = world.nearestCreature(a, 66, (o) => !o.isAvatar && isMature(o))
@@ -435,12 +480,13 @@ function tryAmbient() {
 
 function loop() {
   frame++
-  // the avatar moves in REAL TIME (smooth) no matter how slow or fast the world clock runs
-  if (avatar && !chatting && !paused) {
-    driveAvatar()
-    avatar.x += avatar.vx; avatar.y += avatar.vy
-    if (avatar.vx > 0.05) avatar.facing = 1; else if (avatar.vx < -0.05) avatar.facing = -1
-    avatar.x = clamp(avatar.x, 60, WORLD_W - 60); avatar.y = clamp(avatar.y, 60, WORLD_H - 60)
+  // you control your avatar OR the creature you possess, in REAL TIME (smooth) regardless of world speed
+  const me = possessed || avatar
+  if (me && !chatting && !paused) {
+    driveControlled(me)
+    me.x += me.vx; me.y += me.vy
+    if (me.vx > 0.05) me.facing = 1; else if (me.vx < -0.05) me.facing = -1
+    me.x = clamp(me.x, 60, WORLD_W - 60); me.y = clamp(me.y, 60, WORLD_H - 60)
   }
   if (!paused) {
     const minPerFrame = SCALES[scaleIndex].rate / 60 // in-world minutes added this frame (~60fps)
@@ -455,7 +501,8 @@ function loop() {
     }
     if (steps) worldAffairs(steps)
   }
-  if (avatar) avatar.energy = Math.max(60, Math.min(150, avatar.energy)) // immortal visitor: ages, never starves
+  if (avatar && !possessed) avatar.energy = Math.max(60, Math.min(150, avatar.energy)) // immortal observer
+  if (possessed) possessed.energy = Math.max(0, possessed.energy) // possessed: real hunger you manage (won't die)
   // advance / start overheard chatter
   if (ambient) { if (frame >= ambient.nextAt) { ambient.idx++; if (ambient.idx >= ambient.lines.length) { ambient = null; ambientCool = frame + 480 } else ambient.nextAt = frame + 165 } }
   else tryAmbient()
@@ -463,23 +510,25 @@ function loop() {
 
   // camera: follow the avatar, clamped to the world (centre it on any axis smaller than the view)
   const halfW = canvas.width / (2 * zoom), halfH = canvas.height / (2 * zoom)
-  let cx = avatar ? avatar.x : WORLD_W / 2
-  let cy = avatar ? avatar.y : WORLD_H / 2
+  const camMe = possessed || avatar
+  let cx = camMe ? camMe.x : WORLD_W / 2
+  let cy = camMe ? camMe.y : WORLD_H / 2
   cx = WORLD_W <= 2 * halfW ? WORLD_W / 2 : clamp(cx, halfW, WORLD_W - halfW)
   cy = WORLD_H <= 2 * halfH ? WORLD_H / 2 : clamp(cy, halfH, WORLD_H - halfH)
   lastCam = { x: cx, y: cy, zoom }
   hovered = chatting ? null : creatureAt(mouseX, mouseY)
 
   const speech: { x: number; y: number; tag: string; text: string; understood: boolean }[] = []
-  if (ambient && avatar) {
+  const ov = possessed || avatar
+  if (ambient && ov) {
     const line = ambient.lines[ambient.idx]
-    if (line && (line.who.x - avatar.x) ** 2 + (line.who.y - avatar.y) ** 2 < OVERHEAR * OVERHEAR) {
+    if (line && (line.who.x - ov.x) ** 2 + (line.who.y - ov.y) ** 2 < OVERHEAR * OVERHEAR) {
       const h = heard(line.text, countries[active].lang)
       speech.push({ x: line.who.x, y: line.who.y, tag: h.tag, text: h.text, understood: h.understood })
     }
   }
 
-  drawWorld(ctx, world, assets, avatar, chatTarget, !!chatTarget && !chatting, lastCam, hovered, speech)
+  drawWorld(ctx, world, assets, possessed || avatar, chatTarget, !!chatTarget && !chatting, lastCam, hovered, speech)
   drawChart(ctx, world, canvas.width - 230, 16, 214, 116)
 
   if (isAvatarDead()) {
