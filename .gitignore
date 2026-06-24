@@ -5,3 +5,6 @@ dist-ssr
 *.log
 .DS_Store
 .vite
+
+# regenerated locally on each host (pod) — do not track, it causes pull conflicts
+package-lock.json
