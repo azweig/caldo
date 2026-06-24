@@ -41,8 +41,18 @@ VITE_BASE_LANG="$BASE" npm run build >/tmp/caldo-build.log 2>&1 && echo "  dist/
 # ── 3) Ollama + chat model (server-side proxy → no CORS, no restart of a running Ollama) ──
 g "Ollama"
 if ! command -v ollama >/dev/null 2>&1; then
-  y "instalando Ollama…"; curl -fsSL https://ollama.com/install.sh | sh >/dev/null 2>&1 || y "instalá Ollama a mano"
+  y "instalando Ollama (script oficial)…"
+  curl -fsSL https://ollama.com/install.sh | sh 2>&1 | tail -3 || true
 fi
+if ! command -v ollama >/dev/null 2>&1; then
+  y "fallback: bajando el binario directo…"
+  if curl -fsSL -o /tmp/ollama.tgz https://ollama.com/download/ollama-linux-amd64.tgz && tar -C /usr -xzf /tmp/ollama.tgz; then
+    echo "  binario instalado en /usr/bin/ollama"
+  else
+    y "no se pudo instalar Ollama automáticamente — instalalo a mano:  curl -fsSL https://ollama.com/install.sh | sh"
+  fi
+fi
+command -v ollama >/dev/null 2>&1 && echo "  ollama: $(ollama --version 2>/dev/null | head -1)"
 MODELS_DIR="$HOME/.ollama"; [ -d /workspace ] && MODELS_DIR="/workspace/.ollama"
 if ! pgrep -f "ollama serve" >/dev/null 2>&1; then
   y "arrancando ollama serve (GPU en paralelo para las conversaciones)…"
