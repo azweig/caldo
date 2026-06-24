@@ -4,7 +4,7 @@
 // Conversation pauses the world automatically, so you can talk at any time scale.
 
 import "./style.css"
-import { World, Creature, formatClock, ageYears, isMature, seasonOf, SEASONS, WORLD_W, WORLD_H, SPEED_SCALE } from "./world"
+import { World, Creature, formatClock, ageYears, isMature, seasonOf, SEASONS, WORLD_W, WORLD_H } from "./world"
 import { loadAssets } from "./sprites"
 import { drawWorld, drawChart } from "./render"
 import { respond, greeting, remember, ambientDialogue } from "./chat"
@@ -29,14 +29,15 @@ window.addEventListener("wheel", (e) => {
   zoom = clamp(zoom * (e.deltaY < 0 ? 1.12 : 0.89), 0.35, 2.6)
 }, { passive: false })
 
-// time scale: ticks (days) per real frame. Fractions run via an accumulator so we get sub-day rates.
+// time scale = in-world MINUTES per real second. Default 1 s = 1 min (calm, conversational world);
+// max 1 min = 1 año (8640 min/s) to watch evolution. The day-based dynamics step once per in-world day.
 const SCALES = [
-  { tpf: 0.12, label: "≈ 1 semana/s" },
-  { tpf: 0.5, label: "≈ 1 mes/s" },
-  { tpf: 1, label: "≈ 2 meses/s" },
-  { tpf: 3, label: "≈ medio año/s" },
-  { tpf: 6, label: "≈ 1 año/s" },
-  { tpf: 15, label: "≈ 2½ años/s" },
+  { rate: 1, label: "1 s = 1 min" },
+  { rate: 5, label: "1 s = 5 min" },
+  { rate: 30, label: "1 s = 30 min" },
+  { rate: 180, label: "1 s = 3 h" },
+  { rate: 1440, label: "1 s = 1 día" },
+  { rate: 8640, label: "1 min = 1 año" },
 ]
 
 // the world is split into COUNTRIES — each its own simulation, biome and language; airports + migration
@@ -59,10 +60,9 @@ let world: World
 let avatar: Creature | null = null
 let chatTarget: Creature | null = null
 let paused = false
-let scaleIndex = 2
+let scaleIndex = 0
 let chatting = false
 let pausedByChat = false
-let tickAcc = 0
 let session: Msg[] = []
 
 const CHAT_RANGE = 70
@@ -227,9 +227,10 @@ function driveAvatar() {
   if (keys.has("a") || keys.has("arrowleft")) dx -= 1
   if (keys.has("d") || keys.has("arrowright")) dx += 1
   const m = Math.hypot(dx, dy)
-  if (m > 0) { avatar.vx = (dx / m) * avatar.genome.speed * SPEED_SCALE * 1.1; avatar.vy = (dy / m) * avatar.genome.speed * SPEED_SCALE * 1.1 }
+  if (m > 0) { avatar.vx = (dx / m) * AV_SPEED; avatar.vy = (dy / m) * AV_SPEED } // real-time px/frame
   else { avatar.vx *= 0.6; avatar.vy *= 0.6 }
 }
+const AV_SPEED = 4.2
 
 function updateHud() {
   const wild = world.creatures.filter((c) => !c.isAvatar)
@@ -260,7 +261,7 @@ function updateHud() {
     <div class="stat energy"><span>vos</span> ${aAge}a · ${bar} ${Math.round(e)}</div>
     <div class="hint">${(!chatting && chatTarget) ? `▸ apretá <b>E</b> para hablar con ${chatTarget.name}` : "WASD moverte · E hablar · espacio pausa"}</div>
   `
-  clockEl.textContent = formatClock(world.clockDays)
+  clockEl.textContent = formatClock(world.clockMinutes)
   for (let i = 0; i < tabsEl.children.length; i++) if (countries[i]) (tabsEl.children[i] as HTMLElement).title = `${eraName(countries[i].world.era)} · ${countries[i].world.creatures.filter((c) => !c.isAvatar).length} hab.`
 }
 
@@ -324,16 +325,25 @@ function tryAmbient() {
 
 function loop() {
   frame++
+  // the avatar moves in REAL TIME (smooth) no matter how slow or fast the world clock runs
+  if (avatar && !chatting && !paused) {
+    driveAvatar()
+    avatar.x += avatar.vx; avatar.y += avatar.vy
+    if (avatar.vx > 0.05) avatar.facing = 1; else if (avatar.vx < -0.05) avatar.facing = -1
+    avatar.x = clamp(avatar.x, 60, WORLD_W - 60); avatar.y = clamp(avatar.y, 60, WORLD_H - 60)
+  }
   if (!paused) {
-    tickAcc += SCALES[scaleIndex].tpf
-    let n = Math.floor(tickAcc)
-    tickAcc -= n
-    if (n > 40) n = 40
-    for (let i = 0; i < n; i++) {
-      driveAvatar()
-      for (const c of countries) { if (c.world === world || i < 8) c.world.step() } // inactive countries capped for perf
+    const minPerFrame = SCALES[scaleIndex].rate / 60 // in-world minutes added this frame (~60fps)
+    let steps = 0
+    for (const cn of countries) {
+      cn.world.clockMinutes += minPerFrame
+      const want = Math.floor(cn.world.clockMinutes / 1440) // whole in-world days elapsed
+      const cap = cn.world === world ? 40 : 10
+      let s = 0
+      while (cn.world.clockDays < want && s < cap) { cn.world.step(); s++ }
+      steps += s
     }
-    maybeMigrate(n)
+    if (steps) maybeMigrate(steps)
   }
   if (avatar) avatar.energy = Math.max(60, Math.min(150, avatar.energy)) // immortal visitor: ages, never starves
   // advance / start overheard chatter

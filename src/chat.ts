@@ -66,12 +66,24 @@ export async function ambientDialogue(a: Creature, b: Creature, writeLang: strin
   return templatedDialogue(a, b)
 }
 
-// after a conversation, fold what the player talked about into the creature's lasting memory
-export function remember(c: Creature, session: Msg[]) {
-  const said = session.filter((m) => m.role === "user").map((m) => m.content)
+// After a conversation, distil it into a lasting MEMORY NOTE (graphify principle: extract the knowledge;
+// obsidian principle: it persists and is recalled next time). The note is saved with the world, so the
+// creature remembers you across reloads. With no LLM, it falls back to a raw summary.
+export async function remember(c: Creature, session: Msg[]) {
+  const said = session.filter((m) => m.role === "user")
   if (!said.length) return
-  c.memory.push(`El visitante te habló de: ${said.slice(-3).join("; ")}`.slice(0, 170))
-  while (c.memory.length > 6) c.memory.shift()
+  if (llmConfigured()) {
+    try {
+      const transcript = session.map((m) => `${m.role === "user" ? "Visitante" : c.name}: ${m.content}`).join("\n")
+      const note = await llmChat([
+        { role: "system", content: `Sos la memoria de ${c.name}. Resumí en UNA frase corta (máx 18 palabras), en primera persona ("recuerdo que…"), lo más importante que ${c.name} aprendió o sintió del visitante en esta charla. Solo la frase.` },
+        { role: "user", content: transcript },
+      ])
+      if (note) { c.memory.push(note.replace(/^["']|["']$/g, "").slice(0, 160)); while (c.memory.length > 8) c.memory.shift(); return }
+    } catch { /* fall through to the raw summary */ }
+  }
+  c.memory.push(`El visitante me habló de: ${said.slice(-2).map((m) => m.content).join("; ")}`.slice(0, 160))
+  while (c.memory.length > 8) c.memory.shift()
 }
 
 export function greeting(c: Creature): string {

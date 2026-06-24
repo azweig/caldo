@@ -91,10 +91,14 @@ function given(): string {
 
 export function ageYears(c: Creature): number { return c.ageDays / DAYS_PER_YEAR }
 export function isMature(c: Creature): boolean { return c.ageDays >= MATURITY_YEARS * DAYS_PER_YEAR }
-export function formatClock(days: number): string {
-  const year = Math.floor(days / DAYS_PER_YEAR) + 1
-  const day = (Math.floor(days) % DAYS_PER_YEAR) + 1
-  return `Año ${year} · Día ${day}`
+export function formatClock(minutes: number): string {
+  const totalMin = Math.floor(minutes)
+  const mm = totalMin % 60
+  const hh = Math.floor(totalMin / 60) % 24
+  const totalDays = Math.floor(totalMin / 1440)
+  const day = (totalDays % DAYS_PER_YEAR) + 1
+  const year = Math.floor(totalDays / DAYS_PER_YEAR) + 1
+  return `Año ${year} · Día ${day} · ${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}`
 }
 const clampn = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v))
 
@@ -131,6 +135,7 @@ export class World {
   monarch: Creature | null = null
   tick = 0
   clockDays = 0
+  clockMinutes = 0 // master clock (in-world minutes); the day-based dynamics step once per whole day
   spriteCount: number
   history: Sample[] = []
   births = 0
@@ -245,11 +250,11 @@ export class World {
   toState() {
     const hi = new Map<House, number>(); this.houses.forEach((h, i) => hi.set(h, i))
     const C = (c: Creature) => ({ id: c.id, x: c.x, y: c.y, e: c.energy, ad: c.ageDays, ls: c.lifespanDays, gen: c.generation, nm: c.name, sn: c.surname, h: hi.get(c.home) ?? 0, k: c.knowledge, pf: c.profession, pb: c.profBase, pc: c.profCat, hp: c.heritProf, sick: c.sick, ch: c.children, par: c.parents, rel: c.religion, pw: c.powerHungry, g: c.genome, ps: c.psyche, mem: c.memory, gh: c.goingHome })
-    return { region: this.region, gov: this.gov, era: this.era, clockDays: this.clockDays, tick: this.tick, research: this.research, discovered: [...this.discovered], techBoost: this.techBoost, wisdom: this.wisdom, births: this.births, deaths: this.deaths, peakGen: this.peakGen, plagueUntil: this.plagueUntil, violence: this.violence, psychopathy: this.psychopathy, religionsCfg: this.religionsCfg, chronicle: this.chronicle.slice(-60), houses: this.houses, gardens: this.gardens, schools: this.schools, universities: this.universities, airport: this.airport, monarch: this.monarch?.id ?? null, creatures: this.creatures.filter((c) => !c.isAvatar).map(C) }
+    return { region: this.region, gov: this.gov, era: this.era, clockDays: this.clockDays, clockMinutes: this.clockMinutes, tick: this.tick, research: this.research, discovered: [...this.discovered], techBoost: this.techBoost, wisdom: this.wisdom, births: this.births, deaths: this.deaths, peakGen: this.peakGen, plagueUntil: this.plagueUntil, violence: this.violence, psychopathy: this.psychopathy, religionsCfg: this.religionsCfg, chronicle: this.chronicle.slice(-60), houses: this.houses, gardens: this.gardens, schools: this.schools, universities: this.universities, airport: this.airport, monarch: this.monarch?.id ?? null, creatures: this.creatures.filter((c) => !c.isAvatar).map(C) }
   }
   static fromState(s: any, spriteCount: number): World {
     const w = new World(spriteCount, s.region, undefined, true)
-    w.gov = s.gov; w.era = s.era; w.clockDays = s.clockDays; w.tick = s.tick; w.research = s.research
+    w.gov = s.gov; w.era = s.era; w.clockDays = s.clockDays; w.clockMinutes = s.clockMinutes ?? s.clockDays * 1440; w.tick = s.tick; w.research = s.research
     w.discovered = new Set<string>(s.discovered || []); w.techBoost = s.techBoost; w.wisdom = s.wisdom
     w.births = s.births; w.deaths = s.deaths; w.peakGen = s.peakGen; w.plagueUntil = s.plagueUntil
     w.violence = s.violence; w.psychopathy = s.psychopathy; w.religionsCfg = s.religionsCfg
@@ -416,10 +421,12 @@ export class World {
         c.vx = vx; c.vy = vy
       }
 
-      c.x += c.vx; c.y += c.vy
-      if (c.vx > 0.05) c.facing = 1; else if (c.vx < -0.05) c.facing = -1
-      c.x = clampn(c.x, MARGIN, WORLD_W - MARGIN)
-      c.y = clampn(c.y, MARGIN, WORLD_H - MARGIN)
+      if (!c.isAvatar) { // the avatar moves in REAL TIME (per frame, in main), not at the world's clock rate
+        c.x += c.vx; c.y += c.vy
+        if (c.vx > 0.05) c.facing = 1; else if (c.vx < -0.05) c.facing = -1
+        c.x = clampn(c.x, MARGIN, WORLD_W - MARGIN)
+        c.y = clampn(c.y, MARGIN, WORLD_H - MARGIN)
+      }
 
       const g = c.genome
       // upkeep follows the genome trait (not the scaled px velocity): a flat idle tax + a movement tax
