@@ -40,16 +40,20 @@ VITE_BASE_LANG="$BASE" npm run build >/tmp/caldo-build.log 2>&1 && echo "  dist/
 
 # ── 3) Ollama + chat model (server-side proxy → no CORS, no restart of a running Ollama) ──
 g "Ollama"
+# the official installer needs zstd to unpack — its absence is the silent failure on a fresh pod
+if ! command -v zstd >/dev/null 2>&1; then
+  y "instalando prerequisito zstd…"; apt-get update >/dev/null 2>&1; apt-get install -y zstd >/dev/null 2>&1 || true
+fi
 if ! command -v ollama >/dev/null 2>&1; then
   y "instalando Ollama (script oficial)…"
   curl -fsSL https://ollama.com/install.sh | sh 2>&1 | tail -3 || true
 fi
 if ! command -v ollama >/dev/null 2>&1; then
-  y "fallback: bajando el binario directo…"
-  if curl -fsSL -o /tmp/ollama.tgz https://ollama.com/download/ollama-linux-amd64.tgz && tar -C /usr -xzf /tmp/ollama.tgz; then
+  y "fallback: binario directo (GitHub releases)…"
+  if curl -fsSL -o /tmp/ollama.tgz https://github.com/ollama/ollama/releases/latest/download/ollama-linux-amd64.tgz && tar -C /usr -xzf /tmp/ollama.tgz; then
     echo "  binario instalado en /usr/bin/ollama"
   else
-    y "no se pudo instalar Ollama automáticamente — instalalo a mano:  curl -fsSL https://ollama.com/install.sh | sh"
+    y "no se pudo instalar Ollama automáticamente — instalalo a mano: apt-get install -y zstd && curl -fsSL https://ollama.com/install.sh | sh"
   fi
 fi
 command -v ollama >/dev/null 2>&1 && echo "  ollama: $(ollama --version 2>/dev/null | head -1)"
