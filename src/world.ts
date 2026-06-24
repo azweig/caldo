@@ -19,7 +19,7 @@ export const ROAD_HALF = 20    // half street width
 const MARGIN = 60
 
 const MATURITY_YEARS = 16
-const REPRO_COOLDOWN = 1 * DAYS_PER_YEAR  // recovery between pregnancies (gestation is on top)
+const REPRO_COOLDOWN = 150  // recovery between pregnancies (gestation is on top) — ~5 months
 const REPRO_MIN_ENERGY = 55
 const REPRO_COST = 26
 const CHILD_ENERGY = 42
@@ -30,7 +30,7 @@ const POP_CAP = 280 // per country (several countries simulate at once now)
 // realistic multiple-birth odds: ~3% twins, ~0.2% triplets, else a single
 function litterSize(): number { const r = Math.random(); return r < 0.002 ? 3 : r < 0.032 ? 2 : 1 }
 
-const FOOD_ENERGY = 28
+const FOOD_ENERGY = 40
 const START_ENERGY = 80
 const IDLE_COST = 0.10
 const MOVE_COST = 0.18
@@ -39,8 +39,8 @@ const SICK_EXTRA = 1.7
 // takes ~tens of days, not hundreds. Energy cost stays tied to the genome trait (below), NOT this,
 // so faster creatures still pay more (selection) without the scaled px exploding the upkeep.
 export const SPEED_SCALE = 11
-const GO_HOME_AT = 116   // fed → walk home
-const GO_FORAGE_AT = 80  // hungry → walk to a garden
+const GO_HOME_AT = 120   // fed → walk home
+const GO_FORAGE_AT = 98  // hungry → walk to a garden (forage early; a big map makes trips long)
 
 export interface House { x: number; y: number; w: number; h: number; surname: string; hue: number }
 export interface Garden { x: number; y: number }
@@ -148,6 +148,7 @@ export class World {
   history: Sample[] = []
   births = 0
   deaths = 0
+  deathCauses: Record<string, number> = { hambre: 0, vejez: 0, enfermedad: 0, violencia: 0 }
   peakGen = 0
   foodTarget: number
 
@@ -402,7 +403,7 @@ export class World {
 
   step() {
     this.tick++; this.clockDays++
-    if (this.food.length < this.foodTarget && Math.random() < 0.92) this.scatterFood()
+    { let n = Math.min(this.foodTarget - this.food.length, 2 + Math.ceil(this.creatures.length * 0.5)); while (n-- > 0) this.scatterFood() } // regrow food fast enough to feed a growing town
 
     // ── civilisation: research → discoveries (advance the era, boost the economy, unlock professions) ──
     this.research += this.econ.research * (1 + this.techBoost.research) * 0.5
@@ -473,7 +474,7 @@ export class World {
       let upkeep = IDLE_COST * g.metabolism * g.size + MOVE_COST * g.speed * g.speed * g.size * g.metabolism * moving
       if (c.sick) upkeep *= SICK_EXTRA
       c.energy -= upkeep
-      if (!c.isAvatar && !isMature(c)) c.energy = Math.min(MAX_ENERGY, c.energy + 0.18) // the family feeds the children
+      if (!c.isAvatar && !isMature(c)) c.energy = Math.min(MAX_ENERGY, c.energy + 0.6) // the family feeds the children (well above their upkeep, so they don't starve before growing up)
 
       const mouth = 16 + g.size * 9
       for (let i = this.food.length - 1; i >= 0; i--) {
@@ -506,14 +507,14 @@ export class World {
       if (!c.sick) { if (Math.random() < 0.00009 * (1.25 - g.resistance) * ageRisk * plague / healthM) { c.sick = true; c.sickDays = 0 } }
       else {
         c.sickDays++
-        if (Math.random() < 0.016 * (0.5 + g.resistance) * healthM) { c.sick = false; c.sickDays = 0 }
-        else if (Math.random() < 0.012 * (1.3 - g.resistance) * ageRisk / healthM) { if (!c.isAvatar && !c.controlled) { this.deaths++; continue } }
+        if (Math.random() < 0.022 * (0.5 + g.resistance) * healthM) { c.sick = false; c.sickDays = 0 }
+        else if (Math.random() < 0.006 * (1.3 - g.resistance) * ageRisk / healthM) { if (!c.isAvatar && !c.controlled) { this.deaths++; this.deathCauses.enfermedad++; continue } }
       }
 
       if (!c.isAvatar && !c.controlled) {
-        if (c.energy <= 0) { this.deaths++; continue }
-        if (c.ageDays > c.lifespanDays && Math.random() < (c.ageDays - c.lifespanDays) / (0.18 * c.lifespanDays)) { this.deaths++; continue }
-        if (isMature(c) && Math.random() < 0.0000052 * violenceRate) { this.deaths++; this.logEvent(`${c.name} ${c.surname} murió en un acto de violencia`); continue }
+        if (c.energy <= 0) { this.deaths++; this.deathCauses.hambre++; continue }
+        if (c.ageDays > c.lifespanDays && Math.random() < (c.ageDays - c.lifespanDays) / (0.18 * c.lifespanDays)) { this.deaths++; this.deathCauses.vejez++; continue }
+        if (isMature(c) && Math.random() < 0.0000052 * violenceRate) { this.deaths++; this.deathCauses.violencia++; this.logEvent(`${c.name} ${c.surname} murió en un acto de violencia`); continue }
       }
 
       // gestation → BIRTH (pairing + conception happen in the periodic demographics block below)
@@ -567,9 +568,8 @@ export class World {
       for (const c of wild) { if (c.profCat) counts[c.profCat] = (counts[c.profCat] || 0) + 1; if (c.profBase) pop[c.profBase] = (pop[c.profBase] || 0) + 1 }
       this.profCounts = counts; this.profPop = pop
       this.econ = economyOf(counts, wild.length)
-      this.foodTarget = Math.min(720, Math.round(230 * (1 + this.econ.food + this.techBoost.food)))
-      if (wild.length < 14) this.foodTarget = Math.max(this.foodTarget, 300) // homeostasis: help a tiny village recover
-      this.foodTarget = Math.max(150, this.foodTarget)
+      this.foodTarget = Math.min(2200, Math.round((260 + wild.length * 7) * (1 + this.econ.food + this.techBoost.food))) // food supply scales with the town
+      this.foodTarget = Math.max(260, this.foodTarget)
       this.socialTick(wild) // creatures chat amongst themselves + remember it
 
       // income: working adults earn money from their trade (visible + spendable when you possess them)
@@ -584,19 +584,20 @@ export class World {
       const singles = wild.filter((c) => isMature(c) && !c.partner && ageYears(c) <= FERTILE_MAX + 10)
       for (let i = 0; i + 1 < singles.length; i += 2) { singles[i].partner = singles[i + 1].id; singles[i + 1].partner = singles[i].id }
       const K = Math.min(POP_CAP, 80 + this.era * 7) // carrying capacity grows with the era (technology)
-      const growth = Math.max(0.05, 1 - wild.length / K) // strong birth drive when few, ~0 near capacity
+      const growth = Math.max(0.05, Math.min(1, 1.35 * (1 - wild.length / K))) // strong birth drive when few, ~0 near K
       for (const c of wild) {
         const ay = ageYears(c)
-        if (c.partner && c.pregnant <= 0 && ay >= MATURITY_YEARS && ay <= FERTILE_MAX && c.energy > REPRO_MIN_ENERGY &&
-            this.clockDays - c.lastRepro >= REPRO_COOLDOWN && c.id < c.partner && byId.has(c.partner)) {
-          if (Math.random() < 0.5 * growth) c.pregnant = GESTATION_MIN + Math.floor(Math.random() * 60) // conceive (~7-9 months)
-        }
+        if (!c.partner || c.pregnant > 0 || ay < MATURITY_YEARS || ay > FERTILE_MAX || c.energy <= REPRO_MIN_ENERGY ||
+            this.clockDays - c.lastRepro < REPRO_COOLDOWN || !byId.has(c.partner)) continue
+        const mate = byId.get(c.partner)!, mAy = ageYears(mate)
+        if (mAy >= MATURITY_YEARS && mAy <= FERTILE_MAX && c.id > c.partner) continue // both fertile → only lower-id bears
+        if (Math.random() < 0.85 * growth) c.pregnant = GESTATION_MIN + Math.floor(Math.random() * 60) // conceive (~7-9 months)
       }
 
     }
 
-    if (this.creatures.filter((c) => !c.isAvatar).length < 4) {
-      for (let i = 0; i < 8; i++) this.creatures.push(this.spawn(randomGenome(this.spriteCount), 1, rnd(this.houses)))
+    if (this.creatures.filter((c) => !c.isAvatar).length < 8) { // keep a struggling village from going extinct
+      for (let i = 0; i < 10; i++) { const c = this.spawn(randomGenome(this.spriteCount), 1, rnd(this.houses)); c.ageDays = (16 + Math.random() * 16) * DAYS_PER_YEAR; this.assignProfession(c); this.creatures.push(c) }
     }
   }
 }
