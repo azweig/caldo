@@ -8,6 +8,38 @@ import { TRAIT_BOUNDS } from "./genome"
 
 export interface Cam { x: number; y: number; zoom: number }
 
+let vehT = 0 // real-time animation clock for vehicles (so they move even when the world is slow)
+const seedR = (s: number) => { const x = Math.sin(s) * 43758.5453; return x - Math.floor(x) }
+// vehicles appear with the era: carts (3+), trains (9+), cars (10+), planes (11+). Decorative, on roads.
+function drawVehicles(ctx: CanvasRenderingContext2D, world: World, t: number) {
+  const era = world.era
+  if (era < 3) return
+  const cols = Math.floor(WORLD_W / BLOCK), rows = Math.floor(WORLD_H / BLOCK)
+  const N = era >= 9 ? 16 : 9
+  for (let i = 0; i < N; i++) {
+    const s = i * 1.7
+    const vertical = seedR(s) < 0.5
+    const lane = BLOCK * (1 + Math.floor(seedR(s + 1) * ((vertical ? cols : rows) - 1)))
+    const dir = seedR(s + 2) < 0.5 ? 1 : -1
+    const spd = 0.6 + seedR(s + 3) * 1.3
+    const len = vertical ? WORLD_H : WORLD_W
+    const along = (((t * spd * dir) + seedR(s + 4) * len) % len + len) % len
+    const x = vertical ? lane : along, y = vertical ? along : lane
+    let w = 6, h = 11, col = "#a87c4a" // cart
+    if (era >= 9 && i % 5 === 0) { h = 26; col = "#3a3a44" } // train (long)
+    else if (era >= 10) { w = 5; h = 9; col = i % 2 ? "#d8d8e0" : "#c06060" } // car
+    ctx.fillStyle = col
+    if (vertical) ctx.fillRect(x - w / 2, y - h / 2, w, h)
+    else ctx.fillRect(x - h / 2, y - w / 2, h, w)
+  }
+  if (era >= 11) for (let i = 0; i < 3; i++) { // planes fly above the grid
+    const s = 50 + i * 3.3
+    const px = (t * 1.8 + seedR(s) * WORLD_W) % WORLD_W, py = 120 + seedR(s + 1) * (WORLD_H - 240)
+    ctx.fillStyle = "rgba(220,230,245,0.9)"
+    ctx.beginPath(); ctx.moveTo(px, py); ctx.lineTo(px - 16, py - 5); ctx.lineTo(px - 16, py + 5); ctx.closePath(); ctx.fill()
+  }
+}
+
 const REGION_GROUND = [
   ["#0f1d1a", "#121d16", "#1b1810", "#0c131b"], // templado
   ["#101b22", "#0e1f1f", "#17191a", "#0b1016"], // frío/norteño
@@ -128,6 +160,9 @@ export function drawWorld(
     ctx.fillStyle = "rgba(150,200,255,0.5)"; for (let i = 0; i < 4; i++) ctx.fillRect(a.x + 12 + i * 26, a.y + 16, 18, 22)
     label(ctx, "✈ aeropuerto", a.x + a.w / 2, a.y - 12, "#cfe0ee")
   }
+
+  vehT += 1.3
+  drawVehicles(ctx, world, vehT)
 
   // food
   const foodOk = assets.food.naturalWidth > 0

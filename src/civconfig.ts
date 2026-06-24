@@ -30,6 +30,17 @@ export const FOOD_SYSTEMS = [
 ]
 export function foodSystem(era: number): string { return FOOD_SYSTEMS[Math.max(0, Math.min(FOOD_SYSTEMS.length - 1, era))] }
 
+// transport per era — also gates how much countries can reach each other (level 0 = isolated)
+export const TRANSPORT = [
+  "a pie", "a pie y canoas", "animales de carga", "carros con ruedas", "carros y caballos",
+  "barcos y calzadas", "carretas y veleros", "carabelas oceánicas", "diligencias",
+  "trenes a vapor", "autos y bicicletas", "autos y aviones", "autos, trenes y aviones",
+  "cohetes y jets", "vuelos supersónicos", "transporte autónomo", "drones y autónomos",
+  "transporte cuántico", "naves interestelares",
+]
+export function transportOf(era: number): string { return TRANSPORT[Math.max(0, Math.min(TRANSPORT.length - 1, era))] }
+export function transportLevel(era: number): number { return Math.max(0, Math.min(6, Math.floor(era / 3))) } // 0..6 reach between countries
+
 const NAME_POOL = ["Solandia", "Norvik", "Akahara", "Verdane", "Kessaria", "Tolmir", "Bramwell", "Yssel", "Drennan", "Mokoa", "Ulania", "Pravik", "Caldoria", "Ostmark"]
 const FLAGS = ["🟧", "🔵", "🟣", "🟢", "🔴", "🟡", "⚪", "🟤", "🔶", "🔷", "🟩", "🟥", "🟦", "🟪"]
 

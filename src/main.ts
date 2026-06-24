@@ -12,7 +12,7 @@ import { Msg, setLlm, pingLLM, autoDetect, llmConfigured, llmUrl, llmModel } fro
 import { eraName, professionSpace, ERAS } from "./civ"
 import { ENNEAGRAM } from "./psyche"
 import { LangCode, WRITE_LANG, langName, heard } from "./i18n"
-import { CivConfig, RELIGIONS, buildCountries, foodSystem } from "./civconfig"
+import { CivConfig, RELIGIONS, buildCountries, foodSystem, transportOf, transportLevel } from "./civconfig"
 
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v))
 
@@ -206,6 +206,10 @@ function statsHTML(): string {
     <div class="sline">${top(cat, (k, v) => `${k} ${v}`)}</div>
     <h3>De qué hablan</h3>
     <div class="sline">${Object.keys(topics).length ? Object.entries(topics).sort((a, b) => b[1] - a[1]).slice(0, 6).map(([k]) => k).join(" · ") : "todavía nada"}</div>
+    <h3>Transporte</h3>
+    <div class="sline">${transportOf(world.era)}</div>
+    <h3>Relaciones exteriores</h3>
+    <div class="sline">${countries.filter((c) => c !== countries[active]).map((c) => `${c.flag} ${c.name}: ${relationLabel(relationScore(countries[active], c))}`).join("<br>") || "—"}</div>
     <h3>Conflictividad</h3>
     ${row("ambiciosos (sed de poder)", `${ambitious}`)}
     ${row("nivel de crimen", `${crime}%`)}
@@ -309,7 +313,7 @@ function updateHud() {
     <div class="stat"><span>edad media</span> ${avgAge}a · <span>enfermos ✚</span> ${sick}</div>
     <div class="stat"><span>generación</span> ${world.peakGen} · <span>nac</span> ${world.births} · <span>muertes</span> ${world.deaths}</div>
     <div class="stat"><span>era</span> <b style="color:#bcd9ff">${eraName(world.era)}</b> · ${SEASONS[seasonOf(world.clockDays)]}</div>
-    <div class="stat"><span>alimento</span> ${foodSystem(world.era)}</div>
+    <div class="stat"><span>alimento</span> ${foodSystem(world.era)} · <span>transporte</span> ${transportOf(world.era)}</div>
     <div class="stat"><span>religión</span> ${topRel ? `${topRel[0]} ${Math.round(100 * topRel[1] / (wild.length || 1))}%` : "—"} · <span>ambiciosos</span> ${psychos}</div>
     <div class="stat"><span>saber 📚</span> ${Math.round(world.wisdom)} · <span>oficios</span> ${professionSpace().toLocaleString()} · <span>univ.</span> ${world.universities.length}</div>
     <div class="stat"><span>investigando</span> ${rp.name} <span class="rbar"><i style="width:${Math.round(rp.frac * 100)}%"></i></span></div>
@@ -340,23 +344,66 @@ function switchCountry(i: number) {
   closeChat(); inspect.classList.add("hidden")
   ;[...tabsEl.children].forEach((el, j) => (el as HTMLElement).classList.toggle("active", j === i))
 }
-// occasionally fly a grown creature to another country — cross-pollinating genes, beliefs + trades
-function maybeMigrate(ticks: number) {
-  migrateAcc += ticks
-  if (migrateAcc < 500 || countries.length < 2) return
-  migrateAcc = 0
-  const from = countries[Math.floor(Math.random() * countries.length)]
+// ── inter-country relations: peace / alliance / war computed from compatibility ──
+function topReligion(w: World): string {
+  const r: Record<string, number> = {}
+  for (const c of w.creatures) if (!c.isAvatar && c.religion) r[c.religion] = (r[c.religion] || 0) + 1
+  return Object.entries(r).sort((a, b) => b[1] - a[1])[0]?.[0] || ""
+}
+function relationScore(A: Country, B: Country): number {
+  let s = 1
+  const ra = topReligion(A.world), rb = topReligion(B.world)
+  if (ra && ra === rb) s += 2.5; else s -= 1                       // shared faith bonds; different divides
+  if (A.world.gov === B.world.gov) s += 1; else s -= 0.5           // like governments get along
+  s -= Math.abs(A.world.era - B.world.era) * 0.25                  // a big tech gap breeds resentment
+  s -= (A.world.violence + B.world.violence) * 1.8                 // violent peoples clash
+  s -= (A.world.psychopathy + B.world.psychopathy) * 2.5
+  if (A.world.monarch?.powerHungry || B.world.monarch?.powerHungry) s -= 1.5 // a despot wants conquest
+  return s
+}
+function relationLabel(s: number): string { return s > 3 ? "aliados 🤝" : s > 1 ? "paz" : s > -1 ? "neutral" : s > -3 ? "tensión" : "guerra ⚔" }
+
+function warDeaths(w: World, n: number) {
+  const adults = w.creatures.filter((c) => !c.isAvatar && isMature(c))
+  for (let k = 0; k < n && adults.length > 6; k++) {
+    const v = adults.splice(Math.floor(Math.random() * adults.length), 1)[0]
+    const idx = w.creatures.indexOf(v); if (idx >= 0) { w.creatures.splice(idx, 1); w.deaths++ }
+  }
+}
+function migrateBetween(from: Country, to: Country) {
+  if (from === to) return
   const pool = from.world.creatures.filter((c) => !c.isAvatar && isMature(c))
-  if (pool.length < 24) return
-  let toI = Math.floor(Math.random() * countries.length)
-  if (countries[toI] === from) toI = (toI + 1) % countries.length
-  const to = countries[toI], c = pool[Math.floor(Math.random() * pool.length)]
+  if (pool.length < 16) return
+  const c = pool[Math.floor(Math.random() * pool.length)]
   from.world.creatures.splice(from.world.creatures.indexOf(c), 1)
   c.x = to.world.airport.x + Math.random() * 80; c.y = to.world.airport.y + Math.random() * 50
-  c.home = to.world.houses[Math.floor(Math.random() * to.world.houses.length)]; c.goingHome = false
+  c.home = to.world.houses[Math.floor(Math.random() * to.world.houses.length)]; c.goingHome = false; c.partner = 0; c.pregnant = 0
   to.world.creatures.push(c)
-  from.world.chronicle.push({ day: from.world.clockDays, text: `${c.name} ${c.surname} emigró a ${to.name} ✈` })
-  to.world.chronicle.push({ day: to.world.clockDays, text: `llegó ${c.name} ${c.surname} desde ${from.name} (${c.profession || "forastero"}) ✈` })
+  from.world.chronicle.push({ day: from.world.clockDays, text: `${c.name} ${c.surname} partió a ${to.name} ✈` })
+  to.world.chronicle.push({ day: to.world.clockDays, text: `llegó ${c.name} ${c.surname} desde ${from.name} ✈` })
+}
+// runs periodically: transport gates contact, the relation decides migration / alliance / war
+function worldAffairs(steps: number) {
+  migrateAcc += steps
+  if (migrateAcc < 450 || countries.length < 2) return
+  migrateAcc = 0
+  const i = Math.floor(Math.random() * countries.length)
+  const j = (i + 1 + Math.floor(Math.random() * (countries.length - 1))) % countries.length
+  const A = countries[i], B = countries[j]
+  if (Math.min(transportLevel(A.world.era), transportLevel(B.world.era)) < 1) return // isolated until carts/boats (~era 3)
+  const label = relationLabel(relationScore(A, B))
+  if (label.startsWith("guerra")) {
+    warDeaths(A.world, 1 + Math.floor(Math.random() * 2)); warDeaths(B.world, 1 + Math.floor(Math.random() * 2))
+    A.world.chronicle.push({ day: A.world.clockDays, text: `⚔ guerra con ${B.name}` })
+    B.world.chronicle.push({ day: B.world.clockDays, text: `⚔ guerra con ${A.name}` })
+  } else if (label === "aliados 🤝") {
+    migrateBetween(A, B); migrateBetween(B, A)                       // open borders — the peoples mix
+    const lag = A.world.era <= B.world.era ? A : B; lag.world.research += 5000 // shared technology
+  } else if (label === "paz") {
+    if (Math.random() < 0.5) migrateBetween(A, B); else migrateBetween(B, A)
+  } else if (Math.random() < 0.4) {
+    migrateBetween(A, B)                                            // neutral/tense — the rare traveller
+  }
 }
 
 // overheard AI-to-AI chatter near the avatar (you can listen, not intervene)
@@ -406,7 +453,7 @@ function loop() {
       while (cn.world.clockDays < want && s < cap) { cn.world.step(); s++ }
       steps += s
     }
-    if (steps) maybeMigrate(steps)
+    if (steps) worldAffairs(steps)
   }
   if (avatar) avatar.energy = Math.max(60, Math.min(150, avatar.energy)) // immortal visitor: ages, never starves
   // advance / start overheard chatter
