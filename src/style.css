@@ -1,0 +1,81 @@
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body { height: 100%; overflow: hidden; background: #0a0f14; }
+body { font-family: ui-monospace, "SF Mono", Menlo, monospace; color: #dfe7ee; }
+
+#world { position: fixed; inset: 0; display: block; }
+
+.hidden { display: none !important; }
+
+/* HUD top-left */
+#hud {
+  position: fixed; top: 14px; left: 14px;
+  background: rgba(8, 14, 20, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 10px; padding: 10px 13px;
+  font-size: 12px; line-height: 1.7; min-width: 240px;
+  backdrop-filter: blur(4px); pointer-events: none;
+}
+#hud .stat span { color: #7d93a6; }
+#hud .energy { color: #ffd76a; }
+#hud .hint { margin-top: 7px; color: #5f7384; font-size: 11px; }
+#hud .paused { margin-top: 4px; color: #ff9d6a; }
+
+/* time bar — top center */
+#timebar {
+  position: fixed; top: 14px; left: 50%; transform: translateX(-50%);
+  display: flex; align-items: center; gap: 11px;
+  background: rgba(8, 14, 20, 0.72);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 10px; padding: 7px 13px;
+  font-size: 12px; backdrop-filter: blur(4px);
+}
+#timebar #pause {
+  background: rgba(255, 255, 255, 0.08); color: #dfe7ee;
+  border: 1px solid rgba(255, 255, 255, 0.14); border-radius: 7px;
+  width: 30px; height: 26px; cursor: pointer; font-size: 13px; line-height: 1;
+}
+#timebar #pause:hover { background: rgba(255, 255, 255, 0.16); }
+#timebar #speed { width: 150px; accent-color: #8fe3a0; cursor: pointer; }
+#timebar #scale-label { color: #8fe3a0; min-width: 78px; }
+#timebar .sep { color: #44535f; }
+#timebar #clock { color: #ffd76a; font-variant-numeric: tabular-nums; min-width: 130px; }
+
+/* chat panel bottom-center */
+#chat {
+  position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+  width: min(560px, 92vw);
+  background: rgba(10, 17, 24, 0.94);
+  border: 1px solid rgba(120, 200, 255, 0.35);
+  border-radius: 14px; padding: 12px 14px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+}
+#chat-who { color: #9cd2ff; font-size: 12px; margin-bottom: 8px; font-weight: 600; }
+#chat-log { max-height: 180px; overflow-y: auto; font-size: 13px; line-height: 1.5; margin-bottom: 9px; }
+#chat-log .line { margin: 3px 0; }
+#chat-log .me b { color: #ffd76a; }
+#chat-log .them b { color: #7bd0ff; }
+#chat-input {
+  width: 100%; background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.14); border-radius: 8px;
+  padding: 8px 11px; color: #fff; font: inherit; font-size: 13px; outline: none;
+}
+#chat-input:focus { border-color: #78c8ff; }
+
+/* death + intro overlays */
+#death, #intro {
+  position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
+  background: rgba(5, 8, 12, 0.82); backdrop-filter: blur(3px); z-index: 10; text-align: center;
+}
+.death-card h1, #intro h1 { font-size: 34px; margin-bottom: 12px; letter-spacing: 1px; }
+.death-card h1 { color: #ff8c6a; }
+#intro h1 { color: #8fe3a0; font-size: 46px; }
+.death-card p, #intro p { color: #b6c4d2; line-height: 1.7; max-width: 460px; }
+#intro p { margin-bottom: 14px; }
+#intro .dim { color: #708496; font-size: 13px; }
+.key { margin-top: 14px; color: #ffd76a; }
+#intro button {
+  margin-top: 22px; background: #2e7d5b; color: #eafff2; border: 0;
+  padding: 12px 26px; border-radius: 10px; font: inherit; font-size: 15px; cursor: pointer;
+}
+#intro button:hover { background: #379268; }
+#intro b { color: #cfe9ff; }

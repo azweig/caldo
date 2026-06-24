@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <title>caldo · simulador de vida evolutivo</title>
+  </head>
+  <body>
+    <canvas id="world"></canvas>
+
+    <div id="hud"></div>
+
+    <div id="timebar">
+      <button id="pause" title="pausa (espacio)">⏸</button>
+      <input id="speed" type="range" min="0" max="5" value="0" step="1" title="velocidad del tiempo" />
+      <span id="scale-label">1 s = 1 min</span>
+      <span class="sep">·</span>
+      <span id="clock">Día 1 · 00:00</span>
+    </div>
+
+    <div id="chat" class="hidden">
+      <div id="chat-who"></div>
+      <div id="chat-log"></div>
+      <input id="chat-input" type="text" placeholder="escribí y Enter… (Esc cierra)" autocomplete="off" />
+    </div>
+
+    <div id="death" class="hidden">
+      <div class="death-card">
+        <h1>moriste</h1>
+        <p id="death-reason">te quedaste sin energía.</p>
+        <p class="key">R para volver a entrar</p>
+      </div>
+    </div>
+
+    <div id="intro">
+      <h1>caldo</h1>
+      <p>un mundo que <b>evoluciona solo</b>. vos sos una criatura más — sin poderes, mortal.<br />
+        moverte: <b>WASD</b> · hablar: <b>E</b> · pausa: <b>espacio</b> · zoom: <b>scroll</b></p>
+      <p class="dim">comé los puntos verdes para no apagarte. mirá cómo las líneas del gráfico cambian: eso es la evolución.</p>
+      <button id="start">entrar al caldo</button>
+    </div>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
