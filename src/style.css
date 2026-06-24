@@ -39,6 +39,39 @@ body { font-family: ui-monospace, "SF Mono", Menlo, monospace; color: #dfe7ee; }
 #timebar #scale-label { color: #8fe3a0; min-width: 78px; }
 #timebar .sep { color: #44535f; }
 #timebar #clock { color: #ffd76a; font-variant-numeric: tabular-nums; min-width: 130px; }
+#timebar #cfg {
+  background: rgba(255, 255, 255, 0.08); color: #cfe0ee;
+  border: 1px solid rgba(255, 255, 255, 0.14); border-radius: 7px;
+  width: 28px; height: 26px; cursor: pointer; font-size: 13px;
+}
+#timebar #cfg:hover { background: rgba(143, 227, 160, 0.2); }
+
+/* settings modal */
+#settings {
+  position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
+  background: rgba(5, 8, 12, 0.8); backdrop-filter: blur(3px); z-index: 20;
+}
+.settings-card {
+  background: #0e1620; border: 1px solid rgba(143, 227, 160, 0.3); border-radius: 14px;
+  padding: 22px 24px; width: min(480px, 92vw);
+}
+.settings-card h2 { font-size: 18px; margin-bottom: 8px; color: #8fe3a0; }
+.settings-card .dim { color: #7d93a6; font-size: 12px; line-height: 1.6; margin-bottom: 16px; }
+.settings-card code { background: rgba(255, 255, 255, 0.08); padding: 1px 5px; border-radius: 4px; color: #cfe0ee; }
+.settings-card label { display: block; font-size: 12px; color: #9fb2c2; margin: 10px 0 4px; }
+.settings-card input {
+  width: 100%; background: rgba(255, 255, 255, 0.06); border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 8px; padding: 9px 11px; color: #fff; font: inherit; font-size: 13px; outline: none;
+}
+.settings-card input:focus { border-color: #8fe3a0; }
+.settings-actions { display: flex; gap: 9px; margin-top: 18px; }
+.settings-actions button {
+  flex: 1; padding: 10px; border-radius: 8px; border: 0; font: inherit; font-size: 13px; cursor: pointer;
+  background: rgba(255, 255, 255, 0.1); color: #dfe7ee;
+}
+#cfg-save { background: #2e7d5b !important; color: #eafff2; }
+.settings-actions button:hover { filter: brightness(1.2); }
+#cfg-status { margin-top: 12px; font-size: 12px; min-height: 16px; }
 
 /* chat panel bottom-center */
 #chat {

@@ -16,12 +16,31 @@
       <span id="scale-label">1 s = 1 min</span>
       <span class="sep">·</span>
       <span id="clock">Día 1 · 00:00</span>
+      <button id="cfg" title="conectar IA (voz de las criaturas)">⚙</button>
     </div>
 
     <div id="chat" class="hidden">
       <div id="chat-who"></div>
       <div id="chat-log"></div>
       <input id="chat-input" type="text" placeholder="escribí y Enter… (Esc cierra)" autocomplete="off" />
+    </div>
+
+    <div id="settings" class="hidden">
+      <div class="settings-card">
+        <h2>🧠 Voz IA de las criaturas</h2>
+        <p class="dim">Conectá el Ollama de tu GPU box para que hablen fluido, en personaje y con memoria.
+          Dejalo vacío para usar la voz simple. (Tu Ollama necesita <code>OLLAMA_ORIGINS=*</code>.)</p>
+        <label>URL de Ollama</label>
+        <input id="cfg-url" placeholder="https://&lt;tu-pod&gt;-11434.proxy.runpod.net" autocomplete="off" />
+        <label>Modelo</label>
+        <input id="cfg-model" placeholder="qwen2.5:7b" autocomplete="off" />
+        <div class="settings-actions">
+          <button id="cfg-test">probar</button>
+          <button id="cfg-save">guardar</button>
+          <button id="cfg-close">cerrar</button>
+        </div>
+        <div id="cfg-status"></div>
+      </div>
     </div>
 
     <div id="death" class="hidden">

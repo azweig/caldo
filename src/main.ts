@@ -7,7 +7,8 @@ import "./style.css"
 import { World, Creature, formatClock, ageYears, WORLD_W, WORLD_H, SPEED_SCALE } from "./world"
 import { loadAssets } from "./sprites"
 import { drawWorld, drawChart } from "./render"
-import { respond, greeting } from "./chat"
+import { respond, greeting, remember } from "./chat"
+import { Msg, setLlm, pingLLM, llmConfigured, llmUrl, llmModel } from "./llm"
 
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v))
 
@@ -43,6 +44,7 @@ let scaleIndex = 2
 let chatting = false
 let pausedByChat = false
 let tickAcc = 0
+let session: Msg[] = []
 
 const CHAT_RANGE = 70
 
@@ -67,37 +69,64 @@ function togglePause() { paused = !paused; pauseBtn.textContent = paused ? "▶"
 speedSlider.addEventListener("input", () => { setScale(+speedSlider.value); speedSlider.blur() })
 pauseBtn.addEventListener("click", () => { togglePause(); pauseBtn.blur() })
 
+// ── ⚙ LLM settings (point the creatures' voice at your GPU box's Ollama) ──
+const settings = document.getElementById("settings") as HTMLDivElement
+const cfgUrl = document.getElementById("cfg-url") as HTMLInputElement
+const cfgModel = document.getElementById("cfg-model") as HTMLInputElement
+const cfgStatus = document.getElementById("cfg-status")!
+document.getElementById("cfg")!.addEventListener("click", () => {
+  cfgUrl.value = llmUrl(); cfgModel.value = llmModel(); cfgStatus.textContent = ""
+  settings.classList.remove("hidden")
+})
+document.getElementById("cfg-close")!.addEventListener("click", () => settings.classList.add("hidden"))
+document.getElementById("cfg-save")!.addEventListener("click", () => { setLlm(cfgUrl.value, cfgModel.value); settings.classList.add("hidden") })
+document.getElementById("cfg-test")!.addEventListener("click", async () => {
+  setLlm(cfgUrl.value, cfgModel.value)
+  cfgStatus.textContent = "probando…"; cfgStatus.style.color = "#9fb2c2"
+  const r = await pingLLM()
+  cfgStatus.textContent = r.ok ? `✓ conectado — dijo: "${r.detail}"` : `✗ falló: ${r.detail}`
+  cfgStatus.style.color = r.ok ? "#8fe39a" : "#ff8c6a"
+})
+;[cfgUrl, cfgModel].forEach((inp) => inp.addEventListener("keydown", (e) => e.stopPropagation()))
+
 function nearestTalkable(): Creature | null { return avatar ? world.nearestCreature(avatar, CHAT_RANGE, (o) => !o.isAvatar) : null }
 function openChat() {
   const t = nearestTalkable()
   if (!t) return
-  chatTarget = t; chatting = true
+  chatTarget = t; chatting = true; session = []
   if (!paused) { paused = true; pausedByChat = true; pauseBtn.textContent = "▶" }
   chatBox.classList.remove("hidden")
-  chatWho.textContent = greeting(t)
+  chatWho.textContent = greeting(t) + (llmConfigured() ? " 🧠" : "")
   chatLog.innerHTML = ""
-  addLine(t.name, "Te mira. ¿Querés decirle algo?", "them")
+  addLine(t.name, t.memory.length ? "Te reconoce. ¿Qué le decís?" : "Te mira. ¿Querés decirle algo?", "them")
   chatInput.value = ""; chatInput.focus()
 }
 function closeChat() {
   chatting = false
+  if (chatTarget) remember(chatTarget, session)
   if (pausedByChat) { paused = false; pausedByChat = false; pauseBtn.textContent = "⏸" }
   chatBox.classList.add("hidden")
 }
-function addLine(who: string, text: string, cls: "me" | "them") {
+function addLine(who: string, text: string, cls: "me" | "them"): HTMLDivElement {
   const el = document.createElement("div")
   el.className = "line " + cls
   el.innerHTML = `<b>${who}:</b> ${text}`
   chatLog.appendChild(el); chatLog.scrollTop = chatLog.scrollHeight
+  return el
 }
 chatInput.addEventListener("keydown", async (e) => {
   e.stopPropagation()
   if (e.key === "Escape") { closeChat(); return }
   if (e.key === "Enter" && chatInput.value.trim() && chatTarget) {
+    const who = chatTarget
     const msg = chatInput.value.trim()
     addLine("Tú", msg, "me"); chatInput.value = ""
-    const reply = await respond(chatTarget, msg)
-    addLine(chatTarget.name, reply, "them")
+    session.push({ role: "user", content: msg })
+    const typing = addLine(who.name, "<i>…</i>", "them")
+    const reply = await respond(who, msg, session)
+    typing.innerHTML = `<b>${who.name}:</b> ${reply}`
+    chatLog.scrollTop = chatLog.scrollHeight
+    session.push({ role: "assistant", content: reply })
   }
 })
 
