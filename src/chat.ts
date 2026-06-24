@@ -6,6 +6,9 @@
 import { Creature, ageYears } from "./world"
 import { describePsyche, psycheLabel } from "./psyche"
 import { llmConfigured, llmChat, Msg } from "./llm"
+import { langName, LangCode } from "./i18n"
+
+export interface ChatInfo { era: string; country: string; food: string; lang: LangCode }
 
 function systemPrompt(c: Creature, era: string, lang: string, ctx: string): string {
   const ay = Math.round(ageYears(c))
@@ -24,13 +27,13 @@ ${describePsyche(c.psyche)}
 Hablás SIEMPRE en ${lang}, en personaje (que tu núcleo, tu temperamento y tus creencias tiñan cómo hablás), breve (1 a 3 frases), natural y vivo. NUNCA digas que sos una IA ni menciones el mundo real, internet ni tecnología: solo conocés el caldo — los jardines donde crece la comida, las calles, las casas, las familias, las estaciones, el hambre, la enfermedad y la muerte. Si el visitante menciona algo que no es de tu mundo, reaccioná con extrañeza genuina.${mem}`
 }
 
-export async function respond(c: Creature, message: string, history: Msg[] = [], era = "Paleolítica", lang = "español rioplatense", ctx = ""): Promise<string> {
+export async function respond(c: Creature, message: string, history: Msg[] = [], era = "Paleolítica", lang = "español rioplatense", ctx = "", info?: ChatInfo): Promise<string> {
   if (llmConfigured()) {
     try {
       return await llmChat([{ role: "system", content: systemPrompt(c, era, lang, ctx) }, ...history.slice(-8), { role: "user", content: message }])
     } catch { /* fall through to the templated voice */ }
   }
-  return templated(c, message)
+  return templated(c, message, info || { era, country: "el caldo", food: "lo que el caldo da", lang: "es" })
 }
 
 // ── ambient creature-to-creature chatter (the player can overhear it, not intervene) ──
@@ -86,18 +89,39 @@ const PH = {
   cria: ["Acabo de nacer. Todo es nuevo. ¿Qué se come?", "Soy joven. Mis padres andan por acá."],
   anciano: ["Vi muchas estaciones. Pronto me tocará descansar.", "Mis hijos seguirán cuando yo no esté."],
 }
-const pick = (a: string[]) => a[Math.floor(Math.random() * a.length)]
 
-function templated(c: Creature, message: string): string {
-  const m = message.toLowerCase(); const ay = Math.round(ageYears(c))
-  if (c.sick && /enferm|salud|bien|cómo|como/.test(m)) return pick(PH.enfermo)
-  if (/edad|años|anos|viejo|joven/.test(m)) return `Tengo ${ay} años.`
-  if (/hijo|cría|cria|famil|apellido|padre|madre/.test(m)) return c.children > 0 ? `Soy de los ${c.surname}. Tuve ${c.children} ${c.children === 1 ? "hijo" : "hijos"}.` : `Soy de los ${c.surname}. Aún sin familia.`
-  if (/quién|quien|sos|eres|nombre/.test(m)) return `Soy ${c.name} ${c.surname}, ${ay} años.`
-  if (/hola|buenas|hey|ey/.test(m)) return pick(PH.saludo)
-  if (/comida|comer|hambre|energ/.test(m)) return pick(PH.hambre)
-  if (c.sick) return pick(PH.enfermo)
-  if (ay < 16) return pick(PH.cria)
-  if (ay > 65) return pick(PH.anciano)
-  return pick(PH.filosofia)
+// anti-parrot: don't give a creature the same templated line twice in a row
+const lastSaid = new Map<number, string>()
+function vary(c: Creature, options: string[]): string {
+  const last = lastSaid.get(c.id)
+  const pool = options.length > 1 ? options.filter((o) => o !== last) : options
+  const r = pool[Math.floor(Math.random() * pool.length)]
+  lastSaid.set(c.id, r)
+  return r
+}
+
+// the built-in voice (no LLM) — now context-aware (era, country, food, language, job, faith, family)
+// and varied, so it actually answers and doesn't repeat. The fluid voice still comes from the LLM.
+function templated(c: Creature, message: string, info: ChatInfo): string {
+  const m = message.toLowerCase()
+  const ay = Math.round(ageYears(c))
+  const child = ay < 16, elder = ay > 65
+  if (/idioma|lengua|hablas|habl[aá]s|language|speak/.test(m)) return vary(c, [`Hablo ${langName(info.lang)}, como todos acá.`, `${langName(info.lang)}. ¿Vos no?`, `El de siempre: ${langName(info.lang)}.`])
+  if (/d[oó]nde|lugar|aqu[ií]|d[oó]nde estamos|where|qu[eé] pa[ií]s|qu[eé] lugar|ciudad|pueblo|naci[oó]n/.test(m)) return vary(c, [`Estamos en ${info.country}. ${info.era}, dicen los viejos.`, `Esto es ${info.country}, el único mundo que conozco.`, `${info.country}. ¿De dónde venís vos?`])
+  if (/qui[eé]n.*(sos|eres)|tu nombre|c[oó]mo te llam|who are you|name/.test(m)) return `Soy ${c.name} ${c.surname}${c.profession ? `, ${c.profession}` : ""}.`
+  if (/edad|a[ñn]os|cu[aá]nto|viejo|joven|old|age/.test(m)) return vary(c, child ? [`Tengo ${ay} años, soy chico todavía.`, `${ay}. Todo es nuevo para mí.`] : elder ? [`${ay} años. Vi muchas estaciones.`, `Ya tengo ${ay}; pronto descansaré.`] : [`${ay} años, en mi plenitud.`, `Tengo ${ay}.`])
+  if (/oficio|trabaj|hac[eé]s|haces|laburo|profesi|job|work|dedic/.test(m)) return c.profession ? vary(c, [`Soy ${c.profession}.`, `Me dedico a ser ${c.profession}.`, `Mi oficio es ${c.profession}.`]) : (child ? "Todavía soy chico, voy a la escuela a aprender." : "Aún no tengo oficio.")
+  if (/religi|cre[eé]s|cre[eo]|dios|fe|alma|culto|belief|god|reza/.test(m)) return c.religion ? vary(c, [`Creo en ${c.religion}.`, `Sigo ${c.religion}, como mi familia.`, `${c.religion} guía mis días.`]) : "No sigo ningún credo."
+  if (/hijo|cr[ií]a|famil|padre|madre|apellido|family|children|esposa|pareja/.test(m)) return c.children > 0 ? `Soy de los ${c.surname}, tuve ${c.children} ${c.children === 1 ? "hijo" : "hijos"}.` : c.parents ? `Soy ${c.name} de los ${c.surname}; mis padres andan cerca.` : `Soy de los ${c.surname}, aún sin familia propia.`
+  if (/comida|comer|hambre|comen|food|eat|aliment|cosech/.test(m)) return vary(c, [`Comemos de ${info.food}.`, `Acá vivimos de ${info.food}.`, c.energy < 35 ? "Tengo hambre, voy al jardín." : "Hay comida si uno se mueve."])
+  if (c.sick && /enferm|salud|bien|c[oó]mo est|sick|sentís/.test(m)) return vary(c, PH.enfermo)
+  if (/enferm|salud|sick/.test(m)) return c.sick ? vary(c, PH.enfermo) : "Sano, por ahora, gracias."
+  if (/vida|sentido|por qu[eé]|porque|meaning|why|muerte|morir/.test(m)) return vary(c, PH.filosofia)
+  if (/extra[ñn]|forastero|vos qui[eé]n|stranger|de d[oó]nde ven/.test(m)) return vary(c, ["No te había visto. ¿De qué familia venís?", "Sos raro, no parecés de acá.", "¿Quién sos vos, forastero?"])
+  if (/hola|buenas|hey|ey|hello|hi\b|qu[eé] tal/.test(m)) return vary(c, PH.saludo)
+  if (c.sick) return vary(c, PH.enfermo)
+  if (child) return vary(c, ["No entiendo bien eso, soy chico.", "¿Eso qué es? Soy muy joven.", "Preguntale a un grande, yo no sé."])
+  if (elder) return vary(c, PH.anciano)
+  if (c.powerHungry) return vary(c, ["Hablás mucho. ¿Qué ganás con eso?", "El que manda no pierde tiempo en charlas.", "Andá al grano, forastero."])
+  return vary(c, [...PH.filosofia, `Soy ${c.profession || "uno más del caldo"}. ¿Qué andás buscando?`, "Mmh. Decime algo que valga la pena."])
 }

@@ -194,7 +194,8 @@ chatInput.addEventListener("keydown", async (e) => {
     session.push({ role: "user", content: msg })
     const typing = addLine(who.name, "<i>…</i>", "them")
     const ctx = `Tu pueblo come de ${foodSystem(world.era)}; es una ${world.gov}${world.monarch ? `, gobernada por ${world.monarch.name} ${world.monarch.surname}` : ""}.`
-    const reply = await respond(who, msg, session, eraName(world.era), WRITE_LANG, ctx)
+    const info = { era: eraName(world.era), country: countries[active].name, food: foodSystem(world.era), lang: countries[active].lang }
+    const reply = await respond(who, msg, session, eraName(world.era), WRITE_LANG, ctx, info)
     const h = heard(reply, countries[active].lang)
     typing.innerHTML = `<b>${who.name}:</b> <span class="tag">${h.tag}</span> ${h.text}`
     chatLog.scrollTop = chatLog.scrollHeight
