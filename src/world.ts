@@ -6,9 +6,10 @@
 import { Genome, randomGenome, recombine } from "./genome"
 import { Psyche, randomPsyche, inheritPsyche } from "./psyche"
 import { Cat, Boosts, Prof, PROFS, TECHS, availableProfs, nextTech, economyOf, professionTitle, eraName } from "./civ"
-import { pickReligion } from "./civconfig"
+import { pickReligion, EconSystem } from "./civconfig"
 import { genPerson, inheritDark, classify, DarkTriad, Archetype } from "./population"
 import { runSociety } from "./society"
+import { stageOf } from "./lifestage"
 
 export const SEASONS = ["primavera", "verano", "otoño", "invierno"] as const
 export function seasonOf(days: number): number { return Math.floor((Math.floor(days) % DAYS_PER_YEAR) / (DAYS_PER_YEAR / 4)) }
@@ -93,7 +94,7 @@ export interface Creature {
 // a notable act, logged so we can later rank the most INFLUENTIAL people per generation
 export interface Deed { day: number; gen: number; who: number; name: string; kind: string; text: string; impact: number; content?: string }
 
-export interface WorldOpts { startEra: number; religions: { name: string; pct: number }[]; violence: number; psychopathy: number; gov: "monarquía" | "república" }
+export interface WorldOpts { startEra: number; religions: { name: string; pct: number }[]; violence: number; psychopathy: number; gov: "monarquía" | "república"; system?: EconSystem }
 
 export interface Sample { pop: number; speed: number; vision: number; size: number; metabolism: number; intellect: number; knowledge: number }
 
@@ -146,6 +147,8 @@ export class World {
   plagueUntil = 0
   // civ configuration / governance
   gov: "monarquía" | "república" = "república"
+  system: EconSystem = "capitalista" // economic-political system: capitalist / socialist / dictatorship
+  repressed = 0 // running count of subversives crushed by a dictatorship (for the stats panel)
   violence = 0.3
   psychopathy = 0.05
   religionsCfg: { name: string; pct: number }[] = [{ name: "el Caldo Eterno", pct: 100 }]
@@ -168,7 +171,7 @@ export class World {
     this.region = region
     this.foodTarget = 230
     if (opts) {
-      this.gov = opts.gov; this.violence = opts.violence; this.psychopathy = opts.psychopathy
+      this.gov = opts.gov; this.violence = opts.violence; this.psychopathy = opts.psychopathy; this.system = opts.system ?? this.system
       this.religionsCfg = opts.religions.length ? opts.religions : this.religionsCfg
     }
     if (skipSeed) return // fromState() will populate everything
@@ -270,11 +273,11 @@ export class World {
   toState() {
     const hi = new Map<House, number>(); this.houses.forEach((h, i) => hi.set(h, i))
     const C = (c: Creature) => ({ id: c.id, x: c.x, y: c.y, e: c.energy, ad: c.ageDays, ls: c.lifespanDays, gen: c.generation, nm: c.name, sn: c.surname, h: hi.get(c.home) ?? 0, k: c.knowledge, pf: c.profession, pb: c.profBase, pc: c.profCat, hp: c.heritProf, sick: c.sick, ch: c.children, par: c.parents, rel: c.religion, pw: c.powerHungry, g: c.genome, ps: c.psyche, mem: c.memory, soc: c.social, gh: c.goingHome, pt: c.partner, pg: c.pregnant, mny: c.money, dk: c.dark, arc: c.archetype, crm: c.crimes, biz: c.business })
-    return { region: this.region, gov: this.gov, era: this.era, clockDays: this.clockDays, clockMinutes: this.clockMinutes, tick: this.tick, research: this.research, discovered: [...this.discovered], techBoost: this.techBoost, wisdom: this.wisdom, births: this.births, deaths: this.deaths, peakGen: this.peakGen, plagueUntil: this.plagueUntil, violence: this.violence, psychopathy: this.psychopathy, religionsCfg: this.religionsCfg, chronicle: this.chronicle.slice(-60), houses: this.houses, gardens: this.gardens, schools: this.schools, universities: this.universities, airport: this.airport, monarch: this.monarch?.id ?? null, deeds: this.deeds.slice(-300), creatures: this.creatures.filter((c) => !c.isAvatar).map(C) }
+    return { region: this.region, gov: this.gov, system: this.system, era: this.era, clockDays: this.clockDays, clockMinutes: this.clockMinutes, tick: this.tick, research: this.research, discovered: [...this.discovered], techBoost: this.techBoost, wisdom: this.wisdom, births: this.births, deaths: this.deaths, peakGen: this.peakGen, plagueUntil: this.plagueUntil, violence: this.violence, psychopathy: this.psychopathy, religionsCfg: this.religionsCfg, chronicle: this.chronicle.slice(-60), houses: this.houses, gardens: this.gardens, schools: this.schools, universities: this.universities, airport: this.airport, monarch: this.monarch?.id ?? null, deeds: this.deeds.slice(-300), creatures: this.creatures.filter((c) => !c.isAvatar).map(C) }
   }
   static fromState(s: any, spriteCount: number): World {
     const w = new World(spriteCount, s.region, undefined, true)
-    w.gov = s.gov; w.era = s.era; w.clockDays = s.clockDays; w.clockMinutes = s.clockMinutes ?? s.clockDays * 1440; w.tick = s.tick; w.research = s.research
+    w.gov = s.gov; w.system = s.system || "capitalista"; w.era = s.era; w.clockDays = s.clockDays; w.clockMinutes = s.clockMinutes ?? s.clockDays * 1440; w.tick = s.tick; w.research = s.research
     w.discovered = new Set<string>(s.discovered || []); w.techBoost = s.techBoost; w.wisdom = s.wisdom
     w.births = s.births; w.deaths = s.deaths; w.peakGen = s.peakGen; w.plagueUntil = s.plagueUntil
     w.violence = s.violence; w.psychopathy = s.psychopathy; w.religionsCfg = s.religionsCfg
@@ -510,8 +513,9 @@ export class World {
         if (!isMature(c)) {
           const s = this.nearestSchool(c)
           const atSchool = (c.x - (s.x + s.w / 2)) ** 2 + (c.y - (s.y + s.h / 2)) ** 2 < 95 * 95
-          const ceiling = this.wisdom + 8 // a child can learn what the village knows, plus a little
-          if (atSchool && c.knowledge < ceiling) c.knowledge = Math.min(ceiling, c.knowledge + 0.06 * g.intellect * learnM)
+          const ceiling = this.wisdom + 18 // school teaches the FULL curriculum: the village's knowledge + a broad margin
+          const lr = stageOf(ageYears(c)).learnRate // young children absorb fastest
+          if (atSchool && c.knowledge < ceiling) c.knowledge = Math.min(ceiling, c.knowledge + 0.11 * g.intellect * learnM * lr)
         } else if (c.knowledge < 100) {
           c.knowledge += 0.0014 * g.intellect // slow lifelong experience → nudges the village ceiling up (the ratchet)
         }

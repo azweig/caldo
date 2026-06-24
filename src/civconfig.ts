@@ -6,7 +6,7 @@
 import { LangCode } from "./i18n"
 
 export type Gov = "monarquía" | "república"
-export interface CountryCfg { name: string; flag: string; gov: Gov; lang: LangCode }
+export interface CountryCfg { name: string; flag: string; gov: Gov; lang: LangCode; system: EconSystem }
 export interface CivConfig {
   startEra: number
   religions: { name: string; pct: number }[] // weights (need not sum to 100)
@@ -44,13 +44,18 @@ export function transportLevel(era: number): number { return Math.max(0, Math.mi
 const NAME_POOL = ["Solandia", "Norvik", "Akahara", "Verdane", "Kessaria", "Tolmir", "Bramwell", "Yssel", "Drennan", "Mokoa", "Ulania", "Pravik", "Caldoria", "Ostmark"]
 const FLAGS = ["🟧", "🔵", "🟣", "🟢", "🔴", "🟡", "⚪", "🟤", "🔶", "🔷", "🟩", "🟥", "🟦", "🟪"]
 
+export type EconSystem = "capitalista" | "socialista" | "dictadura"
+export const ECON_SYSTEMS: EconSystem[] = ["capitalista", "socialista", "dictadura"]
+
 export function buildCountries(monarchies: number, republics: number): CountryCfg[] {
   const out: CountryCfg[] = []
-  const add = (gov: Gov, i: number) => out.push({ name: NAME_POOL[i % NAME_POOL.length], flag: FLAGS[i % FLAGS.length], gov, lang: (i % 2 ? "en" : "es") as LangCode })
+  // a monarchy leans authoritarian (dictatorship); republics alternate capitalist / socialist — for variety
+  const sysFor = (gov: Gov, i: number): EconSystem => gov === "monarquía" ? "dictadura" : (i % 2 ? "socialista" : "capitalista")
+  const add = (gov: Gov, i: number) => out.push({ name: NAME_POOL[i % NAME_POOL.length], flag: FLAGS[i % FLAGS.length], gov, lang: (i % 2 ? "en" : "es") as LangCode, system: sysFor(gov, i) })
   let i = 0
   for (let m = 0; m < monarchies; m++) add("monarquía", i++)
   for (let r = 0; r < republics; r++) add("república", i++)
-  return out.length ? out.slice(0, 6) : [{ name: "Solandia", flag: "🟧", gov: "república", lang: "es" }, { name: "Norvik", flag: "🔵", gov: "monarquía", lang: "en" }]
+  return out.length ? out.slice(0, 6) : [{ name: "Solandia", flag: "🟧", gov: "república", lang: "es", system: "capitalista" }, { name: "Norvik", flag: "🔵", gov: "monarquía", lang: "en", system: "dictadura" }]
 }
 
 export function defaultConfig(): CivConfig {

@@ -222,6 +222,8 @@ function statsHTML(): string {
     ${(() => { const ws = wealthStats(world); return `${row("desigualdad (Gini)", ws.gini.toFixed(2))}${row("pobre · medio · rico", `${ws.p10} · ${ws.p50} · ${ws.p90}`)}${row("emprendedores · en deuda", `${ws.entrepreneurs} · ${ws.poor}`)}<div class="sline">más ricos: ${ws.richest.slice(0, 3).map((r) => `${r.name} (${r.money})`).join(" · ") || "—"}</div>` })()}
     <h3>Sociedad (histórico)</h3>
     ${(() => { const k = (kind: string) => world.deeds.filter((d) => d.kind === kind).length; return `${row("crímenes · juicios", `${k("crimen")} · ${k("justicia")}`)}${row("negocios · quiebras", `${k("negocio")} · ${k("quiebra")}`)}${row("libros · obras de arte", `${k("libro")} · ${k("obra")}`)}` })()}
+    <h3>Política y movimientos</h3>
+    ${(() => { const k = (kind: string) => world.deeds.filter((d) => d.kind === kind).length; const sysl = world.system === "capitalista" ? "💵 capitalista" : world.system === "socialista" ? "🤝 socialista" : "⛓ dictadura"; return `${row("sistema", sysl)}${row("sindicatos · subversivos", `${k("sindicato")} · ${k("subversivo") + k("reforma")}`)}${row("represión (desaparecidos)", `${world.repressed}`)}` })()}
     <h3>Conflictividad</h3>
     ${row("ambiciosos (sed de poder)", `${ambitious}`)}
     ${row("nivel de crimen", `${crime}%`)}
@@ -481,7 +483,7 @@ function updateHud() {
   const topRel = Object.entries(relCount).sort((a, b) => b[1] - a[1])[0]
   const psychos = wild.filter((c) => c.powerHungry).length
   hud.innerHTML = `
-    <div class="stat"><span>país</span> <b style="color:#fff">${countries[active]?.flag || ""} ${countries[active]?.name || ""}</b> · ${world.gov === "monarquía" ? "👑 monarquía" : "🏛 república"}</div>
+    <div class="stat"><span>país</span> <b style="color:#fff">${countries[active]?.flag || ""} ${countries[active]?.name || ""}</b> · ${world.gov === "monarquía" ? "👑 monarquía" : "🏛 república"} · ${world.system === "capitalista" ? "💵 capitalista" : world.system === "socialista" ? "🤝 socialista" : "⛓ dictadura"}</div>
     ${world.monarch ? `<div class="stat"><span>monarca</span> ${world.monarch.name} ${world.monarch.surname}${world.monarch.powerHungry ? " (déspota)" : ""}</div>` : ""}
     <div class="stat"><span>población</span> ${wild.length} · <span>familias</span> ${families}</div>
     <div class="stat"><span>edad media</span> ${avgAge}a · <span>enfermos ✚</span> ${sick}</div>
@@ -688,7 +690,7 @@ function startRunning() {
 function newGame(cfg: CivConfig) {
   countries = cfg.countries.map((c, i) => ({
     name: c.name, flag: c.flag, lang: c.lang,
-    world: new World(spriteCount, i, { startEra: cfg.startEra, religions: cfg.religions, violence: cfg.violence, psychopathy: cfg.psychopathy, gov: c.gov }),
+    world: new World(spriteCount, i, { startEra: cfg.startEra, religions: cfg.religions, violence: cfg.violence, psychopathy: cfg.psychopathy, gov: c.gov, system: c.system }),
   }))
   active = 0; world = countries[0].world; avatar = world.addAvatar()
   startRunning(); saveGame()

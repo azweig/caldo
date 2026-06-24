@@ -6,6 +6,7 @@
 import type { World, Creature } from "./world"
 import { ageYears, isMature } from "./world"
 import { conscience, NOAHIDE } from "./morality"
+import { runPolitics } from "./politics"
 
 const rnd = <T>(a: T[]): T => a[Math.floor(Math.random() * a.length)]
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
@@ -13,6 +14,16 @@ const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
 const BOOK_THEMES = ["el origen del mundo", "los astros y el destino", "la memoria de los ancestros", "el arte de gobernar", "la naturaleza del alma", "viajes a tierras lejanas", "el amor y la pérdida", "las leyes de los números", "la caída de los reinos", "sueños y presagios"]
 const ART_FORMS = ["un mural", "una escultura", "un tapiz", "una talla", "un retrato", "un fresco", "una sinfonía", "una danza ritual"]
 const ART_SUBJ = ["la cosecha", "la diosa madre", "la guerra de los abuelos", "el río sagrado", "los amantes", "la ciudad soñada", "el eclipse", "la muerte y el renacer"]
+const BOOK_OPENERS = ["En el principio, cuando los astros aún eran jóvenes,", "Nadie recuerda ya el nombre del primer rey,", "Dicen los ancianos que el río guarda la memoria de todos,", "Hubo un tiempo en que los hombres no conocían la muerte,", "Cuentan que bajo la ciudad duerme un dios antiguo,"]
+const ART_DESC = ["trazos de ocre y carbón que parecen moverse a la luz del fuego", "una figura serena que mira más allá de quien la observa", "colores imposibles que ningún taller supo repetir", "líneas que cuentan, sin palabras, toda una vida"]
+
+// Headless: works get a templated excerpt/description so they feel real without an LLM. In the browser,
+// llm.ts can REPLACE this with genuine generated content using the prompt below (when the pod GPU is on).
+export function workPrompt(authorName: string, era: string, kind: "libro" | "obra", title: string): string {
+  return kind === "libro"
+    ? `Sos ${authorName}, autor en la era ${era}. Escribí el primer párrafo (4-5 líneas) de tu libro titulado ${title}, en su voz y su época. Solo el texto.`
+    : `Sos ${authorName}, artista en la era ${era}. Describí en 2-3 frases tu obra "${title}": qué representa, su técnica y su emoción. Solo la descripción.`
+}
 
 export function personOf(c: Creature) { return { five: c.psyche.five, dark: c.dark, archetype: c.archetype } }
 
@@ -41,6 +52,9 @@ export function runSociety(w: World, wild: Creature[]) {
       }
     }
   }
+
+  // ── the country's political system reshapes the economy (redistribution/hoarding, unions, subversives) ──
+  runPolitics(w, adults, price)
 
   // ── CRIME + COURTS (Noahide law #1): low-conscience adults break the law; courts catch + punish ──
   for (const c of adults) {
@@ -75,10 +89,10 @@ export function runSociety(w: World, wild: Creature[]) {
     const impact = Math.round(4 + c.knowledge / 12 + c.psyche.five.o * 6)
     if (writer || Math.random() < 0.4) {
       const title = `«${cap(rnd(BOOK_THEMES))}»`
-      w.logDeed({ day: w.clockDays, gen: c.generation, who: c.id, name: `${c.name} ${c.surname}`, kind: "libro", text: `escribió ${title}`, impact, content: title })
+      w.logDeed({ day: w.clockDays, gen: c.generation, who: c.id, name: `${c.name} ${c.surname}`, kind: "libro", text: `escribió ${title}`, impact, content: `${rnd(BOOK_OPENERS)} …` })
     } else {
       const title = `${rnd(ART_FORMS)} sobre ${rnd(ART_SUBJ)}`
-      w.logDeed({ day: w.clockDays, gen: c.generation, who: c.id, name: `${c.name} ${c.surname}`, kind: "obra", text: `creó ${title}`, impact, content: title })
+      w.logDeed({ day: w.clockDays, gen: c.generation, who: c.id, name: `${c.name} ${c.surname}`, kind: "obra", text: `creó ${title}`, impact, content: ART_DESC[Math.floor(Math.random() * ART_DESC.length)] })
     }
     w.wisdom = Math.min(100, w.wisdom + impact * 0.04)
   }
@@ -108,7 +122,7 @@ export function influentialByGen(w: World, perGen = 3) {
     let e = byPerson.get(d.who)
     if (!e) { e = { name: d.name, gen: d.gen, impact: 0, deeds: [] }; byPerson.set(d.who, e) }
     e.impact += d.impact
-    if (d.kind === "libro" || d.kind === "obra" || d.kind === "negocio" || d.kind === "crimen" || d.kind === "descubrimiento") e.deeds.push(d.text)
+    if (["libro", "obra", "negocio", "crimen", "descubrimiento", "sindicato", "subversivo", "reforma", "represión"].includes(d.kind)) e.deeds.push(d.text)
   }
   const gens = new Map<number, { name: string; impact: number; deeds: string[] }[]>()
   for (const e of byPerson.values()) { const a = gens.get(e.gen) || []; a.push(e); gens.set(e.gen, a) }
