@@ -38,6 +38,8 @@ const SCALES = [
   { rate: 180, label: "1 s = 3 h" },
   { rate: 1440, label: "1 s = 1 día" },
   { rate: 8640, label: "1 min = 1 año" },
+  { rate: 43200, label: "1 min = 5 años" },
+  { rate: 216000, label: "1 min = 25 años" },
 ]
 
 // the world is split into COUNTRIES — each its own simulation, biome and language; airports + migration
