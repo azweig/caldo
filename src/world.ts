@@ -19,13 +19,16 @@ export const ROAD_HALF = 20    // half street width
 const MARGIN = 60
 
 const MATURITY_YEARS = 16
-const REPRO_COOLDOWN = 3 * DAYS_PER_YEAR
-const REPRO_MIN_ENERGY = 74
-const REPRO_COST = 30
+const REPRO_COOLDOWN = 1 * DAYS_PER_YEAR  // recovery between pregnancies (gestation is on top)
+const REPRO_MIN_ENERGY = 55
+const REPRO_COST = 26
 const CHILD_ENERGY = 42
-const MATING_RADIUS = 30
+const FERTILE_MAX = 48                    // years — fertility window 16..48
+const GESTATION_MIN = 210                 // ~7 months; +0..60 → up to ~9 months
 const MAX_ENERGY = 150
-const POP_CAP = 260 // per country (several countries simulate at once now)
+const POP_CAP = 280 // per country (several countries simulate at once now)
+// realistic multiple-birth odds: ~3% twins, ~0.2% triplets, else a single
+function litterSize(): number { const r = Math.random(); return r < 0.002 ? 3 : r < 0.032 ? 2 : 1 }
 
 const FOOD_ENERGY = 28
 const START_ENERGY = 80
@@ -63,6 +66,8 @@ export interface Creature {
   sick: boolean
   sickDays: number
   lastRepro: number
+  partner: number  // id of life partner (0 = none) — couples form, then bear children over gestation
+  pregnant: number // gestation days remaining (0 = not pregnant)
   isAvatar: boolean
   facing: 1 | -1
   psyche: Psyche
@@ -250,7 +255,7 @@ export class World {
   // ── persistence: a civilisation survives reloads until you start a new one ──
   toState() {
     const hi = new Map<House, number>(); this.houses.forEach((h, i) => hi.set(h, i))
-    const C = (c: Creature) => ({ id: c.id, x: c.x, y: c.y, e: c.energy, ad: c.ageDays, ls: c.lifespanDays, gen: c.generation, nm: c.name, sn: c.surname, h: hi.get(c.home) ?? 0, k: c.knowledge, pf: c.profession, pb: c.profBase, pc: c.profCat, hp: c.heritProf, sick: c.sick, ch: c.children, par: c.parents, rel: c.religion, pw: c.powerHungry, g: c.genome, ps: c.psyche, mem: c.memory, soc: c.social, gh: c.goingHome })
+    const C = (c: Creature) => ({ id: c.id, x: c.x, y: c.y, e: c.energy, ad: c.ageDays, ls: c.lifespanDays, gen: c.generation, nm: c.name, sn: c.surname, h: hi.get(c.home) ?? 0, k: c.knowledge, pf: c.profession, pb: c.profBase, pc: c.profCat, hp: c.heritProf, sick: c.sick, ch: c.children, par: c.parents, rel: c.religion, pw: c.powerHungry, g: c.genome, ps: c.psyche, mem: c.memory, soc: c.social, gh: c.goingHome, pt: c.partner, pg: c.pregnant })
     return { region: this.region, gov: this.gov, era: this.era, clockDays: this.clockDays, clockMinutes: this.clockMinutes, tick: this.tick, research: this.research, discovered: [...this.discovered], techBoost: this.techBoost, wisdom: this.wisdom, births: this.births, deaths: this.deaths, peakGen: this.peakGen, plagueUntil: this.plagueUntil, violence: this.violence, psychopathy: this.psychopathy, religionsCfg: this.religionsCfg, chronicle: this.chronicle.slice(-60), houses: this.houses, gardens: this.gardens, schools: this.schools, universities: this.universities, airport: this.airport, monarch: this.monarch?.id ?? null, creatures: this.creatures.filter((c) => !c.isAvatar).map(C) }
   }
   static fromState(s: any, spriteCount: number): World {
@@ -264,7 +269,7 @@ export class World {
     const byId = new Map<number, Creature>(); let maxId = 0
     w.creatures = (s.creatures || []).map((c: any) => {
       maxId = Math.max(maxId, c.id)
-      const cr: Creature = { id: c.id, x: c.x, y: c.y, vx: 0, vy: 0, energy: c.e, ageDays: c.ad, lifespanDays: c.ls, genome: c.g, generation: c.gen, name: c.nm, surname: c.sn, home: w.houses[c.h] || w.houses[0], goingHome: !!c.gh, parents: c.par, children: c.ch, sick: c.sick, sickDays: 0, lastRepro: -99999, isAvatar: false, facing: 1, psyche: c.ps, memory: c.mem || [], social: c.soc || [], knowledge: c.k, profession: c.pf, profBase: c.pb, profCat: c.pc, heritProf: c.hp || "", religion: c.rel || "", powerHungry: !!c.pw }
+      const cr: Creature = { id: c.id, x: c.x, y: c.y, vx: 0, vy: 0, energy: c.e, ageDays: c.ad, lifespanDays: c.ls, genome: c.g, generation: c.gen, name: c.nm, surname: c.sn, home: w.houses[c.h] || w.houses[0], goingHome: !!c.gh, parents: c.par, children: c.ch, sick: c.sick, sickDays: 0, lastRepro: -99999, partner: c.pt || 0, pregnant: c.pg || 0, isAvatar: false, facing: 1, psyche: c.ps, memory: c.mem || [], social: c.soc || [], knowledge: c.k, profession: c.pf, profBase: c.pb, profCat: c.pc, heritProf: c.hp || "", religion: c.rel || "", powerHungry: !!c.pw }
       byId.set(cr.id, cr); return cr
     })
     w.monarch = s.monarch != null ? byId.get(s.monarch) || null : null
@@ -281,7 +286,7 @@ export class World {
       genome, generation,
       name: given(), surname: home.surname, home,
       goingHome: false, parents: null, children: 0,
-      sick: false, sickDays: 0, lastRepro: -REPRO_COOLDOWN,
+      sick: false, sickDays: 0, lastRepro: -REPRO_COOLDOWN, partner: 0, pregnant: 0,
       isAvatar: false, facing: 1,
       psyche: psyche ?? randomPsyche(), memory: [], social: [], knowledge: 0,
       profession: "", profBase: "", profCat: "", heritProf: "",
@@ -429,7 +434,8 @@ export class World {
 
     const survivors: Creature[] = []
     const newborns: Creature[] = []
-    const paired = new Set<number>()
+    const byId = new Map<number, Creature>()
+    for (const c of this.creatures) byId.set(c.id, c)
 
     for (const c of this.creatures) {
       c.ageDays++
@@ -508,29 +514,27 @@ export class World {
         if (isMature(c) && Math.random() < 0.0000052 * violenceRate) { this.deaths++; this.logEvent(`${c.name} ${c.surname} murió en un acto de violencia`); continue }
       }
 
-      // FAMILIES — pair with a housemate-adult nearby (they gather at home), gene recombination
-      if (!c.isAvatar && this.creatures.length + newborns.length < POP_CAP &&
-          isMature(c) && c.energy >= REPRO_MIN_ENERGY && this.clockDays - c.lastRepro >= REPRO_COOLDOWN && !paired.has(c.id)) {
-        const mate = this.nearestCreature(c, MATING_RADIUS, (o) =>
-          !o.isAvatar && isMature(o) && o.energy >= REPRO_MIN_ENERGY && this.clockDays - o.lastRepro >= REPRO_COOLDOWN && !paired.has(o.id))
-        if (mate) {
-          paired.add(c.id); paired.add(mate.id)
-          c.energy -= REPRO_COST; mate.energy -= REPRO_COST
-          c.lastRepro = mate.lastRepro = this.clockDays
-          c.children++; mate.children++
-          const child = this.spawn(recombine(g, mate.genome, this.spriteCount), c.generation + 1, c.home, c.x + (Math.random() * 18 - 9), c.y + (Math.random() * 18 - 9), inheritPsyche(c.psyche, mate.psyche))
-          child.energy = CHILD_ENERGY
-          child.parents = [c.id, mate.id]
-          child.heritProf = Math.random() < 0.5 ? c.profBase : mate.profBase // apprenticeship pull
-          child.religion = Math.random() < 0.85 ? (Math.random() < 0.5 ? c.religion : mate.religion) : pickReligion(this.religionsCfg)
-          child.powerHungry = Math.random() < this.psychopathy * ((c.powerHungry || mate.powerHungry) ? 1.8 : 1)
-          newborns.push(child)
-          this.births++
-          if (child.generation > this.peakGen) this.peakGen = child.generation
-          // a growing population spills into NEW houses → the town expands instead of staying static
-          if (this.houses.length < 130 && this.creatures.length + newborns.length > this.houses.length * 2.4) {
-            const nh = this.addHouse(c.surname); if (nh) child.home = nh
+      // gestation → BIRTH (pairing + conception happen in the periodic demographics block below)
+      if (!c.isAvatar && c.pregnant > 0) {
+        c.pregnant--
+        if (c.pregnant <= 0 && this.creatures.length + newborns.length < POP_CAP) {
+          const mate = byId.get(c.partner)
+          const mateG = mate ? mate.genome : g, mateP = mate ? mate.psyche : c.psyche
+          const litter = litterSize()
+          for (let b = 0; b < litter; b++) {
+            const child = this.spawn(recombine(g, mateG, this.spriteCount), c.generation + 1, c.home, c.home.x + (Math.random() * 24 - 12), c.home.y + (Math.random() * 18 - 9), inheritPsyche(c.psyche, mateP))
+            child.energy = CHILD_ENERGY
+            child.parents = [c.id, c.partner]
+            child.heritProf = Math.random() < 0.5 ? c.profBase : (mate ? mate.profBase : c.profBase)
+            child.religion = Math.random() < 0.85 ? (Math.random() < 0.5 ? c.religion : (mate ? mate.religion : c.religion)) : pickReligion(this.religionsCfg)
+            child.powerHungry = Math.random() < this.psychopathy * ((c.powerHungry || (mate && mate.powerHungry)) ? 1.8 : 1)
+            newborns.push(child); this.births++
+            if (child.generation > this.peakGen) this.peakGen = child.generation
           }
+          c.children += litter; if (mate) mate.children += litter
+          c.energy -= REPRO_COST; if (mate) mate.energy = Math.max(5, mate.energy - REPRO_COST)
+          c.lastRepro = this.clockDays; if (mate) mate.lastRepro = this.clockDays
+          if (this.houses.length < 130 && this.creatures.length + newborns.length > this.houses.length * 2.4) { const nh = this.addHouse(c.surname); if (nh) newborns[newborns.length - 1].home = nh } // town grows
         }
       }
 
@@ -565,6 +569,20 @@ export class World {
       if (wild.length < 14) this.foodTarget = Math.max(this.foodTarget, 300) // homeostasis: help a tiny village recover
       this.foodTarget = Math.max(150, this.foodTarget)
       this.socialTick(wild) // creatures chat amongst themselves + remember it
+
+      // ── demographics: form couples, then conceive (logistic growth toward a tech-scaled capacity) ──
+      for (const c of wild) if (c.partner && !byId.has(c.partner)) { c.partner = 0; c.pregnant = 0 } // widowed → free again
+      const singles = wild.filter((c) => isMature(c) && !c.partner && ageYears(c) <= FERTILE_MAX + 10)
+      for (let i = 0; i + 1 < singles.length; i += 2) { singles[i].partner = singles[i + 1].id; singles[i + 1].partner = singles[i].id }
+      const K = Math.min(POP_CAP, 80 + this.era * 7) // carrying capacity grows with the era (technology)
+      const growth = Math.max(0.05, 1 - wild.length / K) // strong birth drive when few, ~0 near capacity
+      for (const c of wild) {
+        const ay = ageYears(c)
+        if (c.partner && c.pregnant <= 0 && ay >= MATURITY_YEARS && ay <= FERTILE_MAX && c.energy > REPRO_MIN_ENERGY &&
+            this.clockDays - c.lastRepro >= REPRO_COOLDOWN && c.id < c.partner && byId.has(c.partner)) {
+          if (Math.random() < 0.5 * growth) c.pregnant = GESTATION_MIN + Math.floor(Math.random() * 60) // conceive (~7-9 months)
+        }
+      }
 
     }
 
