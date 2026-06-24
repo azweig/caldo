@@ -66,6 +66,7 @@ let possessed: Creature | null = null // the creature you've taken over (P) — 
 let possessTarget: { x: number; y: number } | null = null
 let possessBusy: { until: number; label: string; reward: "work" | "study" } | null = null // working/studying a shift
 let flashMsg = "", flashUntil = 0 // transient toast in the possession panel
+let camYaw3d = Math.PI / 2 // 3rd-person camera facing (A/D turn it; W/S walk along it)
 let chatTarget: Creature | null = null
 let paused = false
 let scaleIndex = 0
@@ -236,7 +237,7 @@ function togglePossess() {
   }
   const t = nearestTalkable()
   if (!t) return
-  possessed = t; t.controlled = true; possessTarget = null
+  possessed = t; t.controlled = true; possessTarget = null; possessBusy = null; camYaw3d = Math.PI / 2
   init3D(canvas3d, assets.creatures); resize3D(canvas.width, canvas.height) // real 3D, only while possessing
   canvas3d.classList.remove("hidden"); possessEl.classList.remove("hidden"); hud.classList.add("hidden")
   renderPossess()
@@ -325,6 +326,7 @@ function renderPossess() {
     <div class="prow2">💰 <b>${Math.round(c.money)}</b> · 🍔 ${bar} ${e}${c.pregnant > 0 ? " · 🤰" : ""}</div>
     <div class="prow2">${partner ? "❤️ " + partner.name : "💔 sin pareja"} · 👶 ${c.children} · 🧠 ${Math.round(c.knowledge)}</div>
     <div class="prow2">${c.religion || "sin credo"}${c.sick ? " · <b style='color:#8fe39a'>enfermo ✚</b>" : ""}</div>
+    <div class="plegend">⚪ vos · 💗 pareja · 💚 familia · 💛 conocido · ❤️ rival</div>
     ${toast}`
   possessEl.querySelectorAll("button[data-act]").forEach((b) => {
     const st = actionState((b as HTMLElement).dataset.act!)
@@ -419,18 +421,27 @@ function isAvatarDead(): boolean { return false } // you age, but as a visitor y
 function respawn() { avatar = world.addAvatar(); deathScreen.classList.add("hidden") }
 
 function driveControlled(me: Creature) {
+  const up = keys.has("w") || keys.has("arrowup"), down = keys.has("s") || keys.has("arrowdown")
+  const left = keys.has("a") || keys.has("arrowleft"), right = keys.has("d") || keys.has("arrowright")
+  if (possessed) {
+    // third-person: A/D turn the camera, W/S walk forward/back along where you face
+    if (left) camYaw3d -= 0.05
+    if (right) camYaw3d += 0.05
+    const fwd = (up ? 1 : 0) - (down ? 1 : 0)
+    if (fwd) { possessTarget = null; me.vx = Math.cos(camYaw3d) * fwd * AV_SPEED; me.vy = Math.sin(camYaw3d) * fwd * AV_SPEED }
+    else if (possessTarget) { // auto-walk to an action destination + turn to face it
+      const tx = possessTarget.x - me.x, ty = possessTarget.y - me.y, d = Math.hypot(tx, ty)
+      if (d < 16) { possessTarget = null; me.vx *= 0.4; me.vy *= 0.4 }
+      else { me.vx = (tx / d) * AV_SPEED; me.vy = (ty / d) * AV_SPEED; let dd = Math.atan2(ty, tx) - camYaw3d; while (dd > Math.PI) dd -= 2 * Math.PI; while (dd < -Math.PI) dd += 2 * Math.PI; camYaw3d += dd * 0.1 }
+    } else { me.vx *= 0.55; me.vy *= 0.55 }
+    return
+  }
+  // 2D avatar: WASD = screen axes
   let dx = 0, dy = 0
-  if (keys.has("w") || keys.has("arrowup")) dy -= 1
-  if (keys.has("s") || keys.has("arrowdown")) dy += 1
-  if (keys.has("a") || keys.has("arrowleft")) dx -= 1
-  if (keys.has("d") || keys.has("arrowright")) dx += 1
+  if (up) dy -= 1; if (down) dy += 1; if (left) dx -= 1; if (right) dx += 1
   const m = Math.hypot(dx, dy)
-  if (m > 0) { possessTarget = null; me.vx = (dx / m) * AV_SPEED; me.vy = (dy / m) * AV_SPEED } // manual
-  else if (possessTarget) { // auto-walk to an action destination (home, work…)
-    const tx = possessTarget.x - me.x, ty = possessTarget.y - me.y, d = Math.hypot(tx, ty)
-    if (d < 16) { possessTarget = null; me.vx *= 0.5; me.vy *= 0.5 }
-    else { me.vx = (tx / d) * AV_SPEED; me.vy = (ty / d) * AV_SPEED }
-  } else { me.vx *= 0.6; me.vy *= 0.6 }
+  if (m > 0) { me.vx = (dx / m) * AV_SPEED; me.vy = (dy / m) * AV_SPEED }
+  else { me.vx *= 0.6; me.vy *= 0.6 }
 }
 const AV_SPEED = 4.2
 
@@ -611,7 +622,7 @@ function loop() {
   chatTarget = chatting ? chatTarget : nearestTalkable()
 
   if (possessed) {
-    render3D(world, possessed) // immersive 3D while you live a life
+    render3D(world, possessed, camYaw3d) // immersive 3D while you live a life
   } else {
     // 2D camera: follow the avatar, clamped to the world (centre an axis smaller than the view)
     const halfW = canvas.width / (2 * zoom), halfH = canvas.height / (2 * zoom)
