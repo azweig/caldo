@@ -42,6 +42,31 @@ export const BELIEFS = [
   "soñar con irse del caldo es una enfermedad del alma",
 ]
 
+// beliefs are NOT a fixed menu — cultures invent NEW ones over generations (genuine cultural evolution).
+// A belief = a subject the people fixate on + a stance toward it. The curated BELIEFS above are seeds;
+// genBelief() composes fresh ones (incl. subjects/stances no founder ever held), so mythologies drift.
+const BELIEF_SUBJECTS = ["la comida", "la muerte", "el forastero", "los astros", "el trabajo", "los sueños", "el poder", "los ríos", "el fuego", "la sangre", "los nombres", "el silencio", "la risa", "los espejos", "la luna", "el hambre", "la palabra dada", "los hijos", "el oro", "la montaña", "el primer aliento", "las sombras largas"]
+const BELIEF_STANCES: ((s: string) => string)[] = [
+  (s) => `${cap(s)} es sagrado y no debe tocarse`,
+  (s) => `${cap(s)} es una mentira que nos contaron`,
+  (s) => `hay que temer a ${s}`,
+  (s) => `${cap(s)} traerá la salvación al pueblo`,
+  (s) => `los antepasados hablan a través de ${s}`,
+  (s) => `quien domina ${s} domina el mundo`,
+  (s) => `${cap(s)} no significa nada: es puro azar`,
+  (s) => `hay que ofrendar a ${s} para seguir vivos`,
+  (s) => `${cap(s)} corrompe a quien lo persigue`,
+  (s) => `el que comprende ${s} no muere del todo`,
+]
+const rnd = <T>(a: T[]): T => a[Math.floor(Math.random() * a.length)]
+const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
+export function genBelief(): string {
+  return rnd(BELIEF_STANCES)(rnd(BELIEF_SUBJECTS))
+    .replace(/\bde el /g, "del ").replace(/\ba el /g, "al ")          // de el → del · a el → al
+    .replace(/^(Los|Las) (\S+) es /, "$1 $2 son ")                    // plural subject agreement
+    .replace(/^(Los|Las) (\S+) traerá /, "$1 $2 traerán ")
+}
+
 const randFive = (): BigFive => ({ o: Math.random(), c: Math.random(), e: Math.random(), a: Math.random(), n: Math.random() })
 const applyLean = (f: BigFive, l: Partial<BigFive>): BigFive => ({ o: cl(f.o + (l.o || 0)), c: cl(f.c + (l.c || 0)), e: cl(f.e + (l.e || 0)), a: cl(f.a + (l.a || 0)), n: cl(f.n + (l.n || 0)) })
 
@@ -64,7 +89,8 @@ export function inheritPsyche(a: Psyche, b: Psyche): Psyche {
   const type = Math.random() < 0.7 ? (Math.random() < 0.5 ? a.type : b.type) : Math.floor(Math.random() * ENNEAGRAM.length)
   const inherited = [...new Set([...a.beliefs, ...b.beliefs])]
   const beliefs = pickBeliefs(Math.min(2, inherited.length), inherited)
-  if (Math.random() < 0.3) { const fresh = pickBeliefs(1)[0]; if (fresh && !beliefs.includes(fresh)) beliefs.push(fresh) }
+  // cultural drift: a new generation may take up a belief from elsewhere — or INVENT one nobody held before
+  if (Math.random() < 0.32) { const fresh = Math.random() < 0.45 ? genBelief() : pickBeliefs(1)[0]; if (fresh && !beliefs.includes(fresh)) beliefs.push(fresh) }
   return { five, type, beliefs }
 }
 
