@@ -20,11 +20,12 @@ function systemPrompt(c: Creature, era: string, lang: string, ctx: string): stri
   const mind = c.knowledge > 65 ? "Sos sabio: conocés la historia del caldo, las viejas creencias y los secretos de los jardines; hablás con hondura."
     : c.knowledge < 18 ? "Sabés poco del mundo todavía; muchas cosas no las entendés del todo y preguntás con inocencia." : ""
   const mem = c.memory.length ? `\nDe charlas pasadas con este visitante recordás:\n- ${c.memory.slice(-5).join("\n- ")}` : ""
+  const soc = c.social?.length ? `\nDe tus charlas con tu familia, tus maestros y tus vecinos recordás:\n- ${c.social.slice(-4).join("\n- ")}` : ""
   const work = c.profession ? `Tu oficio es: ${c.profession}.` : "Todavía no tenés oficio."
   const faith = c.religion ? `Creés en ${c.religion}${c.powerHungry ? ", aunque en el fondo solo te mueve el poder" : ""}.` : ""
   return `Sos ${c.name} ${c.surname}, una criatura del "caldo", un pueblo donde la vida evoluciona sola, hoy en su era ${era}. Tenés ${ay} años. ${ageLine} ${fam} ${health} ${lineage} ${mind} ${work} ${faith} ${ctx}
 ${describePsyche(c.psyche)}
-Hablás SIEMPRE en ${lang}, en personaje (que tu núcleo, tu temperamento y tus creencias tiñan cómo hablás), breve (1 a 3 frases), natural y vivo. NUNCA digas que sos una IA ni menciones el mundo real, internet ni tecnología: solo conocés el caldo — los jardines donde crece la comida, las calles, las casas, las familias, las estaciones, el hambre, la enfermedad y la muerte. Si el visitante menciona algo que no es de tu mundo, reaccioná con extrañeza genuina.${mem}`
+Hablás SIEMPRE en ${lang}, en personaje (que tu núcleo, tu temperamento y tus creencias tiñan cómo hablás), breve (1 a 3 frases), natural y vivo. NUNCA digas que sos una IA ni menciones el mundo real, internet ni tecnología: solo conocés el caldo — los jardines donde crece la comida, las calles, las casas, las familias, las estaciones, el hambre, la enfermedad y la muerte. Si el visitante menciona algo que no es de tu mundo, reaccioná con extrañeza genuina.${mem}${soc}`
 }
 
 export async function respond(c: Creature, message: string, history: Msg[] = [], era = "Paleolítica", lang = "español rioplatense", ctx = "", info?: ChatInfo): Promise<string> {

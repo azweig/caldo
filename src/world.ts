@@ -67,6 +67,7 @@ export interface Creature {
   facing: 1 | -1
   psyche: Psyche
   memory: string[] // what this creature remembers from past chats with the player
+  social: string[] // what it remembers from talking with OTHER creatures (family, teachers, neighbours)
   knowledge: number // accumulated learning (0..100): school as a child, experience as an adult
   profession: string // full lived title (may be specialised), for display + chat
   profBase: string   // base profession name (PROFS.n), for logic
@@ -249,7 +250,7 @@ export class World {
   // ── persistence: a civilisation survives reloads until you start a new one ──
   toState() {
     const hi = new Map<House, number>(); this.houses.forEach((h, i) => hi.set(h, i))
-    const C = (c: Creature) => ({ id: c.id, x: c.x, y: c.y, e: c.energy, ad: c.ageDays, ls: c.lifespanDays, gen: c.generation, nm: c.name, sn: c.surname, h: hi.get(c.home) ?? 0, k: c.knowledge, pf: c.profession, pb: c.profBase, pc: c.profCat, hp: c.heritProf, sick: c.sick, ch: c.children, par: c.parents, rel: c.religion, pw: c.powerHungry, g: c.genome, ps: c.psyche, mem: c.memory, gh: c.goingHome })
+    const C = (c: Creature) => ({ id: c.id, x: c.x, y: c.y, e: c.energy, ad: c.ageDays, ls: c.lifespanDays, gen: c.generation, nm: c.name, sn: c.surname, h: hi.get(c.home) ?? 0, k: c.knowledge, pf: c.profession, pb: c.profBase, pc: c.profCat, hp: c.heritProf, sick: c.sick, ch: c.children, par: c.parents, rel: c.religion, pw: c.powerHungry, g: c.genome, ps: c.psyche, mem: c.memory, soc: c.social, gh: c.goingHome })
     return { region: this.region, gov: this.gov, era: this.era, clockDays: this.clockDays, clockMinutes: this.clockMinutes, tick: this.tick, research: this.research, discovered: [...this.discovered], techBoost: this.techBoost, wisdom: this.wisdom, births: this.births, deaths: this.deaths, peakGen: this.peakGen, plagueUntil: this.plagueUntil, violence: this.violence, psychopathy: this.psychopathy, religionsCfg: this.religionsCfg, chronicle: this.chronicle.slice(-60), houses: this.houses, gardens: this.gardens, schools: this.schools, universities: this.universities, airport: this.airport, monarch: this.monarch?.id ?? null, creatures: this.creatures.filter((c) => !c.isAvatar).map(C) }
   }
   static fromState(s: any, spriteCount: number): World {
@@ -263,7 +264,7 @@ export class World {
     const byId = new Map<number, Creature>(); let maxId = 0
     w.creatures = (s.creatures || []).map((c: any) => {
       maxId = Math.max(maxId, c.id)
-      const cr: Creature = { id: c.id, x: c.x, y: c.y, vx: 0, vy: 0, energy: c.e, ageDays: c.ad, lifespanDays: c.ls, genome: c.g, generation: c.gen, name: c.nm, surname: c.sn, home: w.houses[c.h] || w.houses[0], goingHome: !!c.gh, parents: c.par, children: c.ch, sick: c.sick, sickDays: 0, lastRepro: -99999, isAvatar: false, facing: 1, psyche: c.ps, memory: c.mem || [], knowledge: c.k, profession: c.pf, profBase: c.pb, profCat: c.pc, heritProf: c.hp || "", religion: c.rel || "", powerHungry: !!c.pw }
+      const cr: Creature = { id: c.id, x: c.x, y: c.y, vx: 0, vy: 0, energy: c.e, ageDays: c.ad, lifespanDays: c.ls, genome: c.g, generation: c.gen, name: c.nm, surname: c.sn, home: w.houses[c.h] || w.houses[0], goingHome: !!c.gh, parents: c.par, children: c.ch, sick: c.sick, sickDays: 0, lastRepro: -99999, isAvatar: false, facing: 1, psyche: c.ps, memory: c.mem || [], social: c.soc || [], knowledge: c.k, profession: c.pf, profBase: c.pb, profCat: c.pc, heritProf: c.hp || "", religion: c.rel || "", powerHungry: !!c.pw }
       byId.set(cr.id, cr); return cr
     })
     w.monarch = s.monarch != null ? byId.get(s.monarch) || null : null
@@ -282,7 +283,7 @@ export class World {
       goingHome: false, parents: null, children: 0,
       sick: false, sickDays: 0, lastRepro: -REPRO_COOLDOWN,
       isAvatar: false, facing: 1,
-      psyche: psyche ?? randomPsyche(), memory: [], knowledge: 0,
+      psyche: psyche ?? randomPsyche(), memory: [], social: [], knowledge: 0,
       profession: "", profBase: "", profCat: "", heritProf: "",
       religion: "", powerHungry: false,
     }
@@ -304,6 +305,35 @@ export class World {
       if (ok) { const h: House = { x: cx - 29, y: cy - 25, w: 58, h: 50, surname, hue: (this.houses.length * 47) % 360 }; this.houses.push(h); return h }
     }
     return null
+  }
+
+  // creatures talk AMONG THEMSELVES (cheap + templated) and KEEP the memory in each one — family at
+  // home, teachers + students at school, neighbours in the street. It persists in their `social`.
+  private prettyTopic(c: Creature): string { return c.profBase ? `el oficio de ${c.profBase}` : c.religion ? `${c.religion}` : "la vida en el caldo" }
+  private socialNotes(a: Creature, b: Creature): [string, string] {
+    const sameHome = a.home === b.home
+    const gap = ageYears(a) - ageYears(b)
+    const topic = rnd([this.prettyTopic(a), this.prettyTopic(b), "la cosecha", "los viejos tiempos", "el clima", "los jardines", "la familia"])
+    if (a.profCat === "enseñanza" && !isMature(b)) return [`le enseñé a ${b.name} en la escuela`, `mi maestro ${a.name} me enseñó de ${topic}`]
+    if (b.profCat === "enseñanza" && !isMature(a)) return [`mi maestro ${b.name} me enseñó de ${topic}`, `le enseñé a ${a.name} en la escuela`]
+    if (sameHome && Math.abs(gap) > 13) {
+      const elder = gap > 0 ? a.name : b.name, young = gap > 0 ? b.name : a.name
+      const elderNote = `le hablé a ${young}, de mi familia, sobre ${topic}`, youngNote = `${elder}, de mi familia, me habló de ${topic}`
+      return gap > 0 ? [elderNote, youngNote] : [youngNote, elderNote]
+    }
+    if (sameHome) return [`charlé en casa con ${b.name} sobre ${topic}`, `charlé en casa con ${a.name} sobre ${topic}`]
+    return [`crucé palabras con ${b.name} sobre ${topic}`, `crucé palabras con ${a.name} sobre ${topic}`]
+  }
+  private socialTick(wild: Creature[]) {
+    for (let k = 0; k < Math.min(6, wild.length); k++) {
+      const a = wild[Math.floor(Math.random() * wild.length)]
+      const b = this.nearestCreature(a, 70, (o) => !o.isAvatar && o !== a)
+      if (!b) continue
+      const [na, nb] = this.socialNotes(a, b)
+      a.social.push(na); b.social.push(nb)
+      while (a.social.length > 6) a.social.shift()
+      while (b.social.length > 6) b.social.shift()
+    }
   }
 
   addAvatar(): Creature {
@@ -534,6 +564,8 @@ export class World {
       this.foodTarget = Math.min(720, Math.round(230 * (1 + this.econ.food + this.techBoost.food)))
       if (wild.length < 14) this.foodTarget = Math.max(this.foodTarget, 300) // homeostasis: help a tiny village recover
       this.foodTarget = Math.max(150, this.foodTarget)
+      this.socialTick(wild) // creatures chat amongst themselves + remember it
+
     }
 
     if (this.creatures.filter((c) => !c.isAvatar).length < 4) {

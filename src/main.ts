@@ -319,7 +319,13 @@ function tryAmbient() {
   if (!pair) return
   ambientCool = frame + 99999 // lock while generating
   ambientDialogue(pair[0], pair[1], WRITE_LANG)
-    .then((lines) => { ambient = lines.length ? { lines, idx: 0, nextAt: frame + 165 } : null; if (!lines.length) ambientCool = frame + 300 })
+    .then((lines) => {
+      if (lines.length) {
+        ambient = { lines, idx: 0, nextAt: frame + 165 }
+        pair[0].social.push(`hablé con ${pair[1].name}`); pair[1].social.push(`hablé con ${pair[0].name}`)
+        while (pair[0].social.length > 6) pair[0].social.shift(); while (pair[1].social.length > 6) pair[1].social.shift()
+      } else ambientCool = frame + 300
+    })
     .catch(() => { ambientCool = frame + 300 })
 }
 
