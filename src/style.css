@@ -105,7 +105,10 @@ body { font-family: ui-monospace, "SF Mono", Menlo, monospace; color: #dfe7ee; }
   color: #dfe7ee; font: inherit; font-size: 12px; cursor: pointer;
 }
 .possess-actions button:hover { background: rgba(255, 214, 128, 0.22); }
+.possess-actions button.dim { opacity: 0.4; }
+.possess-actions button:disabled { cursor: not-allowed; opacity: 0.28; }
 .possess-hint { margin-top: 10px; font-size: 11px; color: #5f7384; text-align: center; }
+.ptoast { margin-top: 10px; font-size: 12px; color: #ffd76a; text-align: center; background: rgba(255, 214, 128, 0.12); border-radius: 8px; padding: 6px 8px; }
 
 /* start menu + new-civilisation form */
 #menu, #newciv {

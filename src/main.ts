@@ -64,6 +64,8 @@ let world: World
 let avatar: Creature | null = null
 let possessed: Creature | null = null // the creature you've taken over (P) — you play AS them
 let possessTarget: { x: number; y: number } | null = null
+let possessBusy: { until: number; label: string; reward: "work" | "study" } | null = null // working/studying a shift
+let flashMsg = "", flashUntil = 0 // transient toast in the possession panel
 let chatTarget: Creature | null = null
 let paused = false
 let scaleIndex = 0
@@ -239,30 +241,118 @@ function togglePossess() {
   canvas3d.classList.remove("hidden"); possessEl.classList.remove("hidden"); hud.classList.add("hidden")
   renderPossess()
 }
+// ── context-aware actions: hours, places, eligibility, refusal, work/study shifts ──
+function hourOf(): number { return (world.clockMinutes % 1440) / 60 }
+function dist2(ax: number, ay: number, bx: number, by: number) { return (ax - bx) ** 2 + (ay - by) ** 2 }
+function nearestPt(arr: { x: number; y: number; w?: number; h?: number }[], c: Creature) {
+  let best: { x: number; y: number } | null = null, bd = Infinity
+  for (const b of arr) { const x = b.x + (b.w ? b.w / 2 : 0), y = b.y + (b.h ? b.h / 2 : 0); const d = dist2(x, y, c.x, c.y); if (d < bd) { bd = d; best = { x, y } } }
+  return best
+}
+function workplaceOf(c: Creature): { x: number; y: number; name: string } | null {
+  if (!c.profCat) return null
+  if (c.profCat === "enseñanza") { const s = nearestPt(world.schools, c); return s && { ...s, name: "la escuela" } }
+  if (c.profCat === "saber" || c.profCat === "ingeniería" || c.profCat === "salud") { const u = nearestPt(world.universities, c); return u ? { ...u, name: "la universidad" } : { x: WORLD_W / 2, y: WORLD_H / 2, name: "la plaza" } }
+  if (c.profCat === "comida" || c.profCat === "cuidado") { const g = nearestPt(world.gardens, c); return g && { ...g, name: "los campos" } }
+  return { x: WORLD_W / 2, y: WORLD_H / 2, name: "la plaza / mercado" }
+}
+function studyPlaceOf(c: Creature): { x: number; y: number; name: string } | null {
+  const a = ageYears(c)
+  if (a >= 6 && a < 18) { const s = nearestPt(world.schools, c); return s && { ...s, name: "la escuela" } }
+  if (a >= 18 && a <= 28 && world.universities.length) return { ...nearestPt(world.universities, c)!, name: "la universidad" }
+  return null
+}
+function courtTargetNear(c: Creature) { return world.nearestCreature(c, 95, (o) => !o.isAvatar && isMature(o) && !o.partner && o !== c && ageYears(o) <= 52) }
+type ActState = { ok: boolean; reason: string; walkTo?: { x: number; y: number } }
+function actionState(act: string): ActState {
+  const c = possessed
+  if (!c) return { ok: false, reason: "" }
+  if (possessBusy) return { ok: false, reason: "ocupado…" }
+  const h = hourOf(), AT = 130 * 130
+  if (act === "eat") return { ok: true, reason: "comer (recupera energía)" }
+  if (act === "home") return { ok: true, reason: "caminar a tu casa" }
+  if (act === "talk") return chatTarget ? { ok: true, reason: `hablar con ${chatTarget.name}` } : { ok: false, reason: "no hay nadie cerca" }
+  if (act === "work") {
+    const wp = workplaceOf(c)
+    if (!wp) return { ok: false, reason: "todavía no tenés oficio" }
+    if (h < 8 || h >= 17) return { ok: false, reason: `tu turno es 8–17h (son las ${Math.floor(h)}h)` }
+    if (dist2(wp.x, wp.y, c.x, c.y) > AT) return { ok: false, reason: `andá a ${wp.name} para trabajar`, walkTo: wp }
+    return { ok: true, reason: `trabajar en ${wp.name} (jornada)` }
+  }
+  if (act === "study") {
+    const sp = studyPlaceOf(c)
+    if (!sp) return { ok: false, reason: ageYears(c) < 6 ? "muy chico para estudiar" : "ya no estás en edad escolar" }
+    if (h < 8 || h >= 14) return { ok: false, reason: `clases 8–14h (son las ${Math.floor(h)}h)` }
+    if (dist2(sp.x, sp.y, c.x, c.y) > AT) return { ok: false, reason: `andá a ${sp.name}`, walkTo: sp }
+    return { ok: true, reason: `estudiar en ${sp.name}` }
+  }
+  if (act === "court") {
+    if (!isMature(c)) return { ok: false, reason: "muy joven para cortejar" }
+    if (c.partner) return { ok: false, reason: "ya tenés pareja" }
+    const t = courtTargetNear(c)
+    return t ? { ok: true, reason: `cortejar a ${t.name} (puede negarse)` } : { ok: false, reason: "no hay soltero/a cerca" }
+  }
+  if (act === "child") {
+    if (!c.partner) return { ok: false, reason: "necesitás una pareja" }
+    const p = world.creatures.find((o) => o.id === c.partner)
+    if (!p) return { ok: false, reason: "tu pareja no está acá" }
+    if (dist2(p.x, p.y, c.x, c.y) > 120 * 120) return { ok: false, reason: `acercate a ${p.name}`, walkTo: { x: p.x, y: p.y } }
+    if (c.pregnant > 0) return { ok: false, reason: "ya estás embarazada" }
+    if (c.energy < 55) return { ok: false, reason: "necesitás energía (comé)" }
+    return { ok: true, reason: `formar familia con ${p.name} (puede negarse)` }
+  }
+  return { ok: false, reason: "" }
+}
+function flash(t: string) { flashMsg = t; flashUntil = frame + 150 }
+function startBusy(reward: "work" | "study", mins: number, label: string) { possessBusy = { until: world.clockMinutes + mins, label, reward }; possessTarget = null; flash(label + "…"); renderPossess() }
+function finishBusy() {
+  const c = possessed
+  if (c && possessBusy) {
+    if (possessBusy.reward === "work") { const g = Math.round(40 * (1 + world.era * 0.12)); c.money += g; c.energy = Math.max(0, c.energy - 25); flash(`jornada cumplida · +${g} 💰`) }
+    else { c.knowledge = Math.min(100, c.knowledge + 10); c.energy = Math.max(0, c.energy - 12); flash("día de clases · +saber 🧠") }
+  }
+  possessBusy = null; renderPossess()
+}
 function renderPossess() {
   const c = possessed; if (!c) return
   const e = Math.round(Math.max(0, c.energy))
   const bar = "█".repeat(Math.max(0, Math.round(e / 12))).padEnd(12, "·")
   const partner = c.partner ? world.creatures.find((o) => o.id === c.partner) : null
+  const toast = possessBusy ? `<div class="ptoast">⏳ ${possessBusy.label}… 🌙</div>` : (frame < flashUntil ? `<div class="ptoast">${flashMsg}</div>` : "")
   possessBody.innerHTML = `
     <div class="pname">🎭 ${c.name} ${c.surname}</div>
-    <div class="prow2">${c.profession || "sin oficio"} · ${Math.round(ageYears(c))} años · gen ${c.generation}</div>
+    <div class="prow2">${c.profession || "sin oficio"} · ${Math.round(ageYears(c))} años · 🕐 ${Math.floor(hourOf())}h</div>
     <div class="prow2">💰 <b>${Math.round(c.money)}</b> · 🍔 ${bar} ${e}${c.pregnant > 0 ? " · 🤰" : ""}</div>
     <div class="prow2">${partner ? "❤️ " + partner.name : "💔 sin pareja"} · 👶 ${c.children} · 🧠 ${Math.round(c.knowledge)}</div>
-    <div class="prow2">${c.religion || "sin credo"}${c.sick ? " · <b style='color:#8fe39a'>enfermo ✚</b>" : ""}${c.powerHungry ? " · 👑 ambicioso" : ""}</div>`
+    <div class="prow2">${c.religion || "sin credo"}${c.sick ? " · <b style='color:#8fe39a'>enfermo ✚</b>" : ""}</div>
+    ${toast}`
+  possessEl.querySelectorAll("button[data-act]").forEach((b) => {
+    const st = actionState((b as HTMLElement).dataset.act!)
+    ;(b as HTMLButtonElement).disabled = !st.ok && !st.walkTo
+    ;(b as HTMLButtonElement).title = st.reason
+    b.classList.toggle("dim", !st.ok)
+  })
 }
 function doAction(act: string) {
   const c = possessed; if (!c) return
-  const pay = 1 + world.era * 0.12
-  if (act === "eat") { c.energy = Math.min(150, c.energy + 50); c.money = Math.max(0, c.money - 4) }
-  else if (act === "work") { c.money += 12 * pay; c.energy = Math.max(0, c.energy - 12); c.knowledge = Math.min(100, c.knowledge + 0.5) }
-  else if (act === "study") { c.knowledge = Math.min(100, c.knowledge + 8); c.energy = Math.max(0, c.energy - 6) }
-  else if (act === "home") { possessTarget = { x: c.home.x + c.home.w / 2, y: c.home.y + c.home.h } }
-  else if (act === "talk") { openChat() }
+  const st = actionState(act)
+  if (!st.ok) { if (st.walkTo) { possessTarget = st.walkTo; flash("caminando… 🚶") } else if (st.reason) flash(st.reason); renderPossess(); return }
+  if (act === "eat") { c.energy = Math.min(150, c.energy + 50); c.money = Math.max(0, c.money - 4); flash("comiste 🍎") }
+  else if (act === "home") { possessTarget = { x: c.home.x + c.home.w / 2, y: c.home.y + c.home.h }; flash("yendo a casa 🏠") }
+  else if (act === "talk") openChat()
+  else if (act === "work") startBusy("work", 480, "trabajando 💼")
+  else if (act === "study") startBusy("study", 360, "estudiando 📚")
   else if (act === "court") {
-    const t = world.nearestCreature(c, 90, (o) => !o.isAvatar && isMature(o) && !o.partner && o !== c && ageYears(o) <= 50)
-    if (t && !c.partner) { c.partner = t.id; t.partner = c.id; world.chronicle.push({ day: world.clockDays, text: `${c.name} y ${t.name} se enamoraron ❤️` }) }
-  } else if (act === "child") { if (c.partner && c.energy > 55 && c.pregnant <= 0) c.pregnant = 210 + Math.floor(Math.random() * 60) }
+    const t = courtTargetNear(c)
+    if (t) {
+      let p = 0.4; if (c.religion && c.religion === t.religion) p += 0.2; p -= Math.min(0.3, Math.abs(ageYears(c) - ageYears(t)) / 60)
+      if (Math.random() < clamp(p, 0.12, 0.9)) { c.partner = t.id; t.partner = c.id; world.chronicle.push({ day: world.clockDays, text: `${c.name} y ${t.name} se enamoraron ❤️` }); flash(`¡${t.name} aceptó! ❤️`) }
+      else flash(`${t.name} te rechazó 💔`)
+    }
+  } else if (act === "child") {
+    const p = world.creatures.find((o) => o.id === c.partner)
+    if (p) { if (Math.random() < 0.7) { c.pregnant = 210 + Math.floor(Math.random() * 60); flash("¡van a tener un hijo! 🤰") } else flash(`${p.name} no quiere ahora`) }
+  }
   renderPossess()
 }
 possessEl.querySelectorAll("button[data-act]").forEach((b) => b.addEventListener("click", () => { doAction((b as HTMLElement).dataset.act!); (b as HTMLElement).blur() }))
@@ -491,7 +581,7 @@ function loop() {
   zoom += (targetZoom - zoom) * 0.12 // smooth cinematic zoom toward the target
   // you control your avatar OR the creature you possess, in REAL TIME (smooth) regardless of world speed
   const me = possessed || avatar
-  if (me && !chatting && !paused) {
+  if (me && !chatting && !paused && !possessBusy) { // while working/studying you're frozen on the job
     driveControlled(me)
     me.x += me.vx; me.y += me.vy
     if (me.vx > 0.05) me.facing = 1; else if (me.vx < -0.05) me.facing = -1
@@ -501,7 +591,9 @@ function loop() {
     const minPerFrame = SCALES[scaleIndex].rate / 60 // in-world minutes added this frame (~60fps)
     let steps = 0
     for (const cn of countries) {
-      cn.world.clockMinutes += minPerFrame
+      let add = minPerFrame
+      if (possessBusy && cn.world === world) add = Math.max(add, 7) // montage: fast-forward the shift (day→night)
+      cn.world.clockMinutes += add
       const want = Math.floor(cn.world.clockMinutes / 1440) // whole in-world days elapsed
       const cap = cn.world === world ? 40 : 10
       let s = 0
@@ -509,6 +601,7 @@ function loop() {
       steps += s
     }
     if (steps) worldAffairs(steps)
+    if (possessBusy && world.clockMinutes >= possessBusy.until) finishBusy()
   }
   if (avatar && !possessed) avatar.energy = Math.max(60, Math.min(150, avatar.energy)) // immortal observer
   if (possessed) possessed.energy = Math.max(0, possessed.energy) // possessed: real hunger you manage (won't die)
