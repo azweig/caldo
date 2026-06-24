@@ -2,6 +2,7 @@
   "name": "caldo",
   "private": true,
   "version": "0.0.1",
+  "license": "MIT",
   "type": "module",
   "description": "Simulador de vida artificial evolutivo — un mundo cero-jugador que evoluciona solo; entrás como una criatura mortal más y podés conversar con cualquiera.",
   "scripts": {

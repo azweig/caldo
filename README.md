@@ -54,3 +54,7 @@ Sin LLM, igual juega con la voz simple. Variables: `PORT`, `CALDO_MODEL`.
 - [ ] árbol genealógico, plaza/mercado, depredadores, cerebros neuronales
 
 Sprites pixel-art reusados del proyecto Puglit.
+
+## Licencia
+
+[MIT](LICENSE) © azweig
