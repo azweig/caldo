@@ -32,7 +32,8 @@ export const lawFor = (simAct: string) => NOAHIDE.find((l) => l.simAct === simAc
 export function conscience(p: Person): number {
   const prosocial = (p.five.a + p.five.c) / 2
   const dark = p.dark.psycho * 0.6 + p.dark.mach * 0.3 + p.dark.narc * 0.2
-  return cl(prosocial - dark)
+  // only genuinely HIGH dark-triad erodes conscience — an average person stays law-abiding
+  return cl(prosocial - Math.max(0, dark - 0.3) * 1.7)
 }
 
 // felt RESTRAINT against breaking a specific law = conscience scaled by how grave that law is.

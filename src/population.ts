@@ -47,7 +47,7 @@ function classify(f: BigFive, d: DarkTriad): Archetype {
   if (d.psycho > 0.575) return "psicópata"        // ~1% (Hare)
   if (d.narc > 0.62) return "narcisista"          // ~1-3% (NPD)
   if (d.mach > 0.50) return "manipulador"         // high-Mach ~12-16%
-  if (f.o > 0.56 && f.e > 0.54 && f.n < 0.52 && f.a < 0.66) return "emprendedor" // risk-taking, driven
+  if (f.o > 0.58 && f.e > 0.56 && f.n < 0.5 && f.a < 0.62 && f.c > 0.45) return "emprendedor" // risk-taking, driven
   if (f.e > 0.56 && f.c > 0.56 && f.a > 0.45) return "líder"
   if (f.a > 0.64 && f.c > 0.5) return "altruista"
   if (f.n > 0.68) return "ansioso"
@@ -60,6 +60,19 @@ export function genPerson(): Person {
   const dark = darkTriad(five)
   return { five, dark, archetype: classify(five, dark) }
 }
+
+// children inherit a blend of both parents' Big Five + Dark-Triad (+ a little noise), then are re-classified
+export function inheritPerson(a: { five: BigFive; dark: DarkTriad }, b: { five: BigFive; dark: DarkTriad }): Person {
+  const mix = (x: number, y: number) => cl((x + y) / 2 + gauss(0, 0.08))
+  const five: BigFive = { o: mix(a.five.o, b.five.o), c: mix(a.five.c, b.five.c), e: mix(a.five.e, b.five.e), a: mix(a.five.a, b.five.a), n: mix(a.five.n, b.five.n) }
+  const dark: DarkTriad = { mach: mix(a.dark.mach, b.dark.mach), narc: mix(a.dark.narc, b.dark.narc), psycho: mix(a.dark.psycho, b.dark.psycho) }
+  return { five, dark, archetype: classify(five, dark) }
+}
+export function inheritDark(a: DarkTriad, b: DarkTriad): DarkTriad {
+  const mix = (x: number, y: number) => cl((x + y) / 2 + gauss(0, 0.08))
+  return { mach: mix(a.mach, b.mach), narc: mix(a.narc, b.narc), psycho: mix(a.psycho, b.psycho) }
+}
+export { classify }
 
 export function genPopulation(n: number): Person[] {
   const out: Person[] = new Array(n)

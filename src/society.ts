@@ -1,0 +1,119 @@
+// society.ts — the economic + legal + cultural layer that runs each periodic tick on a World.
+// Money flows (living costs, merchants, entrepreneurs, bankruptcy), crime + Noahide courts ("black sheep"),
+// and creative works (books + art) by the rare openness-rich creators. Every notable act is logged as a
+// Deed so we can later list the most INFLUENTIAL people per generation and what they did.
+
+import type { World, Creature } from "./world"
+import { ageYears, isMature } from "./world"
+import { conscience, NOAHIDE } from "./morality"
+
+const rnd = <T>(a: T[]): T => a[Math.floor(Math.random() * a.length)]
+const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
+
+const BOOK_THEMES = ["el origen del mundo", "los astros y el destino", "la memoria de los ancestros", "el arte de gobernar", "la naturaleza del alma", "viajes a tierras lejanas", "el amor y la pérdida", "las leyes de los números", "la caída de los reinos", "sueños y presagios"]
+const ART_FORMS = ["un mural", "una escultura", "un tapiz", "una talla", "un retrato", "un fresco", "una sinfonía", "una danza ritual"]
+const ART_SUBJ = ["la cosecha", "la diosa madre", "la guerra de los abuelos", "el río sagrado", "los amantes", "la ciudad soñada", "el eclipse", "la muerte y el renacer"]
+
+export function personOf(c: Creature) { return { five: c.psyche.five, dark: c.dark, archetype: c.archetype } }
+
+export function runSociety(w: World, wild: Creature[]) {
+  const adults = wild.filter(isMature)
+  if (adults.length < 2) return
+  const price = 1 + w.era * 0.08
+
+  // ── ECONOMY: living costs → merchants/entrepreneurs collect them; businesses profit or go bust ──
+  let pot = 0
+  for (const c of adults) { const cost = price * (2 + 0.5 * c.genome.size); c.money -= cost; pot += cost }
+  const sellers = adults.filter((c) => c.profCat === "comercio" || c.business)
+  if (sellers.length) { const share = Math.min(pot * 0.5 / sellers.length, 60 + w.era * 8); for (const s of sellers) s.money += share } // merchants collect part of spending, capped
+  for (const c of adults) {
+    const entrepreneurial = c.archetype === "emprendedor" || (c.psyche.five.o > 0.58 && c.psyche.five.n < 0.46 && c.psyche.five.e > 0.5)
+    if (entrepreneurial && !c.business && c.money > 35 && Math.random() < (c.archetype === "emprendedor" ? 0.08 : 0.03)) {
+      c.business = true; c.money -= 25
+      w.logDeed({ day: w.clockDays, gen: c.generation, who: c.id, name: `${c.name} ${c.surname}`, kind: "negocio", text: "fundó un negocio", impact: 6 })
+    }
+    if (c.business) {
+      c.money += price * 4
+      const risk = 0.02 + 0.06 * (1 - c.psyche.five.c)
+      if (c.money < 0 || Math.random() < risk) {
+        c.business = false; c.money = Math.max(c.money, -25)
+        w.logDeed({ day: w.clockDays, gen: c.generation, who: c.id, name: `${c.name} ${c.surname}`, kind: "quiebra", text: "quebró su negocio", impact: -3 })
+      }
+    }
+  }
+
+  // ── CRIME + COURTS (Noahide law #1): low-conscience adults break the law; courts catch + punish ──
+  for (const c of adults) {
+    const con = conscience(personOf(c))
+    if (con > 0.28) continue // only the genuinely low-conscience break the law
+    if (Math.random() > (0.4 - con) * 0.08) continue
+    const victim = rnd(adults.filter((o) => o !== c))
+    if (!victim) continue
+    let lawKey = "robo"
+    if (c.dark.psycho > 0.6 && Math.random() < 0.28) lawKey = "asesinato"
+    else if (c.partner && c.dark.mach > 0.5 && Math.random() < 0.3) lawKey = "inmoralidad"
+    c.crimes = (c.crimes || 0) + 1
+    const law = NOAHIDE.find((l) => l.key === lawKey)!
+    const caught = Math.random() < 0.35 + w.era * 0.02 // better institutions catch more
+    if (lawKey === "asesinato") {
+      const vi = w.creatures.indexOf(victim); if (vi >= 0) { w.creatures.splice(vi, 1); w.deaths++; w.deathCauses.violencia++ }
+      w.logDeed({ day: w.clockDays, gen: c.generation, who: c.id, name: `${c.name} ${c.surname}`, kind: "crimen", text: `asesinó a ${victim.name} ${victim.surname}`, impact: -20 })
+      if (caught) { const ci = w.creatures.indexOf(c); if (ci >= 0) { w.creatures.splice(ci, 1); w.deaths++ }; w.logDeed({ day: w.clockDays, gen: c.generation, who: c.id, name: `${c.name} ${c.surname}`, kind: "justicia", text: "ejecutado por el tribunal", impact: 0 }) }
+    } else {
+      if (lawKey === "robo") { const loot = Math.min(Math.max(0, victim.money), 10 + price * 5); victim.money -= loot; c.money += loot }
+      w.logDeed({ day: w.clockDays, gen: c.generation, who: c.id, name: `${c.name} ${c.surname}`, kind: "crimen", text: lawKey === "inmoralidad" ? "cometió adulterio" : `robó a ${victim.name} ${victim.surname}`, impact: -4 })
+      if (caught) { c.money -= price * 10 * (0.4 + 0.6 * law.severity); w.logDeed({ day: w.clockDays, gen: c.generation, who: c.id, name: `${c.name} ${c.surname}`, kind: "justicia", text: "multado por el tribunal", impact: 0 }) }
+    }
+  }
+
+  // ── CULTURE: the rare openness-rich writers + artists create works that lift the whole people ──
+  for (const c of adults) {
+    const writer = !!c.profBase && c.profBase.toLowerCase().includes("escrit")
+    const artist = c.profCat === "arte"
+    if ((!writer && !artist) || c.psyche.five.o < 0.6) continue
+    if (Math.random() > 0.015 + 0.03 * c.psyche.five.o) continue
+    const impact = Math.round(4 + c.knowledge / 12 + c.psyche.five.o * 6)
+    if (writer || Math.random() < 0.4) {
+      const title = `«${cap(rnd(BOOK_THEMES))}»`
+      w.logDeed({ day: w.clockDays, gen: c.generation, who: c.id, name: `${c.name} ${c.surname}`, kind: "libro", text: `escribió ${title}`, impact, content: title })
+    } else {
+      const title = `${rnd(ART_FORMS)} sobre ${rnd(ART_SUBJ)}`
+      w.logDeed({ day: w.clockDays, gen: c.generation, who: c.id, name: `${c.name} ${c.surname}`, kind: "obra", text: `creó ${title}`, impact, content: title })
+    }
+    w.wisdom = Math.min(100, w.wisdom + impact * 0.04)
+  }
+}
+
+// ── stats for the "ver más" panel ──
+export function wealthStats(w: World) {
+  const adults = w.creatures.filter((c) => !c.isAvatar && isMature(c))
+  const m = adults.map((c) => c.money).sort((a, b) => a - b)
+  const n = m.length || 1
+  const total = m.reduce((a, b) => a + b, 0)
+  let g = 0; for (let i = 0; i < m.length; i++) g += (2 * (i + 1) - n - 1) * m[i]
+  const gini = total > 0 && n > 1 ? g / (n * total) : 0
+  return {
+    gini: Math.abs(gini), mean: total / n,
+    p10: Math.round(m[Math.floor(n * 0.1)] || 0), p50: Math.round(m[Math.floor(n * 0.5)] || 0), p90: Math.round(m[Math.floor(n * 0.9)] || 0),
+    entrepreneurs: adults.filter((c) => c.business).length,
+    poor: adults.filter((c) => c.money < 0).length,
+    richest: adults.slice().sort((a, b) => b.money - a.money).slice(0, 5).map((c) => ({ name: `${c.name} ${c.surname}`, money: Math.round(c.money), arch: c.archetype })),
+  }
+}
+
+// the most INFLUENTIAL people, grouped by generation (by total deed impact), with what they did
+export function influentialByGen(w: World, perGen = 3) {
+  const byPerson = new Map<number, { name: string; gen: number; impact: number; deeds: string[] }>()
+  for (const d of w.deeds) {
+    let e = byPerson.get(d.who)
+    if (!e) { e = { name: d.name, gen: d.gen, impact: 0, deeds: [] }; byPerson.set(d.who, e) }
+    e.impact += d.impact
+    if (d.kind === "libro" || d.kind === "obra" || d.kind === "negocio" || d.kind === "crimen" || d.kind === "descubrimiento") e.deeds.push(d.text)
+  }
+  const gens = new Map<number, { name: string; impact: number; deeds: string[] }[]>()
+  for (const e of byPerson.values()) { const a = gens.get(e.gen) || []; a.push(e); gens.set(e.gen, a) }
+  return [...gens.entries()].sort((a, b) => a[0] - b[0]).map(([gen, arr]) => ({
+    gen, people: arr.sort((a, b) => Math.abs(b.impact) - Math.abs(a.impact)).slice(0, perGen),
+  }))
+}
+export { ageYears }

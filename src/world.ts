@@ -7,6 +7,8 @@ import { Genome, randomGenome, recombine } from "./genome"
 import { Psyche, randomPsyche, inheritPsyche } from "./psyche"
 import { Cat, Boosts, Prof, PROFS, TECHS, availableProfs, nextTech, economyOf, professionTitle, eraName } from "./civ"
 import { pickReligion } from "./civconfig"
+import { genPerson, inheritDark, classify, DarkTriad, Archetype } from "./population"
+import { runSociety } from "./society"
 
 export const SEASONS = ["primavera", "verano", "otoño", "invierno"] as const
 export function seasonOf(days: number): number { return Math.floor((Math.floor(days) % DAYS_PER_YEAR) / (DAYS_PER_YEAR / 4)) }
@@ -82,7 +84,14 @@ export interface Creature {
   powerHungry: boolean // a power-obsessed "psychopath" — drifts toward rule + raises violence
   money: number      // earned by working (you can SEE + spend it when you possess them)
   controlled: boolean // true while the PLAYER is possessing this creature (transient, not saved)
+  dark: DarkTriad    // machiavellianism / narcissism / psychopathy (realistic base rates)
+  archetype: Archetype // emergent label (psicópata, emprendedor, altruista…)
+  crimes: number     // how many Noahide laws they've broken — a "black sheep" if high
+  business: boolean  // currently runs a business (entrepreneurs)
 }
+
+// a notable act, logged so we can later rank the most INFLUENTIAL people per generation
+export interface Deed { day: number; gen: number; who: number; name: string; kind: string; text: string; impact: number; content?: string }
 
 export interface WorldOpts { startEra: number; religions: { name: string; pct: number }[]; violence: number; psychopathy: number; gov: "monarquía" | "república" }
 
@@ -149,6 +158,8 @@ export class World {
   births = 0
   deaths = 0
   deathCauses: Record<string, number> = { hambre: 0, vejez: 0, enfermedad: 0, violencia: 0 }
+  deeds: Deed[] = [] // log of notable acts (works, crimes, businesses, discoveries) for the legends list
+  logDeed(d: Deed) { this.deeds.push(d); if (this.deeds.length > 800) this.deeds.shift() }
   peakGen = 0
   foodTarget: number
 
@@ -258,8 +269,8 @@ export class World {
   // ── persistence: a civilisation survives reloads until you start a new one ──
   toState() {
     const hi = new Map<House, number>(); this.houses.forEach((h, i) => hi.set(h, i))
-    const C = (c: Creature) => ({ id: c.id, x: c.x, y: c.y, e: c.energy, ad: c.ageDays, ls: c.lifespanDays, gen: c.generation, nm: c.name, sn: c.surname, h: hi.get(c.home) ?? 0, k: c.knowledge, pf: c.profession, pb: c.profBase, pc: c.profCat, hp: c.heritProf, sick: c.sick, ch: c.children, par: c.parents, rel: c.religion, pw: c.powerHungry, g: c.genome, ps: c.psyche, mem: c.memory, soc: c.social, gh: c.goingHome, pt: c.partner, pg: c.pregnant, mny: c.money })
-    return { region: this.region, gov: this.gov, era: this.era, clockDays: this.clockDays, clockMinutes: this.clockMinutes, tick: this.tick, research: this.research, discovered: [...this.discovered], techBoost: this.techBoost, wisdom: this.wisdom, births: this.births, deaths: this.deaths, peakGen: this.peakGen, plagueUntil: this.plagueUntil, violence: this.violence, psychopathy: this.psychopathy, religionsCfg: this.religionsCfg, chronicle: this.chronicle.slice(-60), houses: this.houses, gardens: this.gardens, schools: this.schools, universities: this.universities, airport: this.airport, monarch: this.monarch?.id ?? null, creatures: this.creatures.filter((c) => !c.isAvatar).map(C) }
+    const C = (c: Creature) => ({ id: c.id, x: c.x, y: c.y, e: c.energy, ad: c.ageDays, ls: c.lifespanDays, gen: c.generation, nm: c.name, sn: c.surname, h: hi.get(c.home) ?? 0, k: c.knowledge, pf: c.profession, pb: c.profBase, pc: c.profCat, hp: c.heritProf, sick: c.sick, ch: c.children, par: c.parents, rel: c.religion, pw: c.powerHungry, g: c.genome, ps: c.psyche, mem: c.memory, soc: c.social, gh: c.goingHome, pt: c.partner, pg: c.pregnant, mny: c.money, dk: c.dark, arc: c.archetype, crm: c.crimes, biz: c.business })
+    return { region: this.region, gov: this.gov, era: this.era, clockDays: this.clockDays, clockMinutes: this.clockMinutes, tick: this.tick, research: this.research, discovered: [...this.discovered], techBoost: this.techBoost, wisdom: this.wisdom, births: this.births, deaths: this.deaths, peakGen: this.peakGen, plagueUntil: this.plagueUntil, violence: this.violence, psychopathy: this.psychopathy, religionsCfg: this.religionsCfg, chronicle: this.chronicle.slice(-60), houses: this.houses, gardens: this.gardens, schools: this.schools, universities: this.universities, airport: this.airport, monarch: this.monarch?.id ?? null, deeds: this.deeds.slice(-300), creatures: this.creatures.filter((c) => !c.isAvatar).map(C) }
   }
   static fromState(s: any, spriteCount: number): World {
     const w = new World(spriteCount, s.region, undefined, true)
@@ -268,11 +279,11 @@ export class World {
     w.births = s.births; w.deaths = s.deaths; w.peakGen = s.peakGen; w.plagueUntil = s.plagueUntil
     w.violence = s.violence; w.psychopathy = s.psychopathy; w.religionsCfg = s.religionsCfg
     w.chronicle = s.chronicle || []; w.houses = s.houses; w.gardens = s.gardens; w.schools = s.schools
-    w.universities = s.universities; w.airport = s.airport; w.foodTarget = 230
+    w.universities = s.universities; w.airport = s.airport; w.foodTarget = 230; w.deeds = s.deeds || []
     const byId = new Map<number, Creature>(); let maxId = 0
     w.creatures = (s.creatures || []).map((c: any) => {
       maxId = Math.max(maxId, c.id)
-      const cr: Creature = { id: c.id, x: c.x, y: c.y, vx: 0, vy: 0, energy: c.e, ageDays: c.ad, lifespanDays: c.ls, genome: c.g, generation: c.gen, name: c.nm, surname: c.sn, home: w.houses[c.h] || w.houses[0], goingHome: !!c.gh, parents: c.par, children: c.ch, sick: c.sick, sickDays: 0, lastRepro: -99999, partner: c.pt || 0, pregnant: c.pg || 0, isAvatar: false, facing: 1, psyche: c.ps, memory: c.mem || [], social: c.soc || [], knowledge: c.k, profession: c.pf, profBase: c.pb, profCat: c.pc, heritProf: c.hp || "", religion: c.rel || "", powerHungry: !!c.pw, money: c.mny || 0, controlled: false }
+      const cr: Creature = { id: c.id, x: c.x, y: c.y, vx: 0, vy: 0, energy: c.e, ageDays: c.ad, lifespanDays: c.ls, genome: c.g, generation: c.gen, name: c.nm, surname: c.sn, home: w.houses[c.h] || w.houses[0], goingHome: !!c.gh, parents: c.par, children: c.ch, sick: c.sick, sickDays: 0, lastRepro: -99999, partner: c.pt || 0, pregnant: c.pg || 0, isAvatar: false, facing: 1, psyche: c.ps, memory: c.mem || [], social: c.soc || [], knowledge: c.k, profession: c.pf, profBase: c.pb, profCat: c.pc, heritProf: c.hp || "", religion: c.rel || "", powerHungry: !!c.pw, money: c.mny || 0, controlled: false, dark: c.dk || { mach: 0.2, narc: 0.2, psycho: 0.1 }, archetype: c.arc || "promedio", crimes: c.crm || 0, business: !!c.biz }
       byId.set(cr.id, cr); return cr
     })
     w.monarch = s.monarch != null ? byId.get(s.monarch) || null : null
@@ -281,6 +292,11 @@ export class World {
   }
 
   private spawn(genome: Genome, generation: number, home: House, x?: number, y?: number, psyche?: Psyche): Creature {
+    // realistic personality: a fresh creature draws Big Five + Dark Triad from real base rates; a child
+    // is passed an inherited psyche, so we keep that and only seed dark/archetype (overwritten at birth).
+    const person = genPerson()
+    const ps = psyche ?? randomPsyche()
+    if (!psyche) ps.five = person.five // founders + reseeds get the normally-distributed Big Five
     return {
       id: NEXT_ID++,
       x: x ?? home.x, y: y ?? home.y,
@@ -291,9 +307,10 @@ export class World {
       goingHome: false, parents: null, children: 0,
       sick: false, sickDays: 0, lastRepro: -REPRO_COOLDOWN, partner: 0, pregnant: 0,
       isAvatar: false, facing: 1,
-      psyche: psyche ?? randomPsyche(), memory: [], social: [], knowledge: 0,
+      psyche: ps, memory: [], social: [], knowledge: 0,
       profession: "", profBase: "", profCat: "", heritProf: "",
       religion: "", powerHungry: false, money: 0, controlled: false,
+      dark: person.dark, archetype: classify(ps.five, person.dark), crimes: 0, business: false,
     }
   }
 
@@ -531,6 +548,7 @@ export class World {
             child.heritProf = Math.random() < 0.5 ? c.profBase : (mate ? mate.profBase : c.profBase)
             child.religion = Math.random() < 0.85 ? (Math.random() < 0.5 ? c.religion : (mate ? mate.religion : c.religion)) : pickReligion(this.religionsCfg)
             child.powerHungry = Math.random() < this.psychopathy * ((c.powerHungry || (mate && mate.powerHungry)) ? 1.8 : 1)
+            child.dark = inheritDark(c.dark, mate ? mate.dark : c.dark); child.archetype = classify(child.psyche.five, child.dark)
             newborns.push(child); this.births++
             if (child.generation > this.peakGen) this.peakGen = child.generation
           }
@@ -594,6 +612,7 @@ export class World {
         if (Math.random() < 0.85 * growth) c.pregnant = GESTATION_MIN + Math.floor(Math.random() * 60) // conceive (~7-9 months)
       }
 
+      runSociety(this, wild) // economy, crime + courts, and culture (books/art)
     }
 
     if (this.creatures.filter((c) => !c.isAvatar).length < 8) { // keep a struggling village from going extinct

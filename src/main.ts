@@ -14,6 +14,7 @@ import { ENNEAGRAM } from "./psyche"
 import { LangCode, WRITE_LANG, langName, heard } from "./i18n"
 import { CivConfig, RELIGIONS, buildCountries, foodSystem, transportOf, transportLevel } from "./civconfig"
 import { init3D, resize3D, render3D } from "./three3d"
+import { wealthStats, influentialByGen } from "./society"
 
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v))
 
@@ -217,6 +218,10 @@ function statsHTML(): string {
     <div class="sline">${transportOf(world.era)}</div>
     <h3>Relaciones exteriores</h3>
     <div class="sline">${countries.filter((c) => c !== countries[active]).map((c) => `${c.flag} ${c.name}: ${relationLabel(relationScore(countries[active], c))}`).join("<br>") || "—"}</div>
+    <h3>Riqueza</h3>
+    ${(() => { const ws = wealthStats(world); return `${row("desigualdad (Gini)", ws.gini.toFixed(2))}${row("pobre · medio · rico", `${ws.p10} · ${ws.p50} · ${ws.p90}`)}${row("emprendedores · en deuda", `${ws.entrepreneurs} · ${ws.poor}`)}<div class="sline">más ricos: ${ws.richest.slice(0, 3).map((r) => `${r.name} (${r.money})`).join(" · ") || "—"}</div>` })()}
+    <h3>Sociedad (histórico)</h3>
+    ${(() => { const k = (kind: string) => world.deeds.filter((d) => d.kind === kind).length; return `${row("crímenes · juicios", `${k("crimen")} · ${k("justicia")}`)}${row("negocios · quiebras", `${k("negocio")} · ${k("quiebra")}`)}${row("libros · obras de arte", `${k("libro")} · ${k("obra")}`)}` })()}
     <h3>Conflictividad</h3>
     ${row("ambiciosos (sed de poder)", `${ambitious}`)}
     ${row("nivel de crimen", `${crime}%`)}
@@ -225,6 +230,22 @@ function statsHTML(): string {
 function toggleStats() { if (statsEl.classList.contains("hidden")) statsBody.innerHTML = statsHTML(); statsEl.classList.toggle("hidden") }
 document.getElementById("stats-close")!.addEventListener("click", () => statsEl.classList.add("hidden"))
 document.getElementById("statsbtn")!.addEventListener("click", () => { toggleStats(); (document.getElementById("statsbtn") as HTMLElement).blur() })
+
+// ── legends: the most influential people per generation, and what they did ──
+const legendsEl = document.getElementById("legends") as HTMLDivElement
+const legendsBody = document.getElementById("legends-body")!
+function legendsHTML(): string {
+  const gens = influentialByGen(world, 4)
+  if (!gens.length) return "<p class='dim'>Todavía no hay hechos memorables en esta civilización.</p>"
+  return gens.slice().reverse().map((g) =>
+    `<h3>Generación ${g.gen}</h3>` + g.people.map((p) =>
+      `<div class="srow"><span>${p.name}</span><b style="color:${p.impact >= 0 ? "#8fe3a0" : "#e0788a"}">${p.impact >= 0 ? "+" : ""}${p.impact}</b></div>` +
+      `<div class="sline">${p.deeds.slice(-3).join(" · ") || "figura de su tiempo"}</div>`).join("")
+  ).join("")
+}
+function toggleLegends() { if (legendsEl.classList.contains("hidden")) legendsBody.innerHTML = legendsHTML(); legendsEl.classList.toggle("hidden") }
+document.getElementById("legends-close")!.addEventListener("click", () => legendsEl.classList.add("hidden"))
+document.getElementById("legendsbtn")!.addEventListener("click", () => { toggleLegends(); (document.getElementById("legendsbtn") as HTMLElement).blur() })
 
 // ── possession (P): take over a creature and play AS them, Sims-style ──
 const possessEl = document.getElementById("possess") as HTMLDivElement

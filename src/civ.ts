@@ -94,6 +94,7 @@ export const PROFS: Prof[] = [
   { n: "recolector", e: 0, c: "comida" }, { n: "cazador", e: 0, c: "comida" }, { n: "guardián del fuego", e: 0, c: "construcción" },
   { n: "tallador de piedra", e: 0, c: "oficio" }, { n: "rastreador", e: 0, c: "exploración" }, { n: "curandero de hierbas", e: 0, c: "salud" },
   { n: "narrador de historias", e: 0, c: "arte" }, { n: "chamán", e: 0, c: "espíritu" }, { n: "pintor de cuevas", e: 0, c: "arte" },
+  { n: "escriba", e: 2, c: "arte" }, { n: "escritor", e: 5, c: "arte" }, { n: "novelista", e: 9, c: "arte" }, { n: "guionista", e: 12, c: "arte" },
   { n: "matriarca del clan", e: 0, c: "liderazgo" },
   // 1 Mesolítica
   { n: "pescador", e: 1, c: "comida" }, { n: "arquero", e: 1, c: "defensa" }, { n: "domador de perros", e: 1, c: "cuidado" },
