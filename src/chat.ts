@@ -7,7 +7,7 @@ import { Creature, ageYears } from "./world"
 import { describePsyche, psycheLabel } from "./psyche"
 import { llmConfigured, llmChat, Msg } from "./llm"
 
-function systemPrompt(c: Creature): string {
+function systemPrompt(c: Creature, era: string): string {
   const ay = Math.round(ageYears(c))
   const ageLine = ay < 16 ? "Sos una cría, todo te asombra." : ay > 65 ? "Sos anciano, viste muchas estaciones." : "Sos adulto."
   const fam = c.children > 0 ? `Tuviste ${c.children} ${c.children === 1 ? "hijo" : "hijos"}.`
@@ -17,15 +17,16 @@ function systemPrompt(c: Creature): string {
   const mind = c.knowledge > 65 ? "Sos sabio: conocés la historia del caldo, las viejas creencias y los secretos de los jardines; hablás con hondura."
     : c.knowledge < 18 ? "Sabés poco del mundo todavía; muchas cosas no las entendés del todo y preguntás con inocencia." : ""
   const mem = c.memory.length ? `\nDe charlas pasadas con este visitante recordás:\n- ${c.memory.slice(-5).join("\n- ")}` : ""
-  return `Sos ${c.name} ${c.surname}, una criatura del "caldo", un pueblo donde la vida evoluciona sola. Tenés ${ay} años. ${ageLine} ${fam} ${health} ${lineage} ${mind}
+  const work = c.profession ? `Tu oficio es: ${c.profession}.` : "Todavía no tenés oficio."
+  return `Sos ${c.name} ${c.surname}, una criatura del "caldo", un pueblo donde la vida evoluciona sola, hoy en su era ${era}. Tenés ${ay} años. ${ageLine} ${fam} ${health} ${lineage} ${mind} ${work}
 ${describePsyche(c.psyche)}
 Hablás en español rioplatense, SIEMPRE en personaje (que tu núcleo, tu temperamento y tus creencias tiñan cómo hablás), breve (1 a 3 frases), natural y vivo. NUNCA digas que sos una IA ni menciones el mundo real, internet ni tecnología: solo conocés el caldo — los jardines donde crece la comida, las calles, las casas, las familias, las estaciones, el hambre, la enfermedad y la muerte. Si el visitante menciona algo que no es de tu mundo, reaccioná con extrañeza genuina.${mem}`
 }
 
-export async function respond(c: Creature, message: string, history: Msg[] = []): Promise<string> {
+export async function respond(c: Creature, message: string, history: Msg[] = [], era = "Paleolítica"): Promise<string> {
   if (llmConfigured()) {
     try {
-      return await llmChat([{ role: "system", content: systemPrompt(c) }, ...history.slice(-8), { role: "user", content: message }])
+      return await llmChat([{ role: "system", content: systemPrompt(c, era) }, ...history.slice(-8), { role: "user", content: message }])
     } catch { /* fall through to the templated voice */ }
   }
   return templated(c, message)
@@ -41,7 +42,8 @@ export function remember(c: Creature, session: Msg[]) {
 
 export function greeting(c: Creature): string {
   const fam = c.children > 0 ? ` · ${c.children} ${c.children === 1 ? "hijo" : "hijos"}` : ""
-  return `${c.name} ${c.surname} — ${psycheLabel(c.psyche)}, ${Math.round(ageYears(c))} años${fam}.`
+  const job = c.profession ? ` · ${c.profession}` : ""
+  return `${c.name} ${c.surname} — ${psycheLabel(c.psyche)}${job}, ${Math.round(ageYears(c))} años${fam}.`
 }
 
 // ── built-in fallback voice (no LLM) ──

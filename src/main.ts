@@ -9,6 +9,7 @@ import { loadAssets } from "./sprites"
 import { drawWorld, drawChart } from "./render"
 import { respond, greeting, remember } from "./chat"
 import { Msg, setLlm, pingLLM, llmConfigured, llmUrl, llmModel } from "./llm"
+import { eraName, professionSpace } from "./civ"
 
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v))
 
@@ -123,7 +124,7 @@ chatInput.addEventListener("keydown", async (e) => {
     addLine("Tú", msg, "me"); chatInput.value = ""
     session.push({ role: "user", content: msg })
     const typing = addLine(who.name, "<i>…</i>", "them")
-    const reply = await respond(who, msg, session)
+    const reply = await respond(who, msg, session, eraName(world.era))
     typing.innerHTML = `<b>${who.name}:</b> ${reply}`
     chatLog.scrollTop = chatLog.scrollHeight
     session.push({ role: "assistant", content: reply })
@@ -171,7 +172,9 @@ function updateHud() {
     <div class="stat"><span>población</span> ${wild.length} · <span>familias</span> ${families}</div>
     <div class="stat"><span>edad media</span> ${avgAge}a · <span>enfermos ✚</span> ${sick}</div>
     <div class="stat"><span>generación</span> ${world.peakGen} · <span>nac</span> ${world.births} · <span>muertes</span> ${world.deaths}</div>
-    <div class="stat"><span>saber del pueblo 📚</span> ${Math.round(world.wisdom)}</div>
+    <div class="stat"><span>saber del pueblo 📚</span> ${Math.round(world.wisdom)} · <span>era</span> <b style="color:#bcd9ff">${eraName(world.era)}</b></div>
+    <div class="stat"><span>oficios posibles</span> ${professionSpace().toLocaleString()} · <span>universidades</span> ${world.universities.length}</div>
+    ${world.recentTech ? `<div class="stat"><span>💡 último invento</span> ${world.recentTech}</div>` : ""}
     <div class="stat energy"><span>vos</span> ${aAge}a · ${bar} ${Math.round(e)}</div>
     <div class="hint">${(!chatting && chatTarget) ? `▸ apretá <b>E</b> para hablar con ${chatTarget.name}` : "WASD moverte · E hablar · espacio pausa"}</div>
   `

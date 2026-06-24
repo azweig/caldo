@@ -93,6 +93,17 @@ export function drawWorld(
     label(ctx, "📚 escuela", s.x + s.w / 2, s.y - 36, "#bcd9ff")
   }
 
+  // universities — civic landmark, built when discovered; gate the advanced professions
+  for (const u of world.universities) {
+    ctx.fillStyle = "hsl(45, 28%, 50%)"
+    ctx.fillRect(u.x, u.y, u.w, u.h)
+    ctx.fillStyle = "rgba(255,250,235,0.85)" // columns
+    for (let i = 0; i < 5; i++) ctx.fillRect(u.x + 12 + i * ((u.w - 28) / 4), u.y + 18, 8, u.h - 32)
+    ctx.fillStyle = "hsl(45, 32%, 38%)" // pediment
+    ctx.beginPath(); ctx.moveTo(u.x - 12, u.y + 18); ctx.lineTo(u.x + u.w + 12, u.y + 18); ctx.lineTo(u.x + u.w / 2, u.y - 24); ctx.closePath(); ctx.fill()
+    label(ctx, "🏛️ universidad", u.x + u.w / 2, u.y - 32, "#ffe9b8")
+  }
+
   // food
   const foodOk = assets.food.naturalWidth > 0
   for (const f of world.food) {

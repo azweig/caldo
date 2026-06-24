@@ -5,6 +5,7 @@
 
 import { Genome, randomGenome, recombine } from "./genome"
 import { Psyche, randomPsyche, inheritPsyche } from "./psyche"
+import { Cat, Boosts, Prof, PROFS, availableProfs, nextTech, economyOf, professionTitle } from "./civ"
 
 export const DAYS_PER_YEAR = 360
 export const WORLD_W = 2800
@@ -63,6 +64,10 @@ export interface Creature {
   psyche: Psyche
   memory: string[] // what this creature remembers from past chats with the player
   knowledge: number // accumulated learning (0..100): school as a child, experience as an adult
+  profession: string // full lived title (may be specialised), for display + chat
+  profBase: string   // base profession name (PROFS.n), for logic
+  profCat: Cat | ""  // economic category (drives the village economy); "" = not yet working
+  heritProf: string  // a parent's base profession — biases the child's choice (apprenticeship)
 }
 
 export interface Sample { pop: number; speed: number; vision: number; size: number; metabolism: number; intellect: number; knowledge: number }
@@ -95,7 +100,17 @@ export class World {
   houses: House[] = []
   gardens: Garden[] = []
   schools: School[] = []
+  universities: School[] = []
   wisdom = 25 // the village's collective knowledge ceiling (the cultural ratchet) — rises/falls over generations
+  // civilisation
+  research = 0
+  discovered = new Set<string>()
+  era = 0
+  recentTech = ""
+  techBoost: Boosts = { food: 0, health: 0, research: 0, learn: 0, life: 0 }
+  econ: Boosts = { food: 0, health: 0, research: 0, learn: 0, life: 0 }
+  profCounts: Partial<Record<Cat, number>> = {}
+  profPop: Record<string, number> = {}
   tick = 0
   clockDays = 0
   spriteCount: number
@@ -135,12 +150,47 @@ export class World {
       c.ageDays = Math.random() * 30 * DAYS_PER_YEAR
       c.knowledge = 16 + Math.random() * 28
       c.x = home.x + Math.random() * 30; c.y = home.y + Math.random() * 30
+      this.assignProfession(c)
       this.creatures.push(c)
     }
     for (let i = 0; i < this.foodTarget; i++) this.scatterFood()
   }
 
-  private lifespanFor(g: Genome): number { return Math.round(g.longevity * DAYS_PER_YEAR * (0.9 + Math.random() * 0.2)) }
+  private lifespanFor(g: Genome): number { return Math.round(g.longevity * DAYS_PER_YEAR * (0.9 + Math.random() * 0.2) * (1 + this.techBoost.life)) }
+
+  // ── profession: chosen at maturity from what's available, biased by family, fit, popularity + need ──
+  private fit(cat: Cat, c: Creature): number {
+    const f = c.psyche.five, g = c.genome
+    switch (cat) {
+      case "saber": case "ingeniería": return 0.6 + 1.7 * g.intellect + f.o * 0.6
+      case "enseñanza": return 0.7 + 1.1 * g.intellect + f.a * 0.6
+      case "salud": case "cuidado": return 0.7 + f.a * 1.3 + g.intellect * 0.4
+      case "arte": return 0.7 + f.o * 1.4 + (1 - f.c) * 0.4
+      case "liderazgo": return 0.7 + f.e * 1.0 + (1 - f.a) * 0.5
+      case "defensa": return 0.7 + f.e * 0.7 + (1 - f.a) * 0.7 + g.size * 0.3
+      case "comercio": case "exploración": return 0.8 + f.e * 0.9 + f.o * 0.4
+      case "espíritu": return 0.8 + f.n * 0.8 + f.o * 0.5
+      default: return 1.0 + f.c * 0.6 // comida / oficio / construcción — the steady hands
+    }
+  }
+  private profWeight(p: Prof, c: Creature): number {
+    let w = this.fit(p.c, c)
+    if (p.n === c.heritProf) w *= 4 // family apprenticeship (the strongest pull)
+    const pop = this.profPop[p.n] || 0
+    w *= 0.5 + 0.55 * Math.log1p(pop) + (pop > 0 ? 0.4 : 0) // social learning: known trades are easier to enter
+    w *= 1 + 1.2 / (1 + (this.profCounts[p.c] || 0)) // village need: under-filled categories pull harder
+    return w
+  }
+  private assignProfession(c: Creature) {
+    const avail = availableProfs(this.era, this.universities.length > 0, c.knowledge)
+    const pool = avail.length ? avail : PROFS.filter((p) => p.e === 0)
+    const weights = pool.map((p) => this.profWeight(p, c))
+    let r = Math.random() * weights.reduce((a, b) => a + b, 0)
+    let chosen = pool[pool.length - 1]
+    for (let i = 0; i < pool.length; i++) { r -= weights[i]; if (r <= 0) { chosen = pool[i]; break } }
+    c.profBase = chosen.n; c.profCat = chosen.c
+    c.profession = professionTitle(chosen, this.era, c.id)
+  }
 
   private spawn(genome: Genome, generation: number, home: House, x?: number, y?: number, psyche?: Psyche): Creature {
     return {
@@ -154,6 +204,7 @@ export class World {
       sick: false, sickDays: 0, lastRepro: -REPRO_COOLDOWN,
       isAvatar: false, facing: 1,
       psyche: psyche ?? randomPsyche(), memory: [], knowledge: 0,
+      profession: "", profBase: "", profCat: "", heritProf: "",
     }
   }
 
@@ -164,7 +215,7 @@ export class World {
 
   addAvatar(): Creature {
     const a = this.spawn(randomGenome(this.spriteCount), 0, rnd(this.houses), WORLD_W / 2, WORLD_H / 2)
-    a.isAvatar = true; a.name = "Tú"; a.surname = ""
+    a.isAvatar = true; a.name = "Tú"; a.surname = ""; a.profession = "forastero del más allá"
     a.ageDays = 22 * DAYS_PER_YEAR; a.energy = START_ENERGY * 1.4
     this.creatures.push(a)
     return a
@@ -223,6 +274,19 @@ export class World {
     this.tick++; this.clockDays++
     if (this.food.length < this.foodTarget && Math.random() < 0.92) this.scatterFood()
 
+    // ── civilisation: research → discoveries (advance the era, boost the economy, unlock professions) ──
+    this.research += this.econ.research * (1 + this.techBoost.research) * 0.5
+    let nt = nextTech(this.discovered, this.era)
+    while (nt && this.research >= nt.cost) {
+      this.research -= nt.cost; this.discovered.add(nt.n); this.recentTech = nt.n
+      if (nt.b) { const tb = this.techBoost as unknown as Record<string, number>, nb = nt.b as Record<string, number>; for (const k of Object.keys(nt.b)) tb[k] += nb[k] }
+      if (nt.e > this.era) this.era = nt.e
+      if (nt.n === "Universidad" && !this.universities.length) this.universities.push({ x: WORLD_W * 0.5 - 64, y: WORLD_H * 0.5 - 54, w: 128, h: 104 })
+      nt = nextTech(this.discovered, this.era)
+    }
+    const healthM = 1 + this.econ.health + this.techBoost.health
+    const learnM = 1 + this.econ.learn + this.techBoost.learn
+
     const survivors: Creature[] = []
     const newborns: Creature[] = []
     const paired = new Set<number>()
@@ -274,19 +338,21 @@ export class World {
           const s = this.nearestSchool(c)
           const atSchool = (c.x - (s.x + s.w / 2)) ** 2 + (c.y - (s.y + s.h / 2)) ** 2 < 95 * 95
           const ceiling = this.wisdom + 8 // a child can learn what the village knows, plus a little
-          if (atSchool && c.knowledge < ceiling) c.knowledge = Math.min(ceiling, c.knowledge + 0.06 * g.intellect)
+          if (atSchool && c.knowledge < ceiling) c.knowledge = Math.min(ceiling, c.knowledge + 0.06 * g.intellect * learnM)
         } else if (c.knowledge < 100) {
           c.knowledge += 0.0014 * g.intellect // slow lifelong experience → nudges the village ceiling up (the ratchet)
         }
+        // pick a trade when grown up
+        if (!c.profBase && isMature(c)) this.assignProfession(c)
       }
 
       const ay = ageYears(c)
       const ageRisk = 1 + Math.max(0, ay - 45) / 40
-      if (!c.sick) { if (Math.random() < 0.00009 * (1.25 - g.resistance) * ageRisk) { c.sick = true; c.sickDays = 0 } }
+      if (!c.sick) { if (Math.random() < 0.00009 * (1.25 - g.resistance) * ageRisk / healthM) { c.sick = true; c.sickDays = 0 } }
       else {
         c.sickDays++
-        if (Math.random() < 0.016 * (0.5 + g.resistance)) { c.sick = false; c.sickDays = 0 }
-        else if (Math.random() < 0.012 * (1.3 - g.resistance) * ageRisk) { if (!c.isAvatar) { this.deaths++; continue } else c.energy = 0 }
+        if (Math.random() < 0.016 * (0.5 + g.resistance) * healthM) { c.sick = false; c.sickDays = 0 }
+        else if (Math.random() < 0.012 * (1.3 - g.resistance) * ageRisk / healthM) { if (!c.isAvatar) { this.deaths++; continue } else c.energy = 0 }
       }
 
       if (!c.isAvatar) {
@@ -307,6 +373,7 @@ export class World {
           const child = this.spawn(recombine(g, mate.genome, this.spriteCount), c.generation + 1, c.home, c.x + (Math.random() * 18 - 9), c.y + (Math.random() * 18 - 9), inheritPsyche(c.psyche, mate.psyche))
           child.energy = CHILD_ENERGY
           child.parents = [c.id, mate.id]
+          child.heritProf = Math.random() < 0.5 ? c.profBase : mate.profBase // apprenticeship pull
           newborns.push(child)
           this.births++
           if (child.generation > this.peakGen) this.peakGen = child.generation
@@ -327,6 +394,12 @@ export class World {
       // wisdom = the average knowledge of living adults → the ceiling kids can learn toward (the ratchet)
       const adults = wild.filter(isMature)
       if (adults.length) this.wisdom = adults.reduce((s, c) => s + c.knowledge, 0) / adults.length
+      // recompute the working economy → drives food, health, learning + research output
+      const counts: Partial<Record<Cat, number>> = {}, pop: Record<string, number> = {}
+      for (const c of wild) { if (c.profCat) counts[c.profCat] = (counts[c.profCat] || 0) + 1; if (c.profBase) pop[c.profBase] = (pop[c.profBase] || 0) + 1 }
+      this.profCounts = counts; this.profPop = pop
+      this.econ = economyOf(counts, wild.length)
+      this.foodTarget = Math.min(720, Math.round(230 * (1 + this.econ.food + this.techBoost.food)))
     }
 
     if (this.creatures.filter((c) => !c.isAvatar).length < 4) {
