@@ -24,7 +24,7 @@ const REPRO_COST = 30
 const CHILD_ENERGY = 42
 const MATING_RADIUS = 30
 const MAX_ENERGY = 150
-const POP_CAP = 380
+const POP_CAP = 260 // per country (several countries simulate at once now)
 
 const FOOD_ENERGY = 28
 const START_ENERGY = 80
@@ -104,6 +104,8 @@ export class World {
   gardens: Garden[] = []
   schools: School[] = []
   universities: School[] = []
+  airport: School = { x: 110, y: 110, w: 120, h: 88 }
+  region = 0
   wisdom = 25 // the village's collective knowledge ceiling (the cultural ratchet) — rises/falls over generations
   // civilisation
   research = 0
@@ -125,8 +127,9 @@ export class World {
   peakGen = 0
   foodTarget: number
 
-  constructor(spriteCount: number) {
+  constructor(spriteCount: number, region = 0) {
     this.spriteCount = spriteCount
+    this.region = region
     this.foodTarget = 230
 
     // ── lay out the town: a house in (most) blocks, one surname per house ──

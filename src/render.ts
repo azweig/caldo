@@ -8,7 +8,12 @@ import { TRAIT_BOUNDS } from "./genome"
 
 export interface Cam { x: number; y: number; zoom: number }
 
-const SEASON_GROUND = ["#0f1d1a", "#121d16", "#1b1810", "#0c131b"] // primavera/verano/otoño/invierno
+const REGION_GROUND = [
+  ["#0f1d1a", "#121d16", "#1b1810", "#0c131b"], // templado
+  ["#101b22", "#0e1f1f", "#17191a", "#0b1016"], // frío/norteño
+  ["#1a1614", "#1d1810", "#1c140e", "#120f0e"], // cálido/desierto
+  ["#101d14", "#0e1e12", "#16190f", "#0c150f"], // selvático
+]
 const CAT_COLOR: Record<string, string> = {
   comida: "#9cff7b", salud: "#ff8c8c", saber: "#9bb8ff", enseñanza: "#7bd0ff", construcción: "#c9a06a",
   oficio: "#d9b25a", arte: "#ff9bdd", liderazgo: "#ffd166", comercio: "#7be0c0", exploración: "#8fd6ff",
@@ -34,8 +39,8 @@ export function drawWorld(
   ctx.scale(cam.zoom, cam.zoom)
   ctx.translate(-cam.x, -cam.y)
 
-  // ground — tinted by season
-  ctx.fillStyle = SEASON_GROUND[seasonOf(world.clockDays)]
+  // ground — tinted by the country's biome + the season
+  ctx.fillStyle = REGION_GROUND[world.region % REGION_GROUND.length][seasonOf(world.clockDays)]
   ctx.fillRect(0, 0, WORLD_W, WORLD_H)
 
   // gardens (where food grows)
@@ -110,6 +115,17 @@ export function drawWorld(
     ctx.fillStyle = "hsl(45, 32%, 38%)" // pediment
     ctx.beginPath(); ctx.moveTo(u.x - 12, u.y + 18); ctx.lineTo(u.x + u.w + 12, u.y + 18); ctx.lineTo(u.x + u.w / 2, u.y - 24); ctx.closePath(); ctx.fill()
     label(ctx, "🏛️ universidad", u.x + u.w / 2, u.y - 32, "#ffe9b8")
+  }
+
+  // airport — the gateway between countries
+  {
+    const a = world.airport
+    ctx.fillStyle = "rgba(40,48,56,0.9)"; ctx.fillRect(a.x - 44, a.y + a.h - 16, a.w + 88, 14) // runway
+    ctx.strokeStyle = "rgba(255,220,120,0.5)"; ctx.setLineDash([7, 7]); ctx.lineWidth = 1
+    ctx.beginPath(); ctx.moveTo(a.x - 40, a.y + a.h - 9); ctx.lineTo(a.x + a.w + 40, a.y + a.h - 9); ctx.stroke(); ctx.setLineDash([])
+    ctx.fillStyle = "hsl(210, 12%, 32%)"; ctx.fillRect(a.x, a.y, a.w, a.h) // terminal
+    ctx.fillStyle = "rgba(150,200,255,0.5)"; for (let i = 0; i < 4; i++) ctx.fillRect(a.x + 12 + i * 26, a.y + 16, 18, 22)
+    label(ctx, "✈ aeropuerto", a.x + a.w / 2, a.y - 12, "#cfe0ee")
   }
 
   // food

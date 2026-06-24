@@ -4,7 +4,7 @@
 // Conversation pauses the world automatically, so you can talk at any time scale.
 
 import "./style.css"
-import { World, Creature, formatClock, ageYears, seasonOf, SEASONS, WORLD_W, WORLD_H, SPEED_SCALE } from "./world"
+import { World, Creature, formatClock, ageYears, isMature, seasonOf, SEASONS, WORLD_W, WORLD_H, SPEED_SCALE } from "./world"
 import { loadAssets } from "./sprites"
 import { drawWorld, drawChart } from "./render"
 import { respond, greeting, remember } from "./chat"
@@ -37,6 +37,19 @@ const SCALES = [
   { tpf: 15, label: "≈ 2½ años/s" },
 ]
 
+// the world is split into COUNTRIES — each its own simulation, biome and language; airports + migration
+// connect them, and the tabs let you embed yourself in a different one.
+interface Country { world: World; name: string; flag: string; lang: string }
+const COUNTRY_DEFS = [
+  { name: "Solandia", flag: "🟧", lang: "español rioplatense" },
+  { name: "Norvik", flag: "🔵", lang: "English" },
+  { name: "Akahara", flag: "⛩️", lang: "日本語 (japonés)" },
+  { name: "Verdane", flag: "🟢", lang: "português do Brasil" },
+]
+let countries: Country[] = []
+let active = 0
+let migrateAcc = 0
+
 const keys = new Set<string>()
 let world: World
 let avatar: Creature | null = null
@@ -51,6 +64,7 @@ let session: Msg[] = []
 const CHAT_RANGE = 70
 
 const hud = document.getElementById("hud")!
+const tabsEl = document.getElementById("tabs")!
 const chatBox = document.getElementById("chat") as HTMLDivElement
 const chatLog = document.getElementById("chat-log") as HTMLDivElement
 const chatInput = document.getElementById("chat-input") as HTMLInputElement
@@ -173,7 +187,7 @@ chatInput.addEventListener("keydown", async (e) => {
     addLine("Tú", msg, "me"); chatInput.value = ""
     session.push({ role: "user", content: msg })
     const typing = addLine(who.name, "<i>…</i>", "them")
-    const reply = await respond(who, msg, session, eraName(world.era))
+    const reply = await respond(who, msg, session, eraName(world.era), countries[active].lang)
     typing.innerHTML = `<b>${who.name}:</b> ${reply}`
     chatLog.scrollTop = chatLog.scrollHeight
     session.push({ role: "assistant", content: reply })
@@ -221,6 +235,7 @@ function updateHud() {
   const bar = "█".repeat(Math.round(e / 10)).padEnd(13, "·")
   const rp = world.researchProgress()
   hud.innerHTML = `
+    <div class="stat"><span>país</span> <b style="color:#fff">${countries[active]?.flag || ""} ${countries[active]?.name || ""}</b></div>
     <div class="stat"><span>población</span> ${wild.length} · <span>familias</span> ${families}</div>
     <div class="stat"><span>edad media</span> ${avgAge}a · <span>enfermos ✚</span> ${sick}</div>
     <div class="stat"><span>generación</span> ${world.peakGen} · <span>nac</span> ${world.births} · <span>muertes</span> ${world.deaths}</div>
@@ -232,6 +247,44 @@ function updateHud() {
     <div class="hint">${(!chatting && chatTarget) ? `▸ apretá <b>E</b> para hablar con ${chatTarget.name}` : "WASD moverte · E hablar · espacio pausa"}</div>
   `
   clockEl.textContent = formatClock(world.clockDays)
+  for (let i = 0; i < tabsEl.children.length; i++) if (countries[i]) (tabsEl.children[i] as HTMLElement).title = `${eraName(countries[i].world.era)} · ${countries[i].world.creatures.filter((c) => !c.isAvatar).length} hab.`
+}
+
+function buildTabs() {
+  tabsEl.innerHTML = ""
+  countries.forEach((c, i) => {
+    const b = document.createElement("button")
+    b.className = "tab" + (i === active ? " active" : "")
+    b.innerHTML = `${c.flag} ${c.name}`
+    b.addEventListener("click", () => switchCountry(i))
+    tabsEl.appendChild(b)
+  })
+}
+function switchCountry(i: number) {
+  if (i === active || !countries[i]) return
+  if (avatar) { const k = world.creatures.indexOf(avatar); if (k >= 0) world.creatures.splice(k, 1) }
+  active = i; world = countries[i].world
+  if (avatar) { avatar.x = world.airport.x + world.airport.w / 2; avatar.y = world.airport.y + world.airport.h; avatar.vx = avatar.vy = 0; world.creatures.push(avatar) }
+  closeChat(); inspect.classList.add("hidden")
+  ;[...tabsEl.children].forEach((el, j) => (el as HTMLElement).classList.toggle("active", j === i))
+}
+// occasionally fly a grown creature to another country — cross-pollinating genes, beliefs + trades
+function maybeMigrate(ticks: number) {
+  migrateAcc += ticks
+  if (migrateAcc < 500 || countries.length < 2) return
+  migrateAcc = 0
+  const from = countries[Math.floor(Math.random() * countries.length)]
+  const pool = from.world.creatures.filter((c) => !c.isAvatar && isMature(c))
+  if (pool.length < 24) return
+  let toI = Math.floor(Math.random() * countries.length)
+  if (countries[toI] === from) toI = (toI + 1) % countries.length
+  const to = countries[toI], c = pool[Math.floor(Math.random() * pool.length)]
+  from.world.creatures.splice(from.world.creatures.indexOf(c), 1)
+  c.x = to.world.airport.x + Math.random() * 80; c.y = to.world.airport.y + Math.random() * 50
+  c.home = to.world.houses[Math.floor(Math.random() * to.world.houses.length)]; c.goingHome = false
+  to.world.creatures.push(c)
+  from.world.chronicle.push({ day: from.world.clockDays, text: `${c.name} ${c.surname} emigró a ${to.name} ✈` })
+  to.world.chronicle.push({ day: to.world.clockDays, text: `llegó ${c.name} ${c.surname} desde ${from.name} (${c.profession || "forastero"}) ✈` })
 }
 
 function loop() {
@@ -240,7 +293,11 @@ function loop() {
     let n = Math.floor(tickAcc)
     tickAcc -= n
     if (n > 40) n = 40
-    for (let i = 0; i < n; i++) { driveAvatar(); world.step() }
+    for (let i = 0; i < n; i++) {
+      driveAvatar()
+      for (const c of countries) { if (c.world === world || i < 8) c.world.step() } // inactive countries capped for perf
+    }
+    maybeMigrate(n)
   }
   chatTarget = chatting ? chatTarget : nearestTalkable()
 
@@ -274,8 +331,11 @@ document.getElementById("start")!.addEventListener("click", () => intro.classLis
 let assets: Awaited<ReturnType<typeof loadAssets>>
 loadAssets().then((a) => {
   assets = a
-  world = new World(a.creatures.length)
+  countries = COUNTRY_DEFS.map((c, i) => ({ ...c, world: new World(a.creatures.length, i) }))
+  active = 0
+  world = countries[0].world
   avatar = world.addAvatar()
+  buildTabs()
   setScale(scaleIndex)
   loop()
 })
