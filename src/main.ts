@@ -203,8 +203,10 @@ function statsHTML(): string {
     ${row("niños · adultos · ancianos", `${kids} · ${adults} · ${elders}`)}
     ${row("edad media", `${avgAge} años`)}
     ${row("estado", `${sick} enfermos · ${hungry} con hambre`)}
+    ${(() => { const a = wild.filter(isMature); const av = (f: (c: typeof wild[0]) => number) => a.length ? Math.round(a.reduce((s, c) => s + f(c), 0) / a.length) : 0; return row("salud · ánimo · irritab.", `${av((c) => c.health)} · ${av((c) => c.mental)} · ${av((c) => c.irritability * 100)}%`) })()}
     <h3>Familias y nacimientos</h3>
     ${row("parejas · familias", `${couples} · ${families}`)}
+    ${row("divorcios · hijos s/casar", `${world.deeds.filter((d) => d.kind === "divorcio").length} · ${wild.filter((c) => c.parents && c.parents[1] === 0).length}`)}
     ${row("embarazos ahora", `${pregnant}`)}
     ${row("nacimientos · muertes (histórico)", `${world.births} · ${world.deaths}`)}
     ${row("hijos por persona", avgKids)}
@@ -347,6 +349,7 @@ function renderPossess() {
     <div class="pname">🎭 ${c.name} ${c.surname}</div>
     <div class="prow2">${c.profession || "sin oficio"} · ${Math.round(ageYears(c))} años · 🕐 ${Math.floor(hourOf())}h</div>
     <div class="prow2">💰 <b>${Math.round(c.money)}</b> · 🍔 ${bar} ${e}${c.pregnant > 0 ? " · 🤰" : ""}</div>
+    <div class="prow2">❤️ salud ${Math.round(c.health)} · 🧠 ánimo ${Math.round(c.mental)} · 😤 irrit. ${Math.round(c.irritability * 100)}%</div>
     <div class="prow2">${partner ? "❤️ " + partner.name : "💔 sin pareja"} · 👶 ${c.children} · 🧠 ${Math.round(c.knowledge)}</div>
     <div class="prow2">${c.religion || "sin credo"}${c.sick ? " · <b style='color:#8fe39a'>enfermo ✚</b>" : ""}</div>
     <div class="plegend">⚪ vos · 💗 pareja · 💚 familia · 💛 conocido · ❤️ rival</div>

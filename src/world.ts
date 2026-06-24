@@ -89,6 +89,9 @@ export interface Creature {
   archetype: Archetype // emergent label (psicópata, emprendedor, altruista…)
   crimes: number     // how many Noahide laws they've broken — a "black sheep" if high
   business: boolean  // currently runs a business (entrepreneurs)
+  health: number     // 0..100 physical health — falls if they can't afford food/housing → illness/death
+  mental: number     // 0..100 mental health — falls under poverty, loss, repression → drives bad behaviour
+  irritability: number // 0..1 — rises with stress + low mental health; tips them toward conflict/crime
 }
 
 // a notable act, logged so we can later rank the most INFLUENTIAL people per generation
@@ -160,7 +163,7 @@ export class World {
   history: Sample[] = []
   births = 0
   deaths = 0
-  deathCauses: Record<string, number> = { hambre: 0, vejez: 0, enfermedad: 0, violencia: 0 }
+  deathCauses: Record<string, number> = { hambre: 0, vejez: 0, enfermedad: 0, violencia: 0, pobreza: 0 }
   deeds: Deed[] = [] // log of notable acts (works, crimes, businesses, discoveries) for the legends list
   logDeed(d: Deed) { this.deeds.push(d); if (this.deeds.length > 800) this.deeds.shift() }
   peakGen = 0
@@ -198,14 +201,18 @@ export class World {
     // start the civilisation already advanced to the chosen era (pre-discovered techs + boosts)
     this.applyStartEra(opts?.startEra ?? 0)
 
-    // ── founding population: each takes a house (→ its surname), a religion, lore, and maybe ambition ──
+    // ── founding population: ~100 people across ~FAMILIES households (≈ the 100-people / 10-families ratio,
+    //    the seed of a future 10000 / 1000-family city). Each family shares a house → a surname + a religion.
     const startKnow = 16 + this.era * 4
-    for (let i = 0; i < 30; i++) {
-      const home = rnd(this.houses)
+    const FOUNDERS = 100, FAMILIES = 12
+    const famReligion: string[] = [], famHome: House[] = []
+    for (let f = 0; f < FAMILIES; f++) { famHome[f] = this.houses[f % this.houses.length]; famReligion[f] = pickReligion(this.religionsCfg) }
+    for (let i = 0; i < FOUNDERS; i++) {
+      const f = i % FAMILIES, home = famHome[f]
       const c = this.spawn(randomGenome(spriteCount), 1, home)
-      c.ageDays = Math.random() * 30 * DAYS_PER_YEAR
+      c.ageDays = Math.random() * 38 * DAYS_PER_YEAR
       c.knowledge = startKnow + Math.random() * 28
-      c.religion = pickReligion(this.religionsCfg)
+      c.religion = famReligion[f] // a household shares its faith
       c.powerHungry = Math.random() < this.psychopathy
       c.x = home.x + Math.random() * 30; c.y = home.y + Math.random() * 30
       this.assignProfession(c)
@@ -272,7 +279,7 @@ export class World {
   // ── persistence: a civilisation survives reloads until you start a new one ──
   toState() {
     const hi = new Map<House, number>(); this.houses.forEach((h, i) => hi.set(h, i))
-    const C = (c: Creature) => ({ id: c.id, x: c.x, y: c.y, e: c.energy, ad: c.ageDays, ls: c.lifespanDays, gen: c.generation, nm: c.name, sn: c.surname, h: hi.get(c.home) ?? 0, k: c.knowledge, pf: c.profession, pb: c.profBase, pc: c.profCat, hp: c.heritProf, sick: c.sick, ch: c.children, par: c.parents, rel: c.religion, pw: c.powerHungry, g: c.genome, ps: c.psyche, mem: c.memory, soc: c.social, gh: c.goingHome, pt: c.partner, pg: c.pregnant, mny: c.money, dk: c.dark, arc: c.archetype, crm: c.crimes, biz: c.business })
+    const C = (c: Creature) => ({ id: c.id, x: c.x, y: c.y, e: c.energy, ad: c.ageDays, ls: c.lifespanDays, gen: c.generation, nm: c.name, sn: c.surname, h: hi.get(c.home) ?? 0, k: c.knowledge, pf: c.profession, pb: c.profBase, pc: c.profCat, hp: c.heritProf, sick: c.sick, ch: c.children, par: c.parents, rel: c.religion, pw: c.powerHungry, g: c.genome, ps: c.psyche, mem: c.memory, soc: c.social, gh: c.goingHome, pt: c.partner, pg: c.pregnant, mny: c.money, dk: c.dark, arc: c.archetype, crm: c.crimes, biz: c.business, hl: c.health, mt: c.mental, ir: c.irritability })
     return { region: this.region, gov: this.gov, system: this.system, era: this.era, clockDays: this.clockDays, clockMinutes: this.clockMinutes, tick: this.tick, research: this.research, discovered: [...this.discovered], techBoost: this.techBoost, wisdom: this.wisdom, births: this.births, deaths: this.deaths, peakGen: this.peakGen, plagueUntil: this.plagueUntil, violence: this.violence, psychopathy: this.psychopathy, religionsCfg: this.religionsCfg, chronicle: this.chronicle.slice(-60), houses: this.houses, gardens: this.gardens, schools: this.schools, universities: this.universities, airport: this.airport, monarch: this.monarch?.id ?? null, deeds: this.deeds.slice(-300), creatures: this.creatures.filter((c) => !c.isAvatar).map(C) }
   }
   static fromState(s: any, spriteCount: number): World {
@@ -286,7 +293,7 @@ export class World {
     const byId = new Map<number, Creature>(); let maxId = 0
     w.creatures = (s.creatures || []).map((c: any) => {
       maxId = Math.max(maxId, c.id)
-      const cr: Creature = { id: c.id, x: c.x, y: c.y, vx: 0, vy: 0, energy: c.e, ageDays: c.ad, lifespanDays: c.ls, genome: c.g, generation: c.gen, name: c.nm, surname: c.sn, home: w.houses[c.h] || w.houses[0], goingHome: !!c.gh, parents: c.par, children: c.ch, sick: c.sick, sickDays: 0, lastRepro: -99999, partner: c.pt || 0, pregnant: c.pg || 0, isAvatar: false, facing: 1, psyche: c.ps, memory: c.mem || [], social: c.soc || [], knowledge: c.k, profession: c.pf, profBase: c.pb, profCat: c.pc, heritProf: c.hp || "", religion: c.rel || "", powerHungry: !!c.pw, money: c.mny || 0, controlled: false, dark: c.dk || { mach: 0.2, narc: 0.2, psycho: 0.1 }, archetype: c.arc || "promedio", crimes: c.crm || 0, business: !!c.biz }
+      const cr: Creature = { id: c.id, x: c.x, y: c.y, vx: 0, vy: 0, energy: c.e, ageDays: c.ad, lifespanDays: c.ls, genome: c.g, generation: c.gen, name: c.nm, surname: c.sn, home: w.houses[c.h] || w.houses[0], goingHome: !!c.gh, parents: c.par, children: c.ch, sick: c.sick, sickDays: 0, lastRepro: -99999, partner: c.pt || 0, pregnant: c.pg || 0, isAvatar: false, facing: 1, psyche: c.ps, memory: c.mem || [], social: c.soc || [], knowledge: c.k, profession: c.pf, profBase: c.pb, profCat: c.pc, heritProf: c.hp || "", religion: c.rel || "", powerHungry: !!c.pw, money: c.mny || 0, controlled: false, dark: c.dk || { mach: 0.2, narc: 0.2, psycho: 0.1 }, archetype: c.arc || "promedio", crimes: c.crm || 0, business: !!c.biz, health: c.hl ?? 88, mental: c.mt ?? 78, irritability: c.ir ?? 0.3 }
       byId.set(cr.id, cr); return cr
     })
     w.monarch = s.monarch != null ? byId.get(s.monarch) || null : null
@@ -314,6 +321,7 @@ export class World {
       profession: "", profBase: "", profCat: "", heritProf: "",
       religion: "", powerHungry: false, money: 0, controlled: false,
       dark: person.dark, archetype: classify(ps.five, person.dark), crimes: 0, business: false,
+      health: 88, mental: 78, irritability: Math.max(0.05, Math.min(0.95, ps.five.n * 0.6 + Math.random() * 0.2)),
     }
   }
 
@@ -525,7 +533,8 @@ export class World {
 
       const ay = ageYears(c)
       const ageRisk = 1 + Math.max(0, ay - 45) / 40
-      if (!c.sick) { if (Math.random() < 0.00009 * (1.25 - g.resistance) * ageRisk * plague / healthM) { c.sick = true; c.sickDays = 0 } }
+      const frail = 1 + (1 - c.health / 100) * 1.6 // poor physical health → far more prone to illness
+      if (!c.sick) { if (Math.random() < 0.00009 * (1.25 - g.resistance) * ageRisk * plague / healthM * frail) { c.sick = true; c.sickDays = 0 } }
       else {
         c.sickDays++
         if (Math.random() < 0.022 * (0.5 + g.resistance) * healthM) { c.sick = false; c.sickDays = 0 }
@@ -533,7 +542,9 @@ export class World {
       }
 
       if (!c.isAvatar && !c.controlled) {
-        if (c.energy <= 0) { this.deaths++; this.deathCauses.hambre++; continue }
+        if (this.era < 2) { if (c.energy <= 0) { this.deaths++; this.deathCauses.hambre++; continue } } // hunter-gatherer: forage or starve
+        else if (c.energy < 25) c.energy = 25 // farming/market eras: food is BOUGHT — survival rides on health/money, not foraging
+        if (c.health <= 0) { this.deaths++; this.deathCauses.pobreza++; continue } // died of poverty (couldn't afford food/care)
         if (c.ageDays > c.lifespanDays && Math.random() < (c.ageDays - c.lifespanDays) / (0.18 * c.lifespanDays)) { this.deaths++; this.deathCauses.vejez++; continue }
         if (isMature(c) && Math.random() < 0.0000052 * violenceRate) { this.deaths++; this.deathCauses.violencia++; this.logEvent(`${c.name} ${c.surname} murió en un acto de violencia`); continue }
       }
@@ -543,7 +554,7 @@ export class World {
         c.pregnant--
         if (c.pregnant <= 0 && this.creatures.length + newborns.length < POP_CAP) {
           const mate = byId.get(c.partner)
-          const mateG = mate ? mate.genome : g, mateP = mate ? mate.psyche : c.psyche
+          const mateG = mate ? mate.genome : randomGenome(this.spriteCount), mateP = mate ? mate.psyche : randomPsyche() // unknown father if out of wedlock
           const litter = litterSize()
           for (let b = 0; b < litter; b++) {
             const child = this.spawn(recombine(g, mateG, this.spriteCount), c.generation + 1, c.home, c.home.x + (Math.random() * 24 - 12), c.home.y + (Math.random() * 18 - 9), inheritPsyche(c.psyche, mateP))
@@ -597,14 +608,25 @@ export class World {
       // income: working adults earn money from their trade (visible + spendable when you possess them)
       const eraPay = 1 + this.era * 0.12
       for (const c of wild) if (c.profCat && isMature(c)) {
-        const pay = c.profCat === "comercio" || c.profCat === "liderazgo" ? 6 : c.profCat === "saber" || c.profCat === "ingeniería" ? 5 : c.profCat === "salud" ? 4 : 2.5
-        c.money += pay * eraPay
+        const pay = c.profCat === "comercio" || c.profCat === "liderazgo" ? 7.5 : c.profCat === "saber" || c.profCat === "ingeniería" ? 6.5 : c.profCat === "salud" ? 6 : 4.5
+        c.money += pay * eraPay // a single adult lives comfortably; supporting a big family on a low wage strains it
       }
 
       // ── demographics: form couples, then conceive (logistic growth toward a tech-scaled capacity) ──
       for (const c of wild) if (c.partner && !byId.has(c.partner)) { c.partner = 0; c.pregnant = 0 } // widowed → free again
+      // divorce: irritability + low mental health + incompatibility can break a marriage → both re-pair
+      for (const c of wild) {
+        if (!c.partner || c.id > c.partner) continue
+        const p = byId.get(c.partner); if (!p) continue
+        const incompat = Math.abs(c.psyche.five.a - p.psyche.five.a) + (c.religion && c.religion !== p.religion ? 0.3 : 0)
+        const strain = (c.irritability + p.irritability) * 0.5 + (1 - (c.mental + p.mental) / 200) * 0.5 + incompat * 0.4
+        if (Math.random() < strain * 0.012) {
+          c.partner = 0; p.partner = 0; c.pregnant = 0
+          this.logDeed({ day: this.clockDays, gen: c.generation, who: c.id, name: `${c.name} ${c.surname}`, kind: "divorcio", text: `se divorció de ${p.name} ${p.surname}`, impact: -1 })
+        }
+      }
       const singles = wild.filter((c) => isMature(c) && !c.partner && ageYears(c) <= FERTILE_MAX + 10)
-      for (let i = 0; i + 1 < singles.length; i += 2) { singles[i].partner = singles[i + 1].id; singles[i + 1].partner = singles[i].id }
+      for (let i = 0; i + 1 < singles.length; i += 2) { if (singles[i].surname === singles[i + 1].surname) continue; singles[i].partner = singles[i + 1].id; singles[i + 1].partner = singles[i].id } // not close kin (surname taboo)
       const K = Math.min(POP_CAP, 80 + this.era * 7) // carrying capacity grows with the era (technology)
       const growth = Math.max(0.05, Math.min(1, 1.35 * (1 - wild.length / K))) // strong birth drive when few, ~0 near K
       for (const c of wild) {
@@ -614,6 +636,15 @@ export class World {
         const mate = byId.get(c.partner)!, mAy = ageYears(mate)
         if (mAy >= MATURITY_YEARS && mAy <= FERTILE_MAX && c.id > c.partner) continue // both fertile → only lower-id bears
         if (Math.random() < 0.85 * growth) c.pregnant = GESTATION_MIN + Math.floor(Math.random() * 60) // conceive (~7-9 months)
+      }
+      // children out of wedlock: an unpartnered fertile adult may conceive with a passing fling
+      for (const c of wild) {
+        if (c.partner || c.pregnant > 0) continue
+        const ay = ageYears(c)
+        if (ay < MATURITY_YEARS || ay > FERTILE_MAX || c.energy <= REPRO_MIN_ENERGY || this.clockDays - c.lastRepro < REPRO_COOLDOWN) continue
+        if (this.nearestCreature(c, 75, (o) => !o.isAvatar && isMature(o) && o !== c && ageYears(o) <= FERTILE_MAX) && Math.random() < 0.06 * growth) {
+          c.pregnant = GESTATION_MIN + Math.floor(Math.random() * 60) // single-parent pregnancy (father uninvolved)
+        }
       }
 
       runSociety(this, wild) // economy, crime + courts, and culture (books/art)

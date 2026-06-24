@@ -32,9 +32,31 @@ export function runSociety(w: World, wild: Creature[]) {
   if (adults.length < 2) return
   const price = 1 + w.era * 0.08
 
-  // ── ECONOMY: living costs → merchants/entrepreneurs collect them; businesses profit or go bust ──
+  // ── ECONOMY: agents must AFFORD housing + food + their CHILDREN. Provide, or your family's health falls. ──
+  const homeKids = new Map<object, number>(), homeAdults = new Map<object, number>()
+  for (const c of wild) (isMature(c) ? homeAdults : homeKids).set(c.home, ((isMature(c) ? homeAdults : homeKids).get(c.home) || 0) + 1)
   let pot = 0
-  for (const c of adults) { const cost = price * (2 + 0.5 * c.genome.size); c.money -= cost; pot += cost }
+  for (const c of adults) {
+    const dependents = (homeKids.get(c.home) || 0) / (homeAdults.get(c.home) || 1) // share of the household's children
+    const cost = price * (1.8 + 0.3 * c.genome.size + dependents * 0.95) // supporting kids is the cost of responsibility
+    if (c.money >= cost) {
+      c.money -= cost; pot += cost
+      c.health = Math.min(100, c.health + 3); c.mental = Math.min(100, c.mental + 2) // fed + housed → recover
+    } else {
+      pot += Math.max(0, c.money); c.money -= cost // pay what you can; the rest is debt
+      c.health = Math.max(0, c.health - 4); c.mental = Math.max(0, c.mental - 3) // can't fully provide → slow decline (recoverable)
+    }
+    if (c.partner) c.mental = Math.min(100, c.mental + 0.6) // a partner buffers stress
+    c.irritability = Math.max(0.03, Math.min(0.98, c.irritability * 0.9 + (1 - c.mental / 100) * 0.22 + (0.5 - c.psyche.five.a) * 0.05))
+  }
+  // children's wellbeing rides on whether their FAMILY can provide
+  const provider = new Map<object, number>()
+  for (const c of adults) { const m = provider.get(c.home) ?? -Infinity; if (c.money > m) provider.set(c.home, c.money) }
+  for (const c of wild) if (!isMature(c)) {
+    const prov = provider.get(c.home) ?? -50
+    if (prov >= 0) { c.health = Math.min(100, c.health + 3); c.mental = Math.min(100, c.mental + 2) }
+    else { c.health = Math.max(0, c.health - 5); c.mental = Math.max(0, c.mental - 3) } // a poor family → the kids go hungry
+  }
   const sellers = adults.filter((c) => c.profCat === "comercio" || c.business)
   if (sellers.length) { const share = Math.min(pot * 0.5 / sellers.length, 60 + w.era * 8); for (const s of sellers) s.money += share } // merchants collect part of spending, capped
   for (const c of adults) {
@@ -59,8 +81,9 @@ export function runSociety(w: World, wild: Creature[]) {
   // ── CRIME + COURTS (Noahide law #1): low-conscience adults break the law; courts catch + punish ──
   for (const c of adults) {
     const con = conscience(personOf(c))
-    if (con > 0.28) continue // only the genuinely low-conscience break the law
-    if (Math.random() > (0.4 - con) * 0.08) continue
+    const stress = c.irritability * 0.5 + (1 - c.mental / 100) * 0.5 // desperation + a short fuse
+    if (con - stress * 0.45 > 0.28) continue // the desperate + irritable cross the line more easily
+    if (Math.random() > (0.4 - con + stress * 0.3) * 0.08) continue
     const victim = rnd(adults.filter((o) => o !== c))
     if (!victim) continue
     let lawKey = "robo"
