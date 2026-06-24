@@ -8,7 +8,7 @@ import { World, Creature, formatClock, ageYears, isMature, seasonOf, SEASONS, WO
 import { loadAssets } from "./sprites"
 import { drawWorld, drawChart } from "./render"
 import { respond, greeting, remember, ambientDialogue } from "./chat"
-import { Msg, setLlm, pingLLM, llmConfigured, llmUrl, llmModel } from "./llm"
+import { Msg, setLlm, pingLLM, autoDetect, llmConfigured, llmUrl, llmModel } from "./llm"
 import { eraName, professionSpace, ERAS } from "./civ"
 import { ENNEAGRAM } from "./psyche"
 import { LangCode, WRITE_LANG, langName, heard } from "./i18n"
@@ -216,9 +216,7 @@ window.addEventListener("keydown", (e) => {
 })
 window.addEventListener("keyup", (e) => keys.delete(e.key.toLowerCase()))
 
-function isAvatarDead(): boolean {
-  return !!avatar && (avatar.energy <= 0 || avatar.ageDays > avatar.lifespanDays)
-}
+function isAvatarDead(): boolean { return false } // you age, but as a visitor you never die
 function respawn() { avatar = world.addAvatar(); deathScreen.classList.add("hidden") }
 
 function driveAvatar() {
@@ -337,6 +335,7 @@ function loop() {
     }
     maybeMigrate(n)
   }
+  if (avatar) avatar.energy = Math.max(60, Math.min(150, avatar.energy)) // immortal visitor: ages, never starves
   // advance / start overheard chatter
   if (ambient) { if (frame >= ambient.nextAt) { ambient.idx++; if (ambient.idx >= ambient.lines.length) { ambient = null; ambientCool = frame + 480 } else ambient.nextAt = frame + 165 } }
   else tryAmbient()
@@ -446,4 +445,4 @@ document.getElementById("nc-create")!.addEventListener("click", () => newGame(re
 document.getElementById("nc-back")!.addEventListener("click", () => { newcivEl.classList.add("hidden"); showMenu() })
 
 let assets: Awaited<ReturnType<typeof loadAssets>>
-loadAssets().then((a) => { assets = a; spriteCount = a.creatures.length; showMenu() })
+loadAssets().then((a) => { assets = a; spriteCount = a.creatures.length; autoDetect(); showMenu() })

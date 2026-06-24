@@ -33,6 +33,19 @@ export async function llmChat(messages: Msg[]): Promise<string> {
   return String(txt).trim()
 }
 
+// try to connect automatically: the same-origin proxy (the pod's /ollama) or a local Ollama. Saves
+// the player from configuring ⚙ when it can just work.
+export async function autoDetect(): Promise<boolean> {
+  if (llmConfigured()) return true
+  for (const url of [location.origin + "/ollama", "http://localhost:11434"]) {
+    try {
+      const r = await fetch(url + "/api/tags", { signal: AbortSignal.timeout(2500) })
+      if (r.ok) { setLlm(url, llmModel()); return true }
+    } catch { /* try the next */ }
+  }
+  return false
+}
+
 export async function pingLLM(): Promise<{ ok: boolean; detail: string }> {
   try {
     const r = await llmChat([{ role: "user", content: "Respondé solo con la palabra: hola" }])

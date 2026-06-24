@@ -288,6 +288,19 @@ export class World {
     this.food.push({ x: clampn(g.x + (Math.random() * 2 - 1) * 90, MARGIN, WORLD_W - MARGIN), y: clampn(g.y + (Math.random() * 2 - 1) * 90, MARGIN, WORLD_H - MARGIN) })
   }
 
+  // the town GROWS: build a house in a free lot (the world stops being static as the population rises)
+  private addHouse(surname: string): House | null {
+    const cols = Math.floor(WORLD_W / BLOCK), rows = Math.floor(WORLD_H / BLOCK)
+    for (let t = 0; t < 14; t++) {
+      const cx = BLOCK * (1 + Math.floor(Math.random() * (cols - 1))) + BLOCK / 2 + (Math.random() * 40 - 20)
+      const cy = BLOCK * (1 + Math.floor(Math.random() * (rows - 1))) + BLOCK / 2 + (Math.random() * 30 - 15)
+      let ok = true
+      for (const h of this.houses) if ((h.x + h.w / 2 - cx) ** 2 + (h.y + h.h / 2 - cy) ** 2 < 86 * 86) { ok = false; break }
+      if (ok) { const h: House = { x: cx - 29, y: cy - 25, w: 58, h: 50, surname, hue: (this.houses.length * 47) % 360 }; this.houses.push(h); return h }
+    }
+    return null
+  }
+
   addAvatar(): Creature {
     const a = this.spawn(randomGenome(this.spriteCount), 0, rnd(this.houses), WORLD_W / 2, WORLD_H / 2)
     a.isAvatar = true; a.name = "Tú"; a.surname = ""; a.profession = "forastero del más allá"
@@ -387,14 +400,18 @@ export class World {
       c.ageDays++
 
       if (!c.isAvatar) {
-        // hysteresis: walk home when fed, head to food when hungry
-        if (c.energy < GO_FORAGE_AT) c.goingHome = false
-        else if (c.energy > GO_HOME_AT) c.goingHome = true
         let tx: number, ty: number
-        if (c.goingHome) {
-          if (!isMature(c)) { const s = this.nearestSchool(c); tx = s.x + s.w / 2; ty = s.y + s.h / 2 } // kids go to SCHOOL, not home
-          else { tx = c.home.x; ty = c.home.y }
-        } else { const f = this.nearestFood(c, c.genome.vision * 3); const g = this.nearestGarden(c); tx = f ? f.x : g.x; ty = f ? f.y : g.y }
+        if (!isMature(c)) {
+          // CHILDREN live with their family — they never roam the world alone. Toddlers stay home;
+          // school-age kids go to the school. Adults (16+) leave to forage. (Family feeds the kids.)
+          if (ageYears(c) < 6) { tx = c.home.x; ty = c.home.y }
+          else { const s = this.nearestSchool(c); tx = s.x + s.w / 2; ty = s.y + s.h / 2 }
+        } else {
+          if (c.energy < GO_FORAGE_AT) c.goingHome = false
+          else if (c.energy > GO_HOME_AT) c.goingHome = true
+          if (c.goingHome) { tx = c.home.x; ty = c.home.y }
+          else { const f = this.nearestFood(c, c.genome.vision * 3); const g = this.nearestGarden(c); tx = f ? f.x : g.x; ty = f ? f.y : g.y }
+        }
         const [vx, vy] = this.roadSteer(c, tx, ty)
         c.vx = vx; c.vy = vy
       }
@@ -411,6 +428,7 @@ export class World {
       let upkeep = IDLE_COST * g.metabolism * g.size + MOVE_COST * g.speed * g.speed * g.size * g.metabolism * moving
       if (c.sick) upkeep *= SICK_EXTRA
       c.energy -= upkeep
+      if (!c.isAvatar && !isMature(c)) c.energy = Math.min(MAX_ENERGY, c.energy + 0.18) // the family feeds the children
 
       const mouth = 16 + g.size * 9
       for (let i = this.food.length - 1; i >= 0; i--) {
@@ -472,6 +490,10 @@ export class World {
           newborns.push(child)
           this.births++
           if (child.generation > this.peakGen) this.peakGen = child.generation
+          // a growing population spills into NEW houses → the town expands instead of staying static
+          if (this.houses.length < 130 && this.creatures.length + newborns.length > this.houses.length * 2.4) {
+            const nh = this.addHouse(c.surname); if (nh) child.home = nh
+          }
         }
       }
 
