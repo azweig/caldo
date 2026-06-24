@@ -4,6 +4,7 @@
 // of hunger, illness or old age. The avatar lives by the same rules (you steer it; it ages and dies).
 
 import { Genome, randomGenome, recombine } from "./genome"
+import { Psyche, randomPsyche, inheritPsyche } from "./psyche"
 
 export const DAYS_PER_YEAR = 360
 export const WORLD_W = 2800
@@ -36,15 +37,7 @@ const GO_FORAGE_AT = 80  // hungry → walk to a garden
 export interface House { x: number; y: number; w: number; h: number; surname: string; hue: number }
 export interface Garden { x: number; y: number }
 
-// stable temperament (0..1 each) — somewhat heritable, drives the LLM persona + the fallback voice
-export interface Traits { warmth: number; boldness: number; curiosity: number; optimism: number }
-function randomTraits(): Traits {
-  return { warmth: Math.random(), boldness: Math.random(), curiosity: Math.random(), optimism: Math.random() }
-}
-export function inheritTraits(a: Traits, b: Traits): Traits {
-  const mix = (x: number, y: number) => Math.max(0, Math.min(1, (x + y) / 2 + (Math.random() * 2 - 1) * 0.16))
-  return { warmth: mix(a.warmth, b.warmth), boldness: mix(a.boldness, b.boldness), curiosity: mix(a.curiosity, b.curiosity), optimism: mix(a.optimism, b.optimism) }
-}
+// personality lives in psyche.ts — Big Five (OCEAN) + Enneagram core + heritable beliefs
 
 export interface Creature {
   id: number
@@ -66,7 +59,7 @@ export interface Creature {
   lastRepro: number
   isAvatar: boolean
   facing: 1 | -1
-  traits: Traits
+  psyche: Psyche
   memory: string[] // what this creature remembers from past chats with the player
 }
 
@@ -140,7 +133,7 @@ export class World {
 
   private lifespanFor(g: Genome): number { return Math.round(g.longevity * DAYS_PER_YEAR * (0.9 + Math.random() * 0.2)) }
 
-  private spawn(genome: Genome, generation: number, home: House, x?: number, y?: number, traits?: Traits): Creature {
+  private spawn(genome: Genome, generation: number, home: House, x?: number, y?: number, psyche?: Psyche): Creature {
     return {
       id: NEXT_ID++,
       x: x ?? home.x, y: y ?? home.y,
@@ -151,7 +144,7 @@ export class World {
       goingHome: false, parents: null, children: 0,
       sick: false, sickDays: 0, lastRepro: -REPRO_COOLDOWN,
       isAvatar: false, facing: 1,
-      traits: traits ?? randomTraits(), memory: [],
+      psyche: psyche ?? randomPsyche(), memory: [],
     }
   }
 
@@ -277,7 +270,7 @@ export class World {
           c.energy -= REPRO_COST; mate.energy -= REPRO_COST
           c.lastRepro = mate.lastRepro = this.clockDays
           c.children++; mate.children++
-          const child = this.spawn(recombine(g, mate.genome, this.spriteCount), c.generation + 1, c.home, c.x + (Math.random() * 18 - 9), c.y + (Math.random() * 18 - 9), inheritTraits(c.traits, mate.traits))
+          const child = this.spawn(recombine(g, mate.genome, this.spriteCount), c.generation + 1, c.home, c.x + (Math.random() * 18 - 9), c.y + (Math.random() * 18 - 9), inheritPsyche(c.psyche, mate.psyche))
           child.energy = CHILD_ENERGY
           child.parents = [c.id, mate.id]
           newborns.push(child)

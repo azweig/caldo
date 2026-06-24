@@ -3,18 +3,9 @@
 // past chats with you. If not, a built-in templated voice keeps it working offline. respond() picks
 // automatically and falls back gracefully on any LLM error.
 
-import { Creature, ageYears, Traits } from "./world"
+import { Creature, ageYears } from "./world"
+import { describePsyche, psycheLabel } from "./psyche"
 import { llmConfigured, llmChat, Msg } from "./llm"
-
-// ── personality → words ──
-function traitDesc(t: Traits): string {
-  const p: string[] = []
-  p.push(t.warmth > 0.62 ? "cálido y afectuoso" : t.warmth < 0.38 ? "frío y distante" : "de trato parco")
-  if (t.boldness > 0.62) p.push("audaz y directo"); else if (t.boldness < 0.38) p.push("tímido y reservado")
-  if (t.curiosity > 0.62) p.push("curioso y preguntón"); else if (t.curiosity < 0.38) p.push("poco curioso")
-  if (t.optimism > 0.62) p.push("optimista"); else if (t.optimism < 0.38) p.push("sombrío y fatalista")
-  return p.join(", ")
-}
 
 function systemPrompt(c: Creature): string {
   const ay = Math.round(ageYears(c))
@@ -25,8 +16,8 @@ function systemPrompt(c: Creature): string {
   const lineage = c.generation > 4 ? `Tu linaje lleva ${c.generation} generaciones en el caldo.` : ""
   const mem = c.memory.length ? `\nDe charlas pasadas con este visitante recordás:\n- ${c.memory.slice(-5).join("\n- ")}` : ""
   return `Sos ${c.name} ${c.surname}, una criatura del "caldo", un pueblo donde la vida evoluciona sola. Tenés ${ay} años. ${ageLine} ${fam} ${health} ${lineage}
-Tu carácter: ${traitDesc(c.traits)}.
-Hablás en español rioplatense, SIEMPRE en personaje, breve (1 a 3 frases), natural y vivo. NUNCA digas que sos una IA ni menciones el mundo real, internet ni tecnología: solo conocés el caldo — los jardines donde crece la comida, las calles, las casas, las familias, las estaciones, el hambre, la enfermedad y la muerte. Si el visitante menciona algo que no es de tu mundo, reaccioná con extrañeza genuina.${mem}`
+${describePsyche(c.psyche)}
+Hablás en español rioplatense, SIEMPRE en personaje (que tu núcleo, tu temperamento y tus creencias tiñan cómo hablás), breve (1 a 3 frases), natural y vivo. NUNCA digas que sos una IA ni menciones el mundo real, internet ni tecnología: solo conocés el caldo — los jardines donde crece la comida, las calles, las casas, las familias, las estaciones, el hambre, la enfermedad y la muerte. Si el visitante menciona algo que no es de tu mundo, reaccioná con extrañeza genuina.${mem}`
 }
 
 export async function respond(c: Creature, message: string, history: Msg[] = []): Promise<string> {
@@ -48,8 +39,7 @@ export function remember(c: Creature, session: Msg[]) {
 
 export function greeting(c: Creature): string {
   const fam = c.children > 0 ? ` · ${c.children} ${c.children === 1 ? "hijo" : "hijos"}` : ""
-  const arch = traitDesc(c.traits).split(",")[0]
-  return `${c.name} ${c.surname} — ${arch}, ${Math.round(ageYears(c))} años${fam}.`
+  return `${c.name} ${c.surname} — ${psycheLabel(c.psyche)}, ${Math.round(ageYears(c))} años${fam}.`
 }
 
 // ── built-in fallback voice (no LLM) ──
