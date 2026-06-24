@@ -17,8 +17,11 @@ createServer(async (req, res) => {
 
   // proxy the LLM under the same origin
   if (url.startsWith("/ollama/")) {
+    // strip Origin/Referer so Ollama sees a same-origin (localhost) call and doesn't 403 on CORS
+    const headers = { ...req.headers, host: `${OLLAMA.hostname}:${OLLAMA.port || 11434}` }
+    delete headers.origin; delete headers.referer
     const p = httpRequest(
-      { hostname: OLLAMA.hostname, port: OLLAMA.port || 11434, path: url.replace(/^\/ollama/, ""), method: req.method, headers: { ...req.headers, host: `${OLLAMA.hostname}:${OLLAMA.port || 11434}` } },
+      { hostname: OLLAMA.hostname, port: OLLAMA.port || 11434, path: url.replace(/^\/ollama/, ""), method: req.method, headers },
       (pr) => { res.writeHead(pr.statusCode || 502, pr.headers); pr.pipe(res) },
     )
     p.on("error", (e) => { res.writeHead(502, { "Content-Type": "application/json" }); res.end(JSON.stringify({ error: "ollama_unreachable", detail: String(e) })) })

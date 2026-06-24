@@ -60,7 +60,7 @@ command -v ollama >/dev/null 2>&1 && echo "  ollama: $(ollama --version 2>/dev/n
 MODELS_DIR="$HOME/.ollama"; [ -d /workspace ] && MODELS_DIR="/workspace/.ollama"
 if ! pgrep -f "ollama serve" >/dev/null 2>&1; then
   y "arrancando ollama serve (GPU en paralelo para las conversaciones)…"
-  OLLAMA_MODELS="$MODELS_DIR" OLLAMA_NUM_PARALLEL="${OLLAMA_NUM_PARALLEL:-4}" OLLAMA_MAX_LOADED_MODELS="${OLLAMA_MAX_LOADED_MODELS:-2}" \
+  OLLAMA_MODELS="$MODELS_DIR" OLLAMA_ORIGINS="*" OLLAMA_NUM_PARALLEL="${OLLAMA_NUM_PARALLEL:-4}" OLLAMA_MAX_LOADED_MODELS="${OLLAMA_MAX_LOADED_MODELS:-2}" \
     OLLAMA_KEEP_ALIVE="${OLLAMA_KEEP_ALIVE:-30m}" OLLAMA_FLASH_ATTENTION=1 nohup ollama serve >/tmp/caldo-ollama.log 2>&1 &
   sleep 4
 else
