@@ -36,6 +36,7 @@ const GO_FORAGE_AT = 80  // hungry → walk to a garden
 
 export interface House { x: number; y: number; w: number; h: number; surname: string; hue: number }
 export interface Garden { x: number; y: number }
+export interface School { x: number; y: number; w: number; h: number }
 
 // personality lives in psyche.ts — Big Five (OCEAN) + Enneagram core + heritable beliefs
 
@@ -61,9 +62,10 @@ export interface Creature {
   facing: 1 | -1
   psyche: Psyche
   memory: string[] // what this creature remembers from past chats with the player
+  knowledge: number // accumulated learning (0..100): school as a child, experience as an adult
 }
 
-export interface Sample { pop: number; speed: number; vision: number; size: number; metabolism: number }
+export interface Sample { pop: number; speed: number; vision: number; size: number; metabolism: number; intellect: number; knowledge: number }
 
 const GIVEN = ["ka", "mu", "ri", "to", "na", "se", "lo", "vi", "za", "po", "ne", "shi", "ru", "ba", "ko", "mi", "te", "la", "do", "fa"]
 const SURNAMES = ["Vdel", "Korr", "Mire", "Saum", "Theli", "Nax", "Orbe", "Pell", "Yuni", "Drav", "Esma", "Quil", "Fenn", "Ulmo", "Razi", "Bhen", "Cira", "Wode", "Junn", "Mola"]
@@ -92,6 +94,8 @@ export class World {
   food: Food[] = []
   houses: House[] = []
   gardens: Garden[] = []
+  schools: School[] = []
+  wisdom = 25 // the village's collective knowledge ceiling (the cultural ratchet) — rises/falls over generations
   tick = 0
   clockDays = 0
   spriteCount: number
@@ -120,11 +124,16 @@ export class World {
     // gardens (food grows here) — a few per quadrant, off the houses
     for (let i = 0; i < 16; i++) this.gardens.push({ x: MARGIN + Math.random() * (WORLD_W - 2 * MARGIN), y: MARGIN + Math.random() * (WORLD_H - 2 * MARGIN) })
 
-    // ── founding population: each takes a house (→ its surname) ──
+    // schools — the two seats of learning; the cultural ratchet flows through here
+    this.schools.push({ x: WORLD_W * 0.33 - 48, y: WORLD_H * 0.5 - 40, w: 96, h: 80 })
+    this.schools.push({ x: WORLD_W * 0.67 - 48, y: WORLD_H * 0.5 - 40, w: 96, h: 80 })
+
+    // ── founding population: each takes a house (→ its surname) + some starting lore ──
     for (let i = 0; i < 30; i++) {
       const home = rnd(this.houses)
       const c = this.spawn(randomGenome(spriteCount), 1, home)
       c.ageDays = Math.random() * 30 * DAYS_PER_YEAR
+      c.knowledge = 16 + Math.random() * 28
       c.x = home.x + Math.random() * 30; c.y = home.y + Math.random() * 30
       this.creatures.push(c)
     }
@@ -144,7 +153,7 @@ export class World {
       goingHome: false, parents: null, children: 0,
       sick: false, sickDays: 0, lastRepro: -REPRO_COOLDOWN,
       isAvatar: false, facing: 1,
-      psyche: psyche ?? randomPsyche(), memory: [],
+      psyche: psyche ?? randomPsyche(), memory: [], knowledge: 0,
     }
   }
 
@@ -169,6 +178,11 @@ export class World {
   nearestGarden(c: Creature): Garden {
     let best = this.gardens[0], bd = Infinity
     for (const g of this.gardens) { const d = (g.x - c.x) ** 2 + (g.y - c.y) ** 2; if (d < bd) { bd = d; best = g } }
+    return best
+  }
+  nearestSchool(c: Creature): School {
+    let best = this.schools[0], bd = Infinity
+    for (const s of this.schools) { const d = (s.x + s.w / 2 - c.x) ** 2 + (s.y + s.h / 2 - c.y) ** 2; if (d < bd) { bd = d; best = s } }
     return best
   }
   nearestCreature(c: Creature, radius: number, filter?: (o: Creature) => boolean): Creature | null {
@@ -221,8 +235,10 @@ export class World {
         if (c.energy < GO_FORAGE_AT) c.goingHome = false
         else if (c.energy > GO_HOME_AT) c.goingHome = true
         let tx: number, ty: number
-        if (c.goingHome) { tx = c.home.x; ty = c.home.y }
-        else { const f = this.nearestFood(c, c.genome.vision * 3); const g = this.nearestGarden(c); tx = f ? f.x : g.x; ty = f ? f.y : g.y }
+        if (c.goingHome) {
+          if (!isMature(c)) { const s = this.nearestSchool(c); tx = s.x + s.w / 2; ty = s.y + s.h / 2 } // kids go to SCHOOL, not home
+          else { tx = c.home.x; ty = c.home.y }
+        } else { const f = this.nearestFood(c, c.genome.vision * 3); const g = this.nearestGarden(c); tx = f ? f.x : g.x; ty = f ? f.y : g.y }
         const [vx, vy] = this.roadSteer(c, tx, ty)
         c.vx = vx; c.vy = vy
       }
@@ -243,7 +259,25 @@ export class World {
       const mouth = 16 + g.size * 9
       for (let i = this.food.length - 1; i >= 0; i--) {
         const f = this.food[i]
-        if ((f.x - c.x) ** 2 + (f.y - c.y) ** 2 < mouth * mouth) { this.food.splice(i, 1); c.energy = Math.min(MAX_ENERGY, c.energy + FOOD_ENERGY); break }
+        if ((f.x - c.x) ** 2 + (f.y - c.y) ** 2 < mouth * mouth) {
+          this.food.splice(i, 1)
+          // smarter + better-schooled creatures extract more from the same food (selection pressure)
+          const smart = 1 + 0.3 * (g.intellect - 0.5) + 0.002 * c.knowledge
+          c.energy = Math.min(MAX_ENERGY, c.energy + FOOD_ENERGY * smart)
+          break
+        }
+      }
+
+      // ── learning / mental development ──
+      if (!c.isAvatar) {
+        if (!isMature(c)) {
+          const s = this.nearestSchool(c)
+          const atSchool = (c.x - (s.x + s.w / 2)) ** 2 + (c.y - (s.y + s.h / 2)) ** 2 < 95 * 95
+          const ceiling = this.wisdom + 8 // a child can learn what the village knows, plus a little
+          if (atSchool && c.knowledge < ceiling) c.knowledge = Math.min(ceiling, c.knowledge + 0.06 * g.intellect)
+        } else if (c.knowledge < 100) {
+          c.knowledge += 0.0014 * g.intellect // slow lifelong experience → nudges the village ceiling up (the ratchet)
+        }
       }
 
       const ay = ageYears(c)
@@ -288,8 +322,11 @@ export class World {
       const wild = this.creatures.filter((c) => !c.isAvatar)
       const n = wild.length || 1
       const avg = (f: (c: Creature) => number) => wild.reduce((s, c) => s + f(c), 0) / n
-      this.history.push({ pop: wild.length, speed: avg((c) => c.genome.speed), vision: avg((c) => c.genome.vision), size: avg((c) => c.genome.size), metabolism: avg((c) => c.genome.metabolism) })
+      this.history.push({ pop: wild.length, speed: avg((c) => c.genome.speed), vision: avg((c) => c.genome.vision), size: avg((c) => c.genome.size), metabolism: avg((c) => c.genome.metabolism), intellect: avg((c) => c.genome.intellect), knowledge: avg((c) => c.knowledge) })
       if (this.history.length > 400) this.history.shift()
+      // wisdom = the average knowledge of living adults → the ceiling kids can learn toward (the ratchet)
+      const adults = wild.filter(isMature)
+      if (adults.length) this.wisdom = adults.reduce((s, c) => s + c.knowledge, 0) / adults.length
     }
 
     if (this.creatures.filter((c) => !c.isAvatar).length < 4) {

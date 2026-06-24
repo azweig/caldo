@@ -80,6 +80,19 @@ export function drawWorld(
     if (cam.zoom > 1.1) label(ctx, h.surname, h.x + h.w / 2, h.y + h.h + 13, "rgba(200,215,230,0.6)")
   }
 
+  // schools — distinct civic buildings; the cultural ratchet flows through here
+  for (const s of world.schools) {
+    ctx.fillStyle = "hsl(205, 36%, 38%)"
+    ctx.fillRect(s.x, s.y, s.w, s.h)
+    ctx.fillStyle = "hsl(205, 42%, 25%)" // roof
+    ctx.beginPath(); ctx.moveTo(s.x - 8, s.y); ctx.lineTo(s.x + s.w + 8, s.y); ctx.lineTo(s.x + s.w / 2, s.y - 28); ctx.closePath(); ctx.fill()
+    ctx.fillStyle = "rgba(186,214,255,0.55)" // window row
+    for (let i = 0; i < 3; i++) ctx.fillRect(s.x + 14 + i * 28, s.y + 20, 16, 22)
+    ctx.fillStyle = "rgba(0,0,0,0.5)" // door
+    ctx.fillRect(s.x + s.w / 2 - 10, s.y + s.h - 24, 20, 24)
+    label(ctx, "📚 escuela", s.x + s.w / 2, s.y - 36, "#bcd9ff")
+  }
+
   // food
   const foodOk = assets.food.naturalWidth > 0
   for (const f of world.food) {
@@ -156,6 +169,7 @@ const TRAITS = [
   { key: "vision", color: "#7bd0ff", label: "visión" },
   { key: "size", color: "#9cff7b", label: "tamaño" },
   { key: "metabolism", color: "#ffd166", label: "metabolismo" },
+  { key: "intellect", color: "#c79bff", label: "intelecto" },
 ] as const
 
 export function drawChart(ctx: CanvasRenderingContext2D, world: World, x: number, y: number, w: number, h: number) {

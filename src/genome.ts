@@ -10,6 +10,7 @@ export interface Genome {
   metabolism: number  // base energy burn multiplier (a tax on simply existing)
   longevity: number   // natural lifespan in YEARS (~80 avg) — heritable
   resistance: number  // 0..1 resistance to illness — heritable
+  intellect: number   // 0..1 cognitive capacity: learning speed + a small foraging edge — heritable
   sprite: number      // which creature sprite (visual "species")
   hue: number         // 0..360 colour tint, drifts → lineages visibly diverge
 }
@@ -24,6 +25,7 @@ export const TRAIT_BOUNDS = {
   metabolism: [0.4, 2.0] as const,
   longevity: [45, 110] as const,
   resistance: [0.05, 0.95] as const,
+  intellect: [0.1, 1.0] as const,
 }
 
 export function randomGenome(spriteCount: number): Genome {
@@ -34,6 +36,7 @@ export function randomGenome(spriteCount: number): Genome {
     metabolism: 0.7 + Math.random() * 0.6,
     longevity: 72 + Math.random() * 16,   // centred near 80
     resistance: 0.3 + Math.random() * 0.5,
+    intellect: 0.3 + Math.random() * 0.4,
     sprite: Math.floor(Math.random() * spriteCount),
     hue: Math.random() * 360,
   }
@@ -49,6 +52,7 @@ export function mutate(g: Genome, spriteCount: number): Genome {
     metabolism: clamp(jitter(g.metabolism, r), ...TRAIT_BOUNDS.metabolism),
     longevity: clamp(jitter(g.longevity, r * 8), ...TRAIT_BOUNDS.longevity),
     resistance: clamp(jitter(g.resistance, r * 0.5), ...TRAIT_BOUNDS.resistance),
+    intellect: clamp(jitter(g.intellect, r * 0.5), ...TRAIT_BOUNDS.intellect),
     sprite: Math.random() < 0.02 ? Math.floor(Math.random() * spriteCount) : g.sprite,
     hue: (g.hue + (Math.random() * 2 - 1) * 14 + 360) % 360,
   }
@@ -64,6 +68,7 @@ export function recombine(a: Genome, b: Genome, spriteCount: number): Genome {
     metabolism: pick("metabolism"),
     longevity: pick("longevity"),
     resistance: pick("resistance"),
+    intellect: pick("intellect"),
     sprite: pick("sprite"),
     hue: (a.hue + b.hue) / 2,
   }
