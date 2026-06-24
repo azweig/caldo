@@ -2,7 +2,7 @@
 // creatures; plus a screen-space HUD chart. The camera transform is applied for the world, then
 // reset so the chart/labels-overlay draw in screen pixels.
 
-import { World, Creature, ageYears, isMature, WORLD_W, WORLD_H, BLOCK, ROAD_HALF } from "./world"
+import { World, Creature, House, ageYears, isMature, WORLD_W, WORLD_H, BLOCK, ROAD_HALF } from "./world"
 import { Assets } from "./sprites"
 import { TRAIT_BOUNDS } from "./genome"
 
@@ -46,15 +46,38 @@ export function drawWorld(
   for (let y = BLOCK; y < WORLD_H; y += BLOCK) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(WORLD_W, y); ctx.stroke() }
   ctx.setLineDash([])
 
+  // occupancy: who's currently home (near their own house) → drives the lit windows + the head-count
+  const present = new Map<House, number>()
+  for (const c of world.creatures) {
+    if (c.isAvatar) continue
+    const hx = c.home.x + c.home.w / 2, hy = c.home.y + c.home.h / 2
+    if ((c.x - hx) ** 2 + (c.y - hy) ** 2 < 80 * 80) present.set(c.home, (present.get(c.home) || 0) + 1)
+  }
+
   // houses
   for (const h of world.houses) {
-    ctx.fillStyle = `hsl(${h.hue}, 30%, 40%)`
+    const n = present.get(h) || 0
+    ctx.fillStyle = `hsl(${h.hue}, 30%, ${n > 0 ? 43 : 35}%)`
     ctx.fillRect(h.x, h.y, h.w, h.h)
-    ctx.fillStyle = `hsl(${h.hue}, 38%, 27%)` // roof
+    // windows — warm + lit when someone's home, dark otherwise
+    ctx.fillStyle = n > 0 ? "rgba(255,212,128,0.92)" : "rgba(16,26,36,0.85)"
+    ctx.fillRect(h.x + 9, h.y + 13, 13, 12)
+    ctx.fillRect(h.x + h.w - 22, h.y + 13, 13, 12)
+    // roof
+    ctx.fillStyle = `hsl(${h.hue}, 38%, 27%)`
     ctx.beginPath(); ctx.moveTo(h.x - 5, h.y); ctx.lineTo(h.x + h.w + 5, h.y); ctx.lineTo(h.x + h.w / 2, h.y - 22); ctx.closePath(); ctx.fill()
-    ctx.fillStyle = "rgba(0,0,0,0.45)" // door
-    ctx.fillRect(h.x + h.w / 2 - 6, h.y + h.h - 16, 12, 16)
-    if (cam.zoom > 1.4) label(ctx, h.surname, h.x + h.w / 2, h.y - 26, "rgba(200,215,230,0.6)")
+    // door — glows if occupied
+    ctx.fillStyle = n > 0 ? "rgba(255,200,110,0.55)" : "rgba(0,0,0,0.5)"
+    ctx.fillRect(h.x + h.w / 2 - 7, h.y + h.h - 17, 14, 17)
+    // head-count badge
+    if (n > 0) {
+      const txt = `👥 ${n}`
+      ctx.font = "bold 12px ui-monospace, monospace"; ctx.textAlign = "center"
+      const bw = ctx.measureText(txt).width + 12
+      ctx.fillStyle = "rgba(8,14,20,0.85)"; ctx.beginPath(); ctx.roundRect(h.x + h.w / 2 - bw / 2, h.y - 41, bw, 18, 6); ctx.fill()
+      ctx.fillStyle = "#ffe6a3"; ctx.fillText(txt, h.x + h.w / 2, h.y - 28); ctx.textAlign = "left"
+    }
+    if (cam.zoom > 1.1) label(ctx, h.surname, h.x + h.w / 2, h.y + h.h + 13, "rgba(200,215,230,0.6)")
   }
 
   // food
@@ -96,15 +119,19 @@ function drawCreature(ctx: CanvasRenderingContext2D, c: Creature, assets: Assets
   const img = assets.creatures[c.genome.sprite % assets.creatures.length]
   const ageScale = c.isAvatar || isMature(c) ? 1 : 0.5 + 0.5 * Math.min(1, ageYears(c) / 16)
   const w = (22 + c.genome.size * 18) * ageScale
+  // inside their own house → drawn faint (they "went in"; the lit windows represent them)
+  const hh = c.home
+  const indoors = !c.isAvatar && c.x > hh.x - 2 && c.x < hh.x + hh.w + 2 && c.y > hh.y - 8 && c.y < hh.y + hh.h + 2
+  const dim = indoors ? 0.34 : 1
 
   ctx.save()
-  ctx.globalAlpha = c.isAvatar ? 0.5 : Math.max(0.12, Math.min(0.4, c.energy / 120))
+  ctx.globalAlpha = (c.isAvatar ? 0.5 : Math.max(0.12, Math.min(0.4, c.energy / 120))) * dim
   ctx.fillStyle = `hsl(${c.genome.hue}, 70%, 55%)`
   ctx.beginPath(); ctx.arc(c.x, c.y - w * 0.35, w * 0.7, 0, Math.PI * 2); ctx.fill()
   ctx.restore()
 
   ctx.save()
-  ctx.globalAlpha = c.isAvatar ? 1 : Math.max(0.45, Math.min(1, c.energy / 70))
+  ctx.globalAlpha = (c.isAvatar ? 1 : Math.max(0.45, Math.min(1, c.energy / 70))) * dim
   ctx.translate(c.x, c.y)
   if (c.facing < 0) ctx.scale(-1, 1)
   if (img && img.naturalWidth > 0) { ctx.imageSmoothingEnabled = false; ctx.drawImage(img, -w / 2, -w, w, w) }
