@@ -20,6 +20,7 @@
       <span id="clock">Día 1 · 00:00</span>
       <button id="cron" title="crónica del pueblo (C)">📜</button>
       <button id="cfg" title="conectar IA (voz de las criaturas)">⚙</button>
+      <button id="menubtn" title="menú / nueva civilización">🌎</button>
     </div>
 
     <div id="chat" class="hidden">
@@ -82,12 +83,35 @@
       </div>
     </div>
 
-    <div id="intro">
-      <h1>caldo</h1>
-      <p>un mundo que <b>evoluciona solo</b>. vos sos una criatura más — sin poderes, mortal.<br />
-        moverte: <b>WASD</b> · hablar: <b>E</b> · pausa: <b>espacio</b> · zoom: <b>scroll</b></p>
-      <p class="dim">comé los puntos verdes para no apagarte. mirá cómo las líneas del gráfico cambian: eso es la evolución.</p>
-      <button id="start">entrar al caldo</button>
+    <div id="menu" class="hidden">
+      <div class="menu-card">
+        <h1>caldo</h1>
+        <p class="dim">un mundo de civilizaciones que evolucionan solas — de la era neandertal a la galáctica</p>
+        <button id="menu-continue" class="big hidden"></button>
+        <button id="menu-new" class="big primary">✦ Nueva civilización</button>
+        <p class="warn">empezar una nueva <b>destruye</b> la civilización guardada</p>
+      </div>
+    </div>
+
+    <div id="newciv" class="hidden">
+      <div class="nc-card">
+        <h1>Nueva civilización</h1>
+        <p class="dim">así nace tu mundo. después evoluciona solo, y persiste hasta que crees otro.</p>
+        <label>Era inicial — desde dónde empiezan</label>
+        <select id="nc-era"></select>
+        <label>Religiones — la mezcla de creencias (%)</label>
+        <div id="nc-religions"></div>
+        <div class="ncrow"><span>Violencia</span><input id="nc-violence" type="range" min="0" max="100" value="30" /></div>
+        <div class="ncrow"><span>Psicópatas / sed de poder</span><input id="nc-psych" type="range" min="0" max="100" value="5" /></div>
+        <div class="ncnums">
+          <label>👑 Monarquías <input id="nc-mon" type="number" min="0" max="4" value="1" /></label>
+          <label>🏛 Países independientes <input id="nc-rep" type="number" min="0" max="4" value="1" /></label>
+        </div>
+        <div class="nc-actions">
+          <button id="nc-back">← volver</button>
+          <button id="nc-create" class="primary">crear civilización →</button>
+        </div>
+      </div>
     </div>
 
     <script type="module" src="/src/main.ts"></script>

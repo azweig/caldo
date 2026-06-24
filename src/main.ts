@@ -9,9 +9,10 @@ import { loadAssets } from "./sprites"
 import { drawWorld, drawChart } from "./render"
 import { respond, greeting, remember, ambientDialogue } from "./chat"
 import { Msg, setLlm, pingLLM, llmConfigured, llmUrl, llmModel } from "./llm"
-import { eraName, professionSpace } from "./civ"
+import { eraName, professionSpace, ERAS } from "./civ"
 import { ENNEAGRAM } from "./psyche"
 import { LangCode, WRITE_LANG, langName, heard } from "./i18n"
+import { CivConfig, RELIGIONS, buildCountries, foodSystem } from "./civconfig"
 
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v))
 
@@ -41,16 +42,14 @@ const SCALES = [
 // the world is split into COUNTRIES — each its own simulation, biome and language; airports + migration
 // connect them, and the tabs let you embed yourself in a different one.
 interface Country { world: World; name: string; flag: string; lang: LangCode }
-const COUNTRY_DEFS: { name: string; flag: string; lang: LangCode }[] = [
-  { name: "Solandia", flag: "🟧", lang: "es" },
-  { name: "Norvik", flag: "🔵", lang: "en" },
-  { name: "Akahara", flag: "🟣", lang: "en" },
-  { name: "Verdane", flag: "🟢", lang: "es" },
-]
 let countries: Country[] = []
 let active = 0
 let migrateAcc = 0
 let frame = 0
+let spriteCount = 8
+let loopStarted = false
+let saveAt = 0
+const SAVE_KEY = "caldo_save_v1"
 let ambient: { lines: { who: Creature; text: string }[]; idx: number; nextAt: number } | null = null
 let ambientCool = 0
 const OVERHEAR = 240
@@ -118,7 +117,7 @@ canvas.addEventListener("mousemove", (e) => { mouseX = e.clientX; mouseY = e.cli
 canvas.addEventListener("mouseleave", () => { mouseX = -1; mouseY = -1 })
 function screenToWorld(sx: number, sy: number) { return { x: (sx - canvas.width / 2) / lastCam.zoom + lastCam.x, y: (sy - canvas.height / 2) / lastCam.zoom + lastCam.y } }
 function creatureAt(sx: number, sy: number): Creature | null {
-  if (sx < 0) return null
+  if (sx < 0 || !world) return null
   const w = screenToWorld(sx, sy)
   let best: Creature | null = null, bd = (30 / lastCam.zoom) ** 2
   for (const c of world.creatures) { if (c.isAvatar) continue; const d = (c.x - w.x) ** 2 + (c.y - w.y) ** 2; if (d < bd) { bd = d; best = c } }
@@ -136,6 +135,7 @@ function showInspect(c: Creature) {
   inspectBody.innerHTML = `
     <h2>${c.name} ${c.surname}</h2>
     <div class="row dim">${c.profession || "sin oficio"} · ${Math.round(ageYears(c))} años · gen ${c.generation}</div>
+    <div class="row dim">cree en ${c.religion || "nada"}${c.powerHungry ? " · <b style='color:#ff8c6a'>sed de poder</b>" : ""}</div>
     <div class="row">${c.children} ${c.children === 1 ? "hijo" : "hijos"} · saber ${Math.round(c.knowledge)} · ${c.sick ? '<b style="color:#8fe39a">enfermo ✚</b>' : "sano"}</div>
     <h3>núcleo · ${t.name}</h3><div class="row dim">anhela ${t.desire}; teme ${t.fear}</div>
     <h3>personalidad</h3>${five.map(([l, v]) => `<div class="prow"><span>${l}</span>${pbar(v, "#9bb8ff")}</div>`).join("")}
@@ -157,6 +157,7 @@ function toggleChronicle() {
 document.getElementById("help-close")!.addEventListener("click", () => help.classList.add("hidden"))
 document.getElementById("chronicle-close")!.addEventListener("click", () => chronicleEl.classList.add("hidden"))
 document.getElementById("cron")!.addEventListener("click", () => { toggleChronicle(); (document.getElementById("cron") as HTMLElement).blur() })
+document.getElementById("menubtn")!.addEventListener("click", () => { paused = true; pauseBtn.textContent = "▶"; saveGame(); showMenu(); (document.getElementById("menubtn") as HTMLElement).blur() })
 
 function nearestTalkable(): Creature | null { return avatar ? world.nearestCreature(avatar, CHAT_RANGE, (o) => !o.isAvatar) : null }
 function openChat() {
@@ -192,7 +193,8 @@ chatInput.addEventListener("keydown", async (e) => {
     addLine("Tú", msg, "me"); chatInput.value = ""
     session.push({ role: "user", content: msg })
     const typing = addLine(who.name, "<i>…</i>", "them")
-    const reply = await respond(who, msg, session, eraName(world.era), WRITE_LANG)
+    const ctx = `Tu pueblo come de ${foodSystem(world.era)}; es una ${world.gov}${world.monarch ? `, gobernada por ${world.monarch.name} ${world.monarch.surname}` : ""}.`
+    const reply = await respond(who, msg, session, eraName(world.era), WRITE_LANG, ctx)
     const h = heard(reply, countries[active].lang)
     typing.innerHTML = `<b>${who.name}:</b> <span class="tag">${h.tag}</span> ${h.text}`
     chatLog.scrollTop = chatLog.scrollHeight
@@ -201,7 +203,7 @@ chatInput.addEventListener("keydown", async (e) => {
 })
 
 window.addEventListener("keydown", (e) => {
-  if (chatting) return
+  if (!loopStarted || chatting) return
   keys.add(e.key.toLowerCase())
   if (e.key === "e" || e.key === "E") openChat()
   if (e.key === " ") { togglePause(); e.preventDefault() }
@@ -240,12 +242,19 @@ function updateHud() {
   const aAge = avatar ? Math.round(ageYears(avatar)) : 0
   const bar = "█".repeat(Math.round(e / 10)).padEnd(13, "·")
   const rp = world.researchProgress()
+  const relCount: Record<string, number> = {}
+  for (const c of wild) if (c.religion) relCount[c.religion] = (relCount[c.religion] || 0) + 1
+  const topRel = Object.entries(relCount).sort((a, b) => b[1] - a[1])[0]
+  const psychos = wild.filter((c) => c.powerHungry).length
   hud.innerHTML = `
-    <div class="stat"><span>país</span> <b style="color:#fff">${countries[active]?.flag || ""} ${countries[active]?.name || ""}</b></div>
+    <div class="stat"><span>país</span> <b style="color:#fff">${countries[active]?.flag || ""} ${countries[active]?.name || ""}</b> · ${world.gov === "monarquía" ? "👑 monarquía" : "🏛 república"}</div>
+    ${world.monarch ? `<div class="stat"><span>monarca</span> ${world.monarch.name} ${world.monarch.surname}${world.monarch.powerHungry ? " (déspota)" : ""}</div>` : ""}
     <div class="stat"><span>población</span> ${wild.length} · <span>familias</span> ${families}</div>
     <div class="stat"><span>edad media</span> ${avgAge}a · <span>enfermos ✚</span> ${sick}</div>
     <div class="stat"><span>generación</span> ${world.peakGen} · <span>nac</span> ${world.births} · <span>muertes</span> ${world.deaths}</div>
     <div class="stat"><span>era</span> <b style="color:#bcd9ff">${eraName(world.era)}</b> · ${SEASONS[seasonOf(world.clockDays)]}</div>
+    <div class="stat"><span>alimento</span> ${foodSystem(world.era)}</div>
+    <div class="stat"><span>religión</span> ${topRel ? `${topRel[0]} ${Math.round(100 * topRel[1] / (wild.length || 1))}%` : "—"} · <span>ambiciosos</span> ${psychos}</div>
     <div class="stat"><span>saber 📚</span> ${Math.round(world.wisdom)} · <span>oficios</span> ${professionSpace().toLocaleString()} · <span>univ.</span> ${world.universities.length}</div>
     <div class="stat"><span>investigando</span> ${rp.name} <span class="rbar"><i style="width:${Math.round(rp.frac * 100)}%"></i></span></div>
     ${world.recentTech ? `<div class="stat"><span>💡 último</span> ${world.recentTech}</div>` : ""}
@@ -361,21 +370,79 @@ function loop() {
     deathScreen.classList.remove("hidden")
   }
 
+  if (++saveAt >= 900) { saveAt = 0; saveGame() } // autosave ~every 15s
   updateHud()
   requestAnimationFrame(loop)
 }
 
-const intro = document.getElementById("intro")!
-document.getElementById("start")!.addEventListener("click", () => intro.classList.add("hidden"))
+// ── game lifecycle: new / continue / save (a civilisation persists until you start a new one) ──
+function startRunning() {
+  buildTabs()
+  document.getElementById("menu")!.classList.add("hidden")
+  document.getElementById("newciv")!.classList.add("hidden")
+  if (!loopStarted) { loopStarted = true; setScale(scaleIndex); loop() }
+}
+function newGame(cfg: CivConfig) {
+  countries = cfg.countries.map((c, i) => ({
+    name: c.name, flag: c.flag, lang: c.lang,
+    world: new World(spriteCount, i, { startEra: cfg.startEra, religions: cfg.religions, violence: cfg.violence, psychopathy: cfg.psychopathy, gov: c.gov }),
+  }))
+  active = 0; world = countries[0].world; avatar = world.addAvatar()
+  startRunning(); saveGame()
+}
+function continueGame(save: { active: number; savedAt: number; countries: { name: string; flag: string; lang: LangCode; state: unknown }[] }) {
+  countries = save.countries.map((cc) => ({ name: cc.name, flag: cc.flag, lang: cc.lang, world: World.fromState(cc.state, spriteCount) }))
+  active = Math.min(save.active || 0, countries.length - 1)
+  world = countries[active].world; avatar = world.addAvatar()
+  // offline progression — the civilisations kept advancing while you were away (capped so load is fast)
+  const catchUp = Math.min(2500, Math.floor(Math.max(0, (Date.now() - (save.savedAt || Date.now())) / 1000)) * 20)
+  for (let t = 0; t < catchUp; t++) for (const c of countries) c.world.step()
+  startRunning()
+}
+function saveGame() {
+  if (!countries.length) return
+  try {
+    localStorage.setItem(SAVE_KEY, JSON.stringify({ savedAt: Date.now(), active, countries: countries.map((c) => ({ name: c.name, flag: c.flag, lang: c.lang, state: c.world.toState() })) }))
+  } catch { /* quota — non-fatal */ }
+}
+function loadSave(): { active: number; savedAt: number; countries: { name: string; flag: string; lang: LangCode; state: any }[] } | null {
+  try { const raw = localStorage.getItem(SAVE_KEY); return raw ? JSON.parse(raw) : null } catch { return null }
+}
+window.addEventListener("beforeunload", saveGame)
+
+// ── start menu + new-civilisation form ──
+const menuEl = document.getElementById("menu")!
+const newcivEl = document.getElementById("newciv")!
+function showMenu() {
+  const save = loadSave()
+  const cont = document.getElementById("menu-continue") as HTMLButtonElement
+  if (save?.countries?.length) {
+    cont.classList.remove("hidden")
+    cont.innerHTML = `▶ Continuar — ${save.countries.length} ${save.countries.length === 1 ? "país" : "países"} · ${eraName(save.countries[0].state.era)}`
+    cont.onclick = () => { const s = loadSave(); if (s) continueGame(s) }
+  } else cont.classList.add("hidden")
+  newcivEl.classList.add("hidden")
+  menuEl.classList.remove("hidden")
+}
+function buildNewCiv() {
+  ;(document.getElementById("nc-era") as HTMLSelectElement).innerHTML = ERAS.map((e, i) => `<option value="${i}">${i}. ${e}</option>`).join("")
+  document.getElementById("nc-religions")!.innerHTML = RELIGIONS.map((r, i) => `<label class="ncrow"><span>${r}</span><input type="range" min="0" max="100" value="${i === 0 ? 30 : 14}" data-rel="${i}"></label>`).join("")
+  newcivEl.classList.remove("hidden")
+}
+function readConfig(): CivConfig {
+  const num = (id: string) => Number((document.getElementById(id) as HTMLInputElement).value)
+  const religions = RELIGIONS.map((name, i) => ({ name, pct: Number((newcivEl.querySelector(`[data-rel="${i}"]`) as HTMLInputElement).value) }))
+  return {
+    startEra: num("nc-era"),
+    religions: religions.some((r) => r.pct > 0) ? religions : [{ name: RELIGIONS[1], pct: 100 }],
+    violence: num("nc-violence") / 100,
+    psychopathy: num("nc-psych") / 100,
+    countries: buildCountries(Math.max(0, num("nc-mon")), Math.max(0, num("nc-rep"))),
+  }
+}
+document.getElementById("menu-new")!.addEventListener("click", () => { menuEl.classList.add("hidden"); buildNewCiv() })
+document.getElementById("nc-create")!.addEventListener("click", () => newGame(readConfig()))
+document.getElementById("nc-back")!.addEventListener("click", () => { newcivEl.classList.add("hidden"); showMenu() })
 
 let assets: Awaited<ReturnType<typeof loadAssets>>
-loadAssets().then((a) => {
-  assets = a
-  countries = COUNTRY_DEFS.map((c, i) => ({ ...c, world: new World(a.creatures.length, i) }))
-  active = 0
-  world = countries[0].world
-  avatar = world.addAvatar()
-  buildTabs()
-  setScale(scaleIndex)
-  loop()
-})
+loadAssets().then((a) => { assets = a; spriteCount = a.creatures.length; showMenu() })

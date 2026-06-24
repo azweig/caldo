@@ -64,6 +64,53 @@ body { font-family: ui-monospace, "SF Mono", Menlo, monospace; color: #dfe7ee; }
   width: 28px; height: 26px; cursor: pointer; font-size: 13px;
 }
 #timebar #cron:hover { background: rgba(255, 214, 128, 0.2); }
+#timebar #menubtn {
+  background: rgba(255, 255, 255, 0.08); color: #cfe0ee;
+  border: 1px solid rgba(255, 255, 255, 0.14); border-radius: 7px;
+  width: 28px; height: 26px; cursor: pointer; font-size: 13px;
+}
+#timebar #menubtn:hover { background: rgba(120, 200, 255, 0.22); }
+
+/* start menu + new-civilisation form */
+#menu, #newciv {
+  position: fixed; inset: 0; z-index: 30; display: flex; align-items: center; justify-content: center;
+  background: radial-gradient(60% 60% at 50% 40%, #0c1722, #06090d); padding: 20px; overflow-y: auto;
+}
+.menu-card { text-align: center; max-width: 460px; }
+.menu-card h1 { font-size: 64px; color: #8fe3a0; letter-spacing: 2px; margin-bottom: 8px; }
+.menu-card .dim { color: #7d93a6; margin-bottom: 28px; line-height: 1.6; }
+.big {
+  display: block; width: 100%; margin: 10px 0; padding: 15px; border-radius: 12px; border: 0;
+  font: inherit; font-size: 16px; cursor: pointer; background: rgba(255, 255, 255, 0.08); color: #dfe7ee;
+}
+.big:hover { background: rgba(255, 255, 255, 0.14); }
+.big.primary { background: #2e7d5b; color: #eafff2; }
+.big.primary:hover { background: #379268; }
+.warn { color: #b07a5a; font-size: 12px; margin-top: 16px; }
+
+.nc-card {
+  background: #0e1620; border: 1px solid rgba(143, 227, 160, 0.3); border-radius: 16px;
+  padding: 24px 26px; width: min(520px, 94vw);
+}
+.nc-card h1 { font-size: 26px; color: #8fe3a0; margin-bottom: 4px; }
+.nc-card .dim { color: #7d93a6; font-size: 12.5px; margin-bottom: 16px; line-height: 1.6; }
+.nc-card label { display: block; font-size: 12px; color: #9fb2c2; margin: 14px 0 6px; }
+.nc-card select, .nc-card input[type="number"] {
+  background: rgba(255, 255, 255, 0.06); border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 8px; padding: 8px 10px; color: #fff; font: inherit; font-size: 13px; outline: none;
+}
+.nc-card select { width: 100%; }
+#nc-religions .ncrow { margin: 4px 0; }
+.ncrow { display: flex; align-items: center; gap: 10px; font-size: 12px; color: #c2d0dc; margin: 8px 0; }
+.ncrow span { flex: 1; }
+.ncrow input[type="range"] { width: 200px; accent-color: #8fe3a0; }
+.ncnums { display: flex; gap: 18px; margin-top: 14px; }
+.ncnums label { display: flex; align-items: center; gap: 8px; margin: 0; color: #c2d0dc; font-size: 13px; }
+.ncnums input { width: 60px; }
+.nc-actions { display: flex; gap: 10px; margin-top: 22px; }
+.nc-actions button { flex: 1; padding: 12px; border-radius: 10px; border: 0; font: inherit; font-size: 14px; cursor: pointer; background: rgba(255, 255, 255, 0.1); color: #dfe7ee; }
+.nc-actions .primary { background: #2e7d5b; color: #eafff2; }
+.nc-actions button:hover { filter: brightness(1.2); }
 
 /* inspect panel (right) */
 #inspect {

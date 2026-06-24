@@ -5,7 +5,8 @@
 
 import { Genome, randomGenome, recombine } from "./genome"
 import { Psyche, randomPsyche, inheritPsyche } from "./psyche"
-import { Cat, Boosts, Prof, PROFS, availableProfs, nextTech, economyOf, professionTitle, eraName } from "./civ"
+import { Cat, Boosts, Prof, PROFS, TECHS, availableProfs, nextTech, economyOf, professionTitle, eraName } from "./civ"
+import { pickReligion } from "./civconfig"
 
 export const SEASONS = ["primavera", "verano", "otoño", "invierno"] as const
 export function seasonOf(days: number): number { return Math.floor((Math.floor(days) % DAYS_PER_YEAR) / (DAYS_PER_YEAR / 4)) }
@@ -71,7 +72,11 @@ export interface Creature {
   profBase: string   // base profession name (PROFS.n), for logic
   profCat: Cat | ""  // economic category (drives the village economy); "" = not yet working
   heritProf: string  // a parent's base profession — biases the child's choice (apprenticeship)
+  religion: string   // belief system (heritable; the mix is set when the civ is born)
+  powerHungry: boolean // a power-obsessed "psychopath" — drifts toward rule + raises violence
 }
+
+export interface WorldOpts { startEra: number; religions: { name: string; pct: number }[]; violence: number; psychopathy: number; gov: "monarquía" | "república" }
 
 export interface Sample { pop: number; speed: number; vision: number; size: number; metabolism: number; intellect: number; knowledge: number }
 
@@ -118,6 +123,12 @@ export class World {
   profPop: Record<string, number> = {}
   chronicle: { day: number; text: string }[] = []
   plagueUntil = 0
+  // civ configuration / governance
+  gov: "monarquía" | "república" = "república"
+  violence = 0.3
+  psychopathy = 0.05
+  religionsCfg: { name: string; pct: number }[] = [{ name: "el Caldo Eterno", pct: 100 }]
+  monarch: Creature | null = null
   tick = 0
   clockDays = 0
   spriteCount: number
@@ -127,10 +138,15 @@ export class World {
   peakGen = 0
   foodTarget: number
 
-  constructor(spriteCount: number, region = 0) {
+  constructor(spriteCount: number, region = 0, opts?: WorldOpts, skipSeed = false) {
     this.spriteCount = spriteCount
     this.region = region
     this.foodTarget = 230
+    if (opts) {
+      this.gov = opts.gov; this.violence = opts.violence; this.psychopathy = opts.psychopathy
+      this.religionsCfg = opts.religions.length ? opts.religions : this.religionsCfg
+    }
+    if (skipSeed) return // fromState() will populate everything
 
     // ── lay out the town: a house in (most) blocks, one surname per house ──
     let si = 0
@@ -151,17 +167,35 @@ export class World {
     this.schools.push({ x: WORLD_W * 0.33 - 48, y: WORLD_H * 0.5 - 40, w: 96, h: 80 })
     this.schools.push({ x: WORLD_W * 0.67 - 48, y: WORLD_H * 0.5 - 40, w: 96, h: 80 })
 
-    // ── founding population: each takes a house (→ its surname) + some starting lore ──
+    // start the civilisation already advanced to the chosen era (pre-discovered techs + boosts)
+    this.applyStartEra(opts?.startEra ?? 0)
+
+    // ── founding population: each takes a house (→ its surname), a religion, lore, and maybe ambition ──
+    const startKnow = 16 + this.era * 4
     for (let i = 0; i < 30; i++) {
       const home = rnd(this.houses)
       const c = this.spawn(randomGenome(spriteCount), 1, home)
       c.ageDays = Math.random() * 30 * DAYS_PER_YEAR
-      c.knowledge = 16 + Math.random() * 28
+      c.knowledge = startKnow + Math.random() * 28
+      c.religion = pickReligion(this.religionsCfg)
+      c.powerHungry = Math.random() < this.psychopathy
       c.x = home.x + Math.random() * 30; c.y = home.y + Math.random() * 30
       this.assignProfession(c)
       this.creatures.push(c)
     }
     for (let i = 0; i < this.foodTarget; i++) this.scatterFood()
+  }
+
+  // discover every tech up to `era`, accumulating its boosts + building the university if reached
+  private applyStartEra(era: number) {
+    if (era <= 0) return
+    for (const t of TECHS) {
+      if (t.e > era) continue
+      this.discovered.add(t.n)
+      if (t.b) { const tb = this.techBoost as unknown as Record<string, number>, nb = t.b as Record<string, number>; for (const k of Object.keys(t.b)) tb[k] += nb[k] }
+      if (t.n === "Universidad" && !this.universities.length) this.universities.push({ x: WORLD_W * 0.5 - 64, y: WORLD_H * 0.5 - 54, w: 128, h: 104 })
+    }
+    this.era = era
   }
 
   private lifespanFor(g: Genome): number { return Math.round(g.longevity * DAYS_PER_YEAR * (0.9 + Math.random() * 0.2) * (1 + this.techBoost.life)) }
@@ -184,6 +218,7 @@ export class World {
   private profWeight(p: Prof, c: Creature): number {
     let w = this.fit(p.c, c)
     if (p.n === c.heritProf) w *= 4 // family apprenticeship (the strongest pull)
+    if (c.powerHungry && (p.c === "liderazgo" || p.c === "defensa")) w *= 3 // the ambitious seek power
     const pop = this.profPop[p.n] || 0
     w *= 0.5 + 0.55 * Math.log1p(pop) + (pop > 0 ? 0.4 : 0) // social learning: known trades are easier to enter
     w *= 1 + 1.2 / (1 + (this.profCounts[p.c] || 0)) // village need: under-filled categories pull harder
@@ -206,6 +241,31 @@ export class World {
     return nt ? { name: nt.n, frac: Math.max(0, Math.min(1, this.research / nt.cost)) } : { name: "—", frac: 1 }
   }
 
+  // ── persistence: a civilisation survives reloads until you start a new one ──
+  toState() {
+    const hi = new Map<House, number>(); this.houses.forEach((h, i) => hi.set(h, i))
+    const C = (c: Creature) => ({ id: c.id, x: c.x, y: c.y, e: c.energy, ad: c.ageDays, ls: c.lifespanDays, gen: c.generation, nm: c.name, sn: c.surname, h: hi.get(c.home) ?? 0, k: c.knowledge, pf: c.profession, pb: c.profBase, pc: c.profCat, hp: c.heritProf, sick: c.sick, ch: c.children, par: c.parents, rel: c.religion, pw: c.powerHungry, g: c.genome, ps: c.psyche, mem: c.memory, gh: c.goingHome })
+    return { region: this.region, gov: this.gov, era: this.era, clockDays: this.clockDays, tick: this.tick, research: this.research, discovered: [...this.discovered], techBoost: this.techBoost, wisdom: this.wisdom, births: this.births, deaths: this.deaths, peakGen: this.peakGen, plagueUntil: this.plagueUntil, violence: this.violence, psychopathy: this.psychopathy, religionsCfg: this.religionsCfg, chronicle: this.chronicle.slice(-60), houses: this.houses, gardens: this.gardens, schools: this.schools, universities: this.universities, airport: this.airport, monarch: this.monarch?.id ?? null, creatures: this.creatures.filter((c) => !c.isAvatar).map(C) }
+  }
+  static fromState(s: any, spriteCount: number): World {
+    const w = new World(spriteCount, s.region, undefined, true)
+    w.gov = s.gov; w.era = s.era; w.clockDays = s.clockDays; w.tick = s.tick; w.research = s.research
+    w.discovered = new Set<string>(s.discovered || []); w.techBoost = s.techBoost; w.wisdom = s.wisdom
+    w.births = s.births; w.deaths = s.deaths; w.peakGen = s.peakGen; w.plagueUntil = s.plagueUntil
+    w.violence = s.violence; w.psychopathy = s.psychopathy; w.religionsCfg = s.religionsCfg
+    w.chronicle = s.chronicle || []; w.houses = s.houses; w.gardens = s.gardens; w.schools = s.schools
+    w.universities = s.universities; w.airport = s.airport; w.foodTarget = 230
+    const byId = new Map<number, Creature>(); let maxId = 0
+    w.creatures = (s.creatures || []).map((c: any) => {
+      maxId = Math.max(maxId, c.id)
+      const cr: Creature = { id: c.id, x: c.x, y: c.y, vx: 0, vy: 0, energy: c.e, ageDays: c.ad, lifespanDays: c.ls, genome: c.g, generation: c.gen, name: c.nm, surname: c.sn, home: w.houses[c.h] || w.houses[0], goingHome: !!c.gh, parents: c.par, children: c.ch, sick: c.sick, sickDays: 0, lastRepro: -99999, isAvatar: false, facing: 1, psyche: c.ps, memory: c.mem || [], knowledge: c.k, profession: c.pf, profBase: c.pb, profCat: c.pc, heritProf: c.hp || "", religion: c.rel || "", powerHungry: !!c.pw }
+      byId.set(cr.id, cr); return cr
+    })
+    w.monarch = s.monarch != null ? byId.get(s.monarch) || null : null
+    if (maxId + 1 > NEXT_ID) NEXT_ID = maxId + 1
+    return w
+  }
+
   private spawn(genome: Genome, generation: number, home: House, x?: number, y?: number, psyche?: Psyche): Creature {
     return {
       id: NEXT_ID++,
@@ -219,6 +279,7 @@ export class World {
       isAvatar: false, facing: 1,
       psyche: psyche ?? randomPsyche(), memory: [], knowledge: 0,
       profession: "", profBase: "", profCat: "", heritProf: "",
+      religion: "", powerHungry: false,
     }
   }
 
@@ -315,6 +376,8 @@ export class World {
     const plague = this.clockDays < this.plagueUntil ? 3.4 : 1
     const healthM = 1 + this.econ.health + this.techBoost.health
     const learnM = 1 + this.econ.learn + this.techBoost.learn
+    // violence is fed by the configured level, the share of power-obsessed, monarchy, and a cruel monarch
+    const violenceRate = this.violence * (1 + 2.2 * this.psychopathy) * (this.gov === "monarquía" ? 1.3 : 1) * (this.monarch?.powerHungry ? 1.5 : 1)
 
     const survivors: Creature[] = []
     const newborns: Creature[] = []
@@ -387,6 +450,7 @@ export class World {
       if (!c.isAvatar) {
         if (c.energy <= 0) { this.deaths++; continue }
         if (c.ageDays > c.lifespanDays && Math.random() < (c.ageDays - c.lifespanDays) / (0.18 * c.lifespanDays)) { this.deaths++; continue }
+        if (isMature(c) && Math.random() < 0.0000052 * violenceRate) { this.deaths++; this.logEvent(`${c.name} ${c.surname} murió en un acto de violencia`); continue }
       }
 
       // FAMILIES — pair with a housemate-adult nearby (they gather at home), gene recombination
@@ -403,6 +467,8 @@ export class World {
           child.energy = CHILD_ENERGY
           child.parents = [c.id, mate.id]
           child.heritProf = Math.random() < 0.5 ? c.profBase : mate.profBase // apprenticeship pull
+          child.religion = Math.random() < 0.85 ? (Math.random() < 0.5 ? c.religion : mate.religion) : pickReligion(this.religionsCfg)
+          child.powerHungry = Math.random() < this.psychopathy * ((c.powerHungry || mate.powerHungry) ? 1.8 : 1)
           newborns.push(child)
           this.births++
           if (child.generation > this.peakGen) this.peakGen = child.generation
@@ -423,6 +489,14 @@ export class World {
       // wisdom = the average knowledge of living adults → the ceiling kids can learn toward (the ratchet)
       const adults = wild.filter(isMature)
       if (adults.length) this.wisdom = adults.reduce((s, c) => s + c.knowledge, 0) / adults.length
+      // a monarch reigns until death; the throne goes to the most ambitious/learned/old elder
+      if (this.gov === "monarquía") {
+        if (!this.monarch || !wild.includes(this.monarch)) {
+          let best: Creature | null = null, bs = -1
+          for (const c of adults) { const s = (c.powerHungry ? 45 : 0) + c.knowledge + ageYears(c) * 0.6 + (c.profCat === "liderazgo" ? 35 : 0); if (s > bs) { bs = s; best = c } }
+          if (best) { this.monarch = best; this.logEvent(`👑 ${best.name} ${best.surname} asciende al trono${best.powerHungry ? " (un déspota)" : ""}`) }
+        }
+      } else this.monarch = null
       // recompute the working economy → drives food, health, learning + research output
       const counts: Partial<Record<Cat, number>> = {}, pop: Record<string, number> = {}
       for (const c of wild) { if (c.profCat) counts[c.profCat] = (counts[c.profCat] || 0) + 1; if (c.profBase) pop[c.profBase] = (pop[c.profBase] || 0) + 1 }

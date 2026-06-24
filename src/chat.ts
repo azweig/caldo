@@ -7,7 +7,7 @@ import { Creature, ageYears } from "./world"
 import { describePsyche, psycheLabel } from "./psyche"
 import { llmConfigured, llmChat, Msg } from "./llm"
 
-function systemPrompt(c: Creature, era: string, lang: string): string {
+function systemPrompt(c: Creature, era: string, lang: string, ctx: string): string {
   const ay = Math.round(ageYears(c))
   const ageLine = ay < 16 ? "Sos una cría, todo te asombra." : ay > 65 ? "Sos anciano, viste muchas estaciones." : "Sos adulto."
   const fam = c.children > 0 ? `Tuviste ${c.children} ${c.children === 1 ? "hijo" : "hijos"}.`
@@ -18,15 +18,16 @@ function systemPrompt(c: Creature, era: string, lang: string): string {
     : c.knowledge < 18 ? "Sabés poco del mundo todavía; muchas cosas no las entendés del todo y preguntás con inocencia." : ""
   const mem = c.memory.length ? `\nDe charlas pasadas con este visitante recordás:\n- ${c.memory.slice(-5).join("\n- ")}` : ""
   const work = c.profession ? `Tu oficio es: ${c.profession}.` : "Todavía no tenés oficio."
-  return `Sos ${c.name} ${c.surname}, una criatura del "caldo", un pueblo donde la vida evoluciona sola, hoy en su era ${era}. Tenés ${ay} años. ${ageLine} ${fam} ${health} ${lineage} ${mind} ${work}
+  const faith = c.religion ? `Creés en ${c.religion}${c.powerHungry ? ", aunque en el fondo solo te mueve el poder" : ""}.` : ""
+  return `Sos ${c.name} ${c.surname}, una criatura del "caldo", un pueblo donde la vida evoluciona sola, hoy en su era ${era}. Tenés ${ay} años. ${ageLine} ${fam} ${health} ${lineage} ${mind} ${work} ${faith} ${ctx}
 ${describePsyche(c.psyche)}
 Hablás SIEMPRE en ${lang}, en personaje (que tu núcleo, tu temperamento y tus creencias tiñan cómo hablás), breve (1 a 3 frases), natural y vivo. NUNCA digas que sos una IA ni menciones el mundo real, internet ni tecnología: solo conocés el caldo — los jardines donde crece la comida, las calles, las casas, las familias, las estaciones, el hambre, la enfermedad y la muerte. Si el visitante menciona algo que no es de tu mundo, reaccioná con extrañeza genuina.${mem}`
 }
 
-export async function respond(c: Creature, message: string, history: Msg[] = [], era = "Paleolítica", lang = "español rioplatense"): Promise<string> {
+export async function respond(c: Creature, message: string, history: Msg[] = [], era = "Paleolítica", lang = "español rioplatense", ctx = ""): Promise<string> {
   if (llmConfigured()) {
     try {
-      return await llmChat([{ role: "system", content: systemPrompt(c, era, lang) }, ...history.slice(-8), { role: "user", content: message }])
+      return await llmChat([{ role: "system", content: systemPrompt(c, era, lang, ctx) }, ...history.slice(-8), { role: "user", content: message }])
     } catch { /* fall through to the templated voice */ }
   }
   return templated(c, message)
