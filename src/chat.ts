@@ -23,7 +23,9 @@ function systemPrompt(c: Creature, era: string, lang: string, ctx: string): stri
   const soc = c.social?.length ? `\nDe tus charlas con tu familia, tus maestros y tus vecinos recordás:\n- ${c.social.slice(-4).join("\n- ")}` : ""
   const work = c.profession ? `Tu oficio es: ${c.profession}.` : "Todavía no tenés oficio."
   const faith = c.religion ? `Creés en ${c.religion}${c.powerHungry ? ", aunque en el fondo solo te mueve el poder" : ""}.` : ""
-  return `Sos ${c.name} ${c.surname}, una criatura del "caldo", un pueblo donde la vida evoluciona sola, hoy en su era ${era}. Tenés ${ay} años. ${ageLine} ${fam} ${health} ${lineage} ${mind} ${work} ${faith} ${ctx}
+  const L = c.life
+  const inner = L ? `Hoy te sentís ${L.emoInt > 0.25 && L.emotion !== "neutral" ? L.emotion : "tranquilo/a"}. En la vida soñás con ${L.goal.toLowerCase()}. En tus ratos te gusta ${L.hobby}.${L.condition ? ` Cargás un ${L.condition} que te pesa.` : ""}` : ""
+  return `Sos ${c.name} ${c.surname}, una criatura del "caldo", un pueblo donde la vida evoluciona sola, hoy en su era ${era}. Tenés ${ay} años. ${ageLine} ${fam} ${health} ${lineage} ${mind} ${work} ${faith} ${inner} ${ctx}
 ${describePsyche(c.psyche)}
 Hablás SIEMPRE en ${lang}, en personaje (que tu núcleo, tu temperamento y tus creencias tiñan cómo hablás), breve (1 a 3 frases), natural y vivo. NUNCA digas que sos una IA ni menciones el mundo real, internet ni tecnología: solo conocés el caldo — los jardines donde crece la comida, las calles, las casas, las familias, las estaciones, el hambre, la enfermedad y la muerte. Si el visitante menciona algo que no es de tu mundo, reaccioná con extrañeza genuina.${mem}${soc}`
 }

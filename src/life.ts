@@ -114,6 +114,9 @@ export function lifeTick(c: Creature, partnerAlive: boolean, householdSize: numb
   if (L.condition) { L.condDays--; if (L.condDays <= 0) { L.condition = ""; feel(c, "esperanzado", 0.4) } }
   // long-term goal progress (light; events add the big jumps)
   L.goalProg = Math.max(0, Math.min(1, L.goalProg + goalDrift(c) * 0.001))
+  // ELDERS earn quiet respect for their years + wisdom (their reputation slowly rises)
+  const age = c.ageDays / 360
+  if (age > 55) L.rep = Math.min(1, L.rep + 0.0006 * Math.min(20, age - 55))
 }
 function goalDrift(c: Creature): number {
   const L = c.life!; switch (L.goalKey) {

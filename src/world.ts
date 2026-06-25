@@ -511,6 +511,11 @@ export class World {
     }
     // a milestone-gated era advance: all keystones + enough of the era's discoveries (a civ-style tech tree)
     if (this.era < 18 && canAdvanceEra(this.discovered, this.era)) { this.era++; this.logEvent(`✦ amanece la era ${eraName(this.era)}`) }
+    // FESTIVAL: a few times a year the whole town gathers to celebrate — spirits, fun + togetherness lift
+    if (this.clockDays > 0 && this.clockDays % 90 === 0) {
+      for (const c of this.creatures) if (!c.isAvatar && c.life) { c.mental = Math.min(100, c.mental + 4); c.life.fun = Math.min(100, c.life.fun + 35); c.life.social = Math.min(100, c.life.social + 22); feel(c, "alegre", 0.55) }
+      this.logEvent(`✦ el pueblo celebra una fiesta`)
+    }
     // plague: a rare epidemic that can take the wise and tip the village into a dark age
     if (this.clockDays > this.plagueUntil + 1500 && Math.random() < 0.00012) {
       this.plagueUntil = this.clockDays + 130 + Math.floor(Math.random() * 160)
@@ -689,7 +694,7 @@ export class World {
       const eraPay = 1 + this.era * 0.12
       for (const c of wild) if (c.profCat && isMature(c)) {
         const pay = c.profCat === "comercio" || c.profCat === "liderazgo" ? 7.5 : c.profCat === "saber" || c.profCat === "ingeniería" ? 6.5 : c.profCat === "salud" ? 6 : 4.5
-        c.money += pay * eraPay // a single adult lives comfortably; supporting a big family on a low wage strains it
+        c.money += pay * eraPay * (1 + (c.life?.mastery || 0) * 0.6) // a master of their craft earns more; supporting a big family on a low wage strains it
       }
 
       // ── demographics: form couples, then conceive (logistic growth toward a tech-scaled capacity) ──
@@ -702,11 +707,31 @@ export class World {
         const strain = (c.irritability + p.irritability) * 0.5 + (1 - (c.mental + p.mental) / 200) * 0.5 + incompat * 0.4
         if (Math.random() < strain * 0.012) {
           c.partner = 0; p.partner = 0; c.pregnant = 0
+          feel(c, "afligido", 0.7); feel(p, "afligido", 0.7); bond(c, p.id, -0.5); bond(p, c.id, -0.5) // heartbreak + resentment
           this.logDeed({ day: this.clockDays, gen: c.generation, who: c.id, name: `${c.name} ${c.surname}`, kind: "divorcio", text: `se divorció de ${p.name} ${p.surname}`, impact: -1 })
         }
       }
+      // COURTSHIP: people pair with someone they CLICK with (compatible values, existing warmth, near in age),
+      // not at random — and the union is a small joy (a wedding), not an instant fact
       const singles = wild.filter((c) => isMature(c) && !c.partner && ageYears(c) <= FERTILE_MAX + 10)
-      for (let i = 0; i + 1 < singles.length; i += 2) { if (singles[i].surname === singles[i + 1].surname) continue; singles[i].partner = singles[i + 1].id; singles[i + 1].partner = singles[i].id } // not close kin (surname taboo)
+      const taken = new Set<number>()
+      for (const a of singles) {
+        if (taken.has(a.id)) continue
+        let best: Creature | null = null, bs = -2
+        for (const b of singles) {
+          if (b.id === a.id || taken.has(b.id) || b.surname === a.surname) continue // not close kin (surname taboo)
+          const compat = 1 - Math.abs(a.psyche.five.a - b.psyche.five.a) * 0.6 - (a.religion && a.religion !== b.religion ? 0.3 : 0)
+          const warmth = (a.life?.rels[b.id] || 0) * 1.5, ageGap = Math.abs(ageYears(a) - ageYears(b)) / 22
+          const score = compat + warmth - ageGap + Math.random() * 0.5 // values + warmth + a spark of chemistry
+          if (score > bs) { bs = score; best = b }
+        }
+        if (!best) continue
+        a.partner = best.id; best.partner = a.id; taken.add(a.id); taken.add(best.id)
+        feel(a, "enamorado", 0.85); feel(best, "enamorado", 0.85); bond(a, best.id, 0.7); bond(best, a.id, 0.7)
+        if (a.life?.goalKey === "amor") a.life.goalProg = Math.min(1, a.life.goalProg + 0.5)
+        if (best.life?.goalKey === "amor") best.life.goalProg = Math.min(1, best.life.goalProg + 0.5)
+        this.logDeed({ day: this.clockDays, gen: a.generation, who: a.id, name: `${a.name} ${a.surname}`, kind: "boda", text: `se unió a ${best.name} ${best.surname}`, impact: 3 })
+      }
       const K = Math.min(POP_CAP, 80 + this.era * 7) // carrying capacity grows with the era (technology)
       const growth = Math.max(0.05, Math.min(1, 1.35 * (1 - wild.length / K))) // strong birth drive when few, ~0 near K
       for (const c of wild) {
