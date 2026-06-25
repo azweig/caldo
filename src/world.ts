@@ -308,6 +308,7 @@ export class World {
     if (c.life) {
       c.life.vocFit = 0.5 // recomputed next tick from the new trade
       if (chosen.n === c.heritProf) { c.life.mastery = Math.max(c.life.mastery, 0.22); feel(c, "orgulloso", 0.4) } // raised in the family craft → a head start
+      if (chosen.u) { c.life.mastery = Math.max(c.life.mastery, 0.3); feel(c, "orgulloso", 0.6); c.life.rep = Math.min(1, c.life.rep + 0.1); this.logEvent(`${c.name} ${c.surname} se graduó de ${c.profBase} en la universidad`) } // a university degree
     }
   }
   // a deeply mismatched, unhappy worker may RETRAIN into a trade that fits them better (career change)
@@ -483,6 +484,7 @@ export class World {
   private intentTarget(c: Creature, intent: string): { x: number; y: number } {
     const home = { x: c.home.x + c.home.w / 2, y: c.home.y + c.home.h + 14 }
     const plaza = { x: WORLD_W / 2, y: WORLD_H / 2 } // the town centre, where people gather
+    if (intent === "estudiar" && this.universities[0]) { const u = this.universities[0]; return { x: u.x + u.w / 2, y: u.y + u.h / 2 } }
     if (intent === "descansar") return home
     if (intent === "socializar" || intent === "cortejar") return plaza
     if (intent === "disfrutar") { const g = this.nearestGarden(c); return { x: g.x, y: g.y } } // hobbies happen out in the open
@@ -601,6 +603,9 @@ export class World {
           if (c.energy < GO_FORAGE_AT) c.goingHome = false
           else if (c.energy > GO_HOME_AT) c.goingHome = true
           if (c.life && (this.clockDays + c.id) % 3 === 0) c.life.intent = decideIntent(c)
+          // higher education: a studious young adult enrols at the university to keep learning a trade
+          const ay = ageYears(c)
+          if (c.life && this.universities[0] && ay >= 18 && ay <= 27 && c.psyche.five.c + c.psyche.five.o > 1.05 && c.energy > GO_FORAGE_AT && Math.random() < 0.5) c.life.intent = "estudiar"
           const intent = c.life?.intent || "comer"
           if (c.energy < GO_FORAGE_AT || intent === "comer") { const f = this.nearestFood(c, c.genome.vision * 3); const gd = this.nearestGarden(c); tx = f ? f.x : gd.x; ty = f ? f.y : gd.y }
           else { const t = this.intentTarget(c, intent); tx = t.x; ty = t.y }
@@ -647,9 +652,12 @@ export class World {
           const atSchool = (c.x - (s.x + s.w / 2)) ** 2 + (c.y - (s.y + s.h / 2)) ** 2 < 95 * 95
           const lr = stageOf(ageYears(c)).learnRate // young children absorb fastest
           if (atSchool && c.knowledge < ceiling) c.knowledge = Math.min(ceiling, c.knowledge + 0.11 * g.intellect * learnM * lr)
-        } else if (c.knowledge < ceiling) {
-          // adults keep learning toward the (rising) ceiling — faster in a literate, institution-rich society
-          c.knowledge = Math.min(ceiling, c.knowledge + (0.0014 + 0.004 * this.techBoost.learn) * g.intellect)
+        } else if (c.knowledge < ceiling + 20) {
+          // adults keep learning; a student AT the university learns far faster + can rise ABOVE the common ceiling (higher ed)
+          const u = this.universities[0]
+          const atUni = !!u && (c.x - (u.x + u.w / 2)) ** 2 + (c.y - (u.y + u.h / 2)) ** 2 < 115 * 115
+          const rate = atUni ? 0.06 * g.intellect * learnM : (0.0014 + 0.004 * this.techBoost.learn) * g.intellect
+          c.knowledge = Math.min(ceiling + (atUni ? 20 : 0), c.knowledge + rate)
         }
         // pick a trade when grown up
         if (!c.profBase && isMature(c)) this.assignProfession(c)
@@ -726,6 +734,8 @@ export class World {
     }
     this.creatures = survivors.concat(newborns)
 
+    // a thriving, advanced civilisation founds a SECOND university as it grows
+    if (this.era >= 9 && this.universities.length < 2 && this.creatures.length > 160) this.universities.push({ x: WORLD_W * 0.5 + 90, y: WORLD_H * 0.5 + 70, w: 128, h: 104 })
     if (this.tick % 20 === 0) {
       const wild = this.creatures.filter((c) => !c.isAvatar)
       const n = wild.length || 1
