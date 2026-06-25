@@ -322,6 +322,25 @@ function workplaceOf(c: Creature): { x: number; y: number; name: string } | null
   if (c.profCat === "comida" || c.profCat === "cuidado") { const g = nearestPt(world.gardens, c); return g && { ...g, name: "los campos" } }
   return { x: WORLD_W / 2, y: WORLD_H / 2, name: "la plaza / mercado" }
 }
+// where a person SHOULD be right now — drives their daily rhythm so the town is never frozen
+let routinePhase = 0
+function routineDest(c: Creature, hour: number): { x: number; y: number; sleep: boolean } {
+  const age = ageYears(c)
+  const home = { x: c.home.x + c.home.w / 2, y: c.home.y + c.home.h + 18 }
+  if (hour >= 22 || hour < 7) return { ...home, sleep: true } // night → home, asleep (still)
+  if (hour >= 8 && hour < 17) { // work / school by day
+    if (age >= 6 && age < 18) { const s = nearestPt(world.schools, c); if (s) return { x: s.x + (s.w || 0) / 2, y: s.y + (s.h || 0) + 20, sleep: false } }
+    else if (age >= 18) {
+      if (world.era < 2) { const g = nearestPt(world.gardens, c); if (g) return { x: g.x, y: g.y, sleep: false } } // forage in early eras
+      const wp = workplaceOf(c); if (wp) return { x: wp.x, y: wp.y, sleep: false }
+    }
+    return { ...home, sleep: false }
+  }
+  // morning / evening → leisure: visit a "friend's" house, drifting by the hour
+  const hs = world.houses
+  const f = hs.length ? hs[(c.id * 13 + Math.floor(hour)) % hs.length] : null
+  return f ? { x: f.x + f.w / 2, y: f.y + f.h + 18, sleep: false } : { ...home, sleep: false }
+}
 function studyPlaceOf(c: Creature): { x: number; y: number; name: string } | null {
   const a = ageYears(c)
   if (a >= 6 && a < 18) { const s = nearestPt(world.schools, c); return s && { ...s, name: "la escuela" } }
@@ -731,14 +750,21 @@ function loop() {
     if (steps) worldAffairs(steps)
     if (possessBusy && world.clockMinutes >= possessBusy.until) finishBusy()
   }
-  // everyone walks SMOOTHLY toward whatever they're doing (home/work/forage), not just when you're near.
-  // people right next to you slow down so you can actually talk to them instead of them walking off.
-  if (possessed && !paused) {
+  // DAILY RHYTHM: everyone walks to work/school by day, visits/strolls in the evening, and only goes still
+  // when they're home asleep at night. They mill about once they arrive, so the town is never frozen.
+  if (!paused) {
+    routinePhase += 0.02
+    const hour = hourOf()
     for (const c of world.creatures) {
       if (c === possessed || c.isAvatar || c.controlled) continue
-      const dx = c.x - possessed.x, dy = c.y - possessed.y
-      const k = dx * dx + dy * dy < 95 * 95 ? 0.05 : 0.32
-      c.x += c.vx * k; c.y += c.vy * k
+      const dest = routineDest(c, hour)
+      const dx = dest.x - c.x, dy = dest.y - c.y, d = Math.hypot(dx, dy) || 1
+      let mvx = 0, mvy = 0
+      if (dest.sleep && d < 26) { /* asleep at home → still */ }
+      else if (d > 46) { mvx = (dx / d) * 1.4; mvy = (dy / d) * 1.4 } // commute toward where they should be
+      else { const a = routinePhase * 2 + c.id; mvx = Math.cos(a) * 0.7; mvy = Math.sin(a * 1.4) * 0.7 } // mill about
+      if (possessed) { const px = c.x - possessed.x, py = c.y - possessed.y; if (px * px + py * py < 95 * 95) { mvx *= 0.1; mvy *= 0.1 } } // pause near you so you can talk
+      c.x += mvx; c.y += mvy; c.vx = mvx; c.vy = mvy
     }
   }
   if (avatar && !possessed) avatar.energy = Math.max(60, Math.min(150, avatar.energy)) // immortal observer
