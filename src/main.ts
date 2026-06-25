@@ -262,7 +262,7 @@ function legendsHTML(): string {
       p.works.slice(-3).map((w) => {
         const key = `${w.who}:${w.title}`, r = cachedWork(key)
         const body = r && !r.loading
-          ? `<div class="excerpt">${r.text}${r.image ? `<img class="artimg" src="${r.image}">` : ""}${r.prompt ? `<div class="prompt">🎨 ${r.prompt}</div>` : ""}</div>`
+          ? `<div class="excerpt">${r.text}${r.prompt ? `<div class="prompt">🎨 prompt: ${r.prompt}</div>` : ""}</div>`
           : r && r.loading ? `<div class="excerpt">generando… ✨</div>`
           : `<div class="excerpt">${w.content} <span class="gen">— click para ${w.kind === "libro" ? "leerlo" : "verlo"} 🤖</span></div>`
         return `<div class="work" data-wk="${key}" data-kind="${w.kind}" data-author="${esc(p.name)}" data-title="${esc(w.title)}">${w.kind === "libro" ? "📖" : "🖼️"} <i>${w.text}</i>${body}</div>`
