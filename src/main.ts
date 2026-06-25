@@ -624,6 +624,16 @@ function tryAmbient() {
     .catch(() => { ambientCool = frame + 300 })
 }
 
+// solid houses: you can't walk through a building (you slide along its wall). You MAY step onto your OWN
+// home; everyone else's is closed (the basis for the door/owner-permission system to come).
+function blockedByHouse(x: number, y: number, mover?: Creature): boolean {
+  for (const h of world.houses) {
+    if (mover && mover.home === h) continue
+    if (x > h.x - 12 && x < h.x + h.w + 12 && y > h.y - 12 && y < h.y + h.h + 12) return true
+  }
+  return false
+}
+
 function loop() {
   frame++
   zoom += (targetZoom - zoom) * 0.12 // smooth cinematic zoom toward the target
@@ -631,7 +641,10 @@ function loop() {
   const me = possessed || avatar
   if (me && !chatting && !paused && !possessBusy) { // while working/studying you're frozen on the job
     driveControlled(me)
-    me.x += me.vx; me.y += me.vy
+    // axis-separated collision: houses are SOLID (slide along walls instead of walking through them)
+    const nx = me.x + me.vx, ny = me.y + me.vy
+    if (!blockedByHouse(nx, me.y, me)) me.x = nx; else me.vx *= 0.2
+    if (!blockedByHouse(me.x, ny, me)) me.y = ny; else me.vy *= 0.2
     if (me.vx > 0.05) me.facing = 1; else if (me.vx < -0.05) me.facing = -1
     me.x = clamp(me.x, 60, WORLD_W - 60); me.y = clamp(me.y, 60, WORLD_H - 60)
   }

@@ -476,12 +476,12 @@ export class World {
         if (!isMature(c)) {
           // CHILDREN live with their family — they never roam the world alone. Toddlers stay home;
           // school-age kids go to the school. Adults (16+) leave to forage. (Family feeds the kids.)
-          if (ageYears(c) < 6) { tx = c.home.x; ty = c.home.y }
+          if (ageYears(c) < 6) { tx = c.home.x + c.home.w / 2; ty = c.home.y + c.home.h + 14 }
           else { const s = this.nearestSchool(c); tx = s.x + s.w / 2; ty = s.y + s.h / 2 }
         } else {
           if (c.energy < GO_FORAGE_AT) c.goingHome = false
           else if (c.energy > GO_HOME_AT) c.goingHome = true
-          if (c.goingHome) { tx = c.home.x; ty = c.home.y }
+          if (c.goingHome) { tx = c.home.x + c.home.w / 2; ty = c.home.y + c.home.h + 14 }
           else { const f = this.nearestFood(c, c.genome.vision * 3); const g = this.nearestGarden(c); tx = f ? f.x : g.x; ty = f ? f.y : g.y }
         }
         const [vx, vy] = this.roadSteer(c, tx, ty)
