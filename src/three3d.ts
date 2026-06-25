@@ -10,7 +10,6 @@ const S = 0.045 // world px → 3D units
 let renderer: THREE.WebGLRenderer
 let scene: THREE.Scene
 let camera: THREE.PerspectiveCamera
-let sprites: THREE.Texture[] = []
 let pool: THREE.Sprite[] = []
 let rings: THREE.Mesh[] = []
 let town: THREE.Group | null = null
@@ -18,7 +17,7 @@ let builtFor: World | null = null
 let builtEra = -1 // rebuild the town when the era (architecture) changes
 let ready = false
 
-export function init3D(canvas: HTMLCanvasElement, creatureImgs: HTMLImageElement[]) {
+export function init3D(canvas: HTMLCanvasElement, _creatureImgs: HTMLImageElement[]) {
   if (ready) return
   renderer = new THREE.WebGLRenderer({ canvas, antialias: false })
   renderer.setPixelRatio(Math.min(2, window.devicePixelRatio))
@@ -26,12 +25,8 @@ export function init3D(canvas: HTMLCanvasElement, creatureImgs: HTMLImageElement
   scene.background = new THREE.Color(0x0a0e16)
   scene.fog = new THREE.Fog(0x0a0e16, 55, 240) // see down the street, fade the far horizon
   camera = new THREE.PerspectiveCamera(60, 1, 0.1, 600)
-  scene.add(new THREE.AmbientLight(0x8a9ec0, 0.9))
+  scene.add(new THREE.AmbientLight(0x8a9ec0, 0.95))
   const sun = new THREE.DirectionalLight(0xfff0d8, 0.6); sun.position.set(30, 60, 20); scene.add(sun)
-  sprites = creatureImgs.map((img) => {
-    const t = new THREE.Texture(img); t.needsUpdate = true; t.magFilter = THREE.NearestFilter; t.minFilter = THREE.NearestFilter; t.colorSpace = THREE.SRGBColorSpace
-    return t
-  })
   const ringGeo = new THREE.RingGeometry(0.5, 0.74, 22)
   for (let i = 0; i < 64; i++) {
     const sp = new THREE.Sprite(new THREE.SpriteMaterial({ transparent: true, depthWrite: false })); sp.visible = false; scene.add(sp); pool.push(sp)
@@ -81,6 +76,35 @@ function eraTex(era: number) {
   return { wall: "wall_neon", roof: "roof_metal", ground: "ground_neon" }
 }
 const hashf = (n: number) => { const x = Math.sin(n * 12.9898) * 43758.5453; return x - Math.floor(x) } // stable per-house pseudo-random
+
+// ── people sprites (SDXL-generated, rembg cut-outs) chosen by era + role + sex + a heritable variant ──
+const peopleTex = new Map<string, THREE.Texture>()
+const peopleAspect = new Map<string, number>()
+function loadPerson(name: string): THREE.Texture {
+  let t = peopleTex.get(name)
+  if (!t) {
+    t = loader.load(`/people/${name}.png`, (tx) => { const im = tx.image; if (im && im.width) peopleAspect.set(name, im.width / im.height) })
+    t.colorSpace = THREE.SRGBColorSpace
+    peopleTex.set(name, t)
+  }
+  return t
+}
+function eraTier(era: number): string {
+  if (era <= 1) return "prehist"; if (era <= 4) return "ancient"; if (era <= 7) return "medieval"
+  if (era <= 9) return "renais"; if (era <= 11) return "industrial"; if (era <= 14) return "modern"; return "future"
+}
+function roleOf(c: Creature): string {
+  const cat = c.profCat
+  if (cat === "comercio" || cat === "liderazgo") return "merchant"
+  if (cat === "defensa") return "warrior"
+  if (cat === "saber" || cat === "enseñanza" || cat === "ingeniería" || cat === "arte" || cat === "espíritu" || cat === "salud") return "scholar"
+  return "commoner"
+}
+function personName(c: Creature, era: number): string {
+  const sex = c.id % 2 ? "m" : "f"
+  const v = (c.genome.sprite + c.id) % 2 // heritable (genome) + a touch of individual variation
+  return `${eraTier(era)}_${roleOf(c)}_${sex}_${v}`
+}
 
 function boxBuilding(x: number, y: number, w: number, h: number, height: number, mat: THREE.Material): THREE.Mesh {
   const m = new THREE.Mesh(new THREE.BoxGeometry(w * S, height, h * S), mat)
@@ -147,10 +171,12 @@ export function render3D(world: World, me: Creature, yaw: number, pitch = 0) {
   let i = 0
   const place = (c: Creature, scale: number, ringCol: number) => {
     const sp = pool[i]; sp.visible = true
-    sp.material.map = sprites[c.genome.sprite % sprites.length]; sp.material.needsUpdate = true
-    sp.position.set(c.x * S, scale / 2 + 0.1, c.y * S); sp.scale.set(scale, scale, 1)
+    const name = personName(c, world.era)
+    sp.material.map = loadPerson(name); sp.material.needsUpdate = true
+    const asp = peopleAspect.get(name) ?? 0.5
+    sp.position.set(c.x * S, scale / 2 + 0.05, c.y * S); sp.scale.set(scale * asp, scale, 1) // keep aspect
     const r = rings[i]; r.visible = true; (r.material as THREE.MeshBasicMaterial).color.setHex(ringCol)
-    r.position.set(c.x * S, 0.06, c.y * S); r.scale.setScalar(scale * 0.62)
+    r.position.set(c.x * S, 0.06, c.y * S); r.scale.setScalar(scale * asp * 0.95)
     i++
   }
   place(me, 2.1, 0x46c8ff) // you — cyan ring, larger since the camera is right behind you
