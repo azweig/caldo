@@ -9,6 +9,20 @@ export type WorkResult = { kind: "libro" | "obra"; text: string; prompt?: string
 const cache = new Map<string, WorkResult>()
 export const cachedWork = (key: string) => cache.get(key)
 
+// Stable Diffusion endpoint (the pod). Configurable via localStorage caldo_sd_url.
+const sdUrl = () => (localStorage.getItem("caldo_sd_url") || "https://mfm0k56hwcs9ep-7860.proxy.runpod.net").replace(/\/+$/, "")
+async function paintWork(prompt: string): Promise<string | undefined> {
+  try {
+    const res = await fetch(sdUrl() + "/sdapi/v1/txt2img", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ prompt: prompt + ", a painting, artwork", steps: 18, width: 512, height: 512, cfg_scale: 7, sampler_name: "DPM++ 2M" }),
+    })
+    if (!res.ok) return undefined
+    const j = await res.json()
+    return j.images?.[0] ? `data:image/png;base64,${j.images[0]}` : undefined
+  } catch { return undefined }
+}
+
 export async function composeWork(key: string, kind: "libro" | "obra", author: string, era: string, title: string, lang: LangCode): Promise<WorkResult> {
   const hit = cache.get(key); if (hit && !hit.loading) return hit
   if (!llmConfigured()) { const r: WorkResult = { kind, text: "(conectá la voz IA en ⚙ para leer/ver la obra real)" }; cache.set(key, r); return r }
@@ -27,7 +41,8 @@ export async function composeWork(key: string, kind: "libro" | "obra", author: s
     ])
     const desc = (out.match(/DESC:\s*([\s\S]+?)(?:\nPROMPT:|$)/)?.[1] || out).trim()
     const prompt = (out.match(/PROMPT:\s*([\s\S]+)/)?.[1] || "").trim()
-    const r: WorkResult = { kind, text: desc, prompt }; cache.set(key, r); return r
+    const image = prompt ? await paintWork(prompt) : undefined // actually paint it with Stable Diffusion
+    const r: WorkResult = { kind, text: desc, prompt, image }; cache.set(key, r); return r
   } catch {
     const r: WorkResult = { kind, text: "(no se pudo generar)" }; cache.set(key, r); return r
   }
