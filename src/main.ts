@@ -15,6 +15,7 @@ import { LangCode, WRITE_LANG, langName, heard } from "./i18n"
 import { CivConfig, RELIGIONS, buildCountries, foodSystem, transportOf, transportLevel } from "./civconfig"
 import { init3D, resize3D, render3D, renderInterior, ROOM } from "./three3d"
 import { wealthStats, influentialByGen } from "./society"
+import { composeWork, cachedWork } from "./works"
 
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v))
 
@@ -258,13 +259,29 @@ function legendsHTML(): string {
     `<h3>Generación ${g.gen}</h3>` + g.people.map((p) =>
       `<div class="srow"><span>${p.name}</span><b style="color:${p.impact >= 0 ? "#8fe3a0" : "#e0788a"}">${p.impact >= 0 ? "+" : ""}${p.impact}</b></div>` +
       `<div class="sline">${p.deeds.slice(-3).join(" · ") || "figura de su tiempo"}</div>` +
-      p.works.slice(-3).map((w) => `<div class="work">${w.kind === "libro" ? "📖" : "🖼️"} <i>${w.text}</i><div class="excerpt">${w.content}</div></div>`).join("")
+      p.works.slice(-3).map((w) => {
+        const key = `${w.who}:${w.title}`, r = cachedWork(key)
+        const body = r && !r.loading
+          ? `<div class="excerpt">${r.text}${r.prompt ? `<div class="prompt">🎨 ${r.prompt}</div>` : ""}</div>`
+          : r && r.loading ? `<div class="excerpt">generando… ✨</div>`
+          : `<div class="excerpt">${w.content} <span class="gen">— click para ${w.kind === "libro" ? "leerlo" : "verlo"} 🤖</span></div>`
+        return `<div class="work" data-wk="${key}" data-kind="${w.kind}" data-author="${esc(p.name)}" data-title="${esc(w.title)}">${w.kind === "libro" ? "📖" : "🖼️"} <i>${w.text}</i>${body}</div>`
+      }).join("")
     ).join("")
   ).join("")
 }
+const esc = (s: string) => s.replace(/"/g, "&quot;").replace(/</g, "&lt;")
 function toggleLegends() { if (legendsEl.classList.contains("hidden")) legendsBody.innerHTML = legendsHTML(); legendsEl.classList.toggle("hidden") }
 document.getElementById("legends-close")!.addEventListener("click", () => legendsEl.classList.add("hidden"))
 document.getElementById("legendsbtn")!.addEventListener("click", () => { toggleLegends(); (document.getElementById("legendsbtn") as HTMLElement).blur() })
+legendsBody.addEventListener("click", async (e) => { // click a work → the LLM writes/describes it for real
+  const el = (e.target as HTMLElement).closest(".work") as HTMLElement | null
+  if (!el || !el.dataset.wk || cachedWork(el.dataset.wk)) return
+  const p = composeWork(el.dataset.wk, el.dataset.kind as "libro" | "obra", el.dataset.author!, eraName(world.era), el.dataset.title!, countries[active].lang)
+  legendsBody.innerHTML = legendsHTML() // show "generando…"
+  await p
+  legendsBody.innerHTML = legendsHTML() // show the result
+})
 
 // ── possession (P): take over a creature and play AS them, Sims-style ──
 const possessEl = document.getElementById("possess") as HTMLDivElement

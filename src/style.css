@@ -101,7 +101,11 @@ body { font-family: ui-monospace, "SF Mono", Menlo, monospace; color: #dfe7ee; }
 #legends .srow { display: flex; justify-content: space-between; gap: 12px; font-size: 13px; color: #e6f0fa; }
 #legends .sline { font-size: 11.5px; color: #9fb2c2; line-height: 1.45; margin-bottom: 5px; }
 #legends .work { margin: 4px 0 7px 8px; font-size: 11.5px; color: #cdbf9a; }
+#legends .work { cursor: pointer; }
+#legends .work:hover { color: #ffe6a3; }
 #legends .work .excerpt { color: #8a93a0; font-style: italic; margin-top: 2px; padding-left: 14px; border-left: 2px solid rgba(255,210,128,0.25); }
+#legends .work .excerpt .gen { color: #6f86c0; font-style: normal; }
+#legends .work .prompt { color: #7d9b7d; font-style: normal; font-size: 10.5px; margin-top: 3px; }
 #timebar #legendsbtn { background: rgba(255, 255, 255, 0.08); color: #cfe0ee; border: 1px solid rgba(255, 255, 255, 0.14); border-radius: 7px; width: 28px; height: 26px; cursor: pointer; font-size: 13px; }
 #timebar #legendsbtn:hover { background: rgba(255, 214, 128, 0.2); }
 

@@ -140,14 +140,14 @@ export function wealthStats(w: World) {
 
 // the most INFLUENTIAL people, grouped by generation (by total deed impact), with what they did
 export function influentialByGen(w: World, perGen = 3) {
-  type Work = { kind: string; text: string; content: string }
+  type Work = { kind: "libro" | "obra"; text: string; content: string; who: number; title: string }
   const byPerson = new Map<number, { name: string; gen: number; impact: number; deeds: string[]; works: Work[] }>()
   for (const d of w.deeds) {
     let e = byPerson.get(d.who)
     if (!e) { e = { name: d.name, gen: d.gen, impact: 0, deeds: [], works: [] }; byPerson.set(d.who, e) }
     e.impact += d.impact
     if (["libro", "obra", "negocio", "crimen", "descubrimiento", "sindicato", "subversivo", "reforma", "represión"].includes(d.kind)) e.deeds.push(d.text)
-    if ((d.kind === "libro" || d.kind === "obra") && d.content) e.works.push({ kind: d.kind, text: d.text, content: d.content })
+    if ((d.kind === "libro" || d.kind === "obra") && d.content) e.works.push({ kind: d.kind as "libro" | "obra", text: d.text, content: d.content, who: d.who, title: d.text.match(/«([^»]+)»/)?.[1] || d.text.replace(/^\S+\s/, "") })
   }
   const gens = new Map<number, { name: string; impact: number; deeds: string[]; works: Work[] }[]>()
   for (const e of byPerson.values()) { const a = gens.get(e.gen) || []; a.push(e); gens.set(e.gen, a) }
