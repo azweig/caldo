@@ -553,14 +553,17 @@ export class World {
 
       // ── learning / mental development ──
       if (!c.isAvatar) {
+        // the ceiling RISES with the civilisation's institutions — printing, universities, encyclopaedias,
+        // computers (the learn boosts) push how much a person can learn, so knowledge keeps accelerating
+        const ceiling = this.wisdom + 18 + this.techBoost.learn * 22 + this.universities.length * 14
         if (!isMature(c)) {
           const s = this.nearestSchool(c)
           const atSchool = (c.x - (s.x + s.w / 2)) ** 2 + (c.y - (s.y + s.h / 2)) ** 2 < 95 * 95
-          const ceiling = this.wisdom + 18 // school teaches the FULL curriculum: the village's knowledge + a broad margin
           const lr = stageOf(ageYears(c)).learnRate // young children absorb fastest
           if (atSchool && c.knowledge < ceiling) c.knowledge = Math.min(ceiling, c.knowledge + 0.11 * g.intellect * learnM * lr)
-        } else if (c.knowledge < 100) {
-          c.knowledge += 0.0014 * g.intellect // slow lifelong experience → nudges the village ceiling up (the ratchet)
+        } else if (c.knowledge < ceiling) {
+          // adults keep learning toward the (rising) ceiling — faster in a literate, institution-rich society
+          c.knowledge = Math.min(ceiling, c.knowledge + (0.0014 + 0.004 * this.techBoost.learn) * g.intellect)
         }
         // pick a trade when grown up
         if (!c.profBase && isMature(c)) this.assignProfession(c)
