@@ -168,8 +168,12 @@ function loadBase(name: string) {
     const c = box.getCenter(new THREE.Vector3())
     root.scale.setScalar(s)
     root.position.set(-c.x * s, -box.min.y * s, -c.z * s) // feet at y=0, centred on x/z
-    root.traverse((o) => { // unlit + vertex colours → the characters are always clearly visible, never dark
-      if (o instanceof THREE.Mesh) { const old = o.material as THREE.MeshStandardMaterial; o.material = new THREE.MeshBasicMaterial({ vertexColors: true, map: old.map ?? null }) }
+    root.traverse((o) => { // unlit so they're always clearly visible; use the baked TEXTURE (TRELLIS) not vertex colours
+      if (o instanceof THREE.Mesh) {
+        const old = o.material as THREE.MeshStandardMaterial
+        if (old.map) { old.map.colorSpace = THREE.SRGBColorSpace; o.material = new THREE.MeshBasicMaterial({ map: old.map }) }
+        else o.material = new THREE.MeshBasicMaterial({ vertexColors: true, color: 0xffffff })
+      }
     })
     const wrap = new THREE.Group(); wrap.add(root)
     modelCache.set(name, wrap)

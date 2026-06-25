@@ -23,6 +23,22 @@ const canvas = document.getElementById("world") as HTMLCanvasElement
 const ctx = canvas.getContext("2d")!
 const canvas3d = document.getElementById("world3d") as HTMLCanvasElement
 const speech3d = document.getElementById("speech3d") as HTMLDivElement
+const npccard = document.getElementById("npccard") as HTMLDivElement
+// click a person in 3D → show their card (info + actions) on the left, like you asked
+function showNpcCard(c: Creature | null) {
+  if (!c || !possessed) { npccard.classList.add("hidden"); return }
+  const rel = c.partner === possessed.id ? "💗 tu pareja" : c.surname === possessed.surname ? "💚 familia" : "🤍 vecino/a"
+  const canCourt = isMature(c) && isMature(possessed) && !c.partner && !possessed.partner && c.id % 2 !== possessed.id % 2
+  npccard.innerHTML = `
+    <div class="nc-name">${c.name} ${c.surname}</div>
+    <div class="nc-row">${c.profession || "sin oficio"} · ${Math.round(ageYears(c))} años · ${rel}</div>
+    <div class="nc-row">🧠 ${Math.round(c.mental)} · 😤 ${Math.round(c.irritability * 100)}% · 🍔 ${Math.round(c.energy)}</div>
+    <div class="nc-acts"><button id="nc-talk">💬 Hablar</button>${canCourt ? '<button id="nc-court">💘 Cortejar</button>' : ""}<button id="nc-x">✕</button></div>`
+  npccard.classList.remove("hidden")
+  document.getElementById("nc-talk")!.onclick = () => { showNpcCard(null); openChat(c) }
+  document.getElementById("nc-x")!.onclick = () => showNpcCard(null)
+  const cb = document.getElementById("nc-court"); if (cb) cb.onclick = () => { showNpcCard(null); chatTarget = c; doAction("court") }
+}
 // drag the 3D view to look around (yaw + pitch); a CLICK (no drag) on a person talks to them
 let dragging = false, dragX = 0, dragY = 0, dragDist = 0
 canvas3d.addEventListener("mousedown", (e) => { dragging = true; dragX = e.clientX; dragY = e.clientY; dragDist = 0 })
@@ -30,7 +46,7 @@ window.addEventListener("mouseup", (e) => {
   if (dragging && dragDist < 7 && possessed && !insideHouse && !chatting) {
     const r = canvas3d.getBoundingClientRect()
     const t = pick3D(world, possessed, e.clientX - r.left, e.clientY - r.top, r.width, r.height)
-    if (t) { chatTarget = t; openChat(t) } // click a person → talk to them
+    if (t) { chatTarget = t; showNpcCard(t) } // click a person → show their card (info + actions)
   }
   dragging = false
 })
@@ -804,7 +820,7 @@ function loop() {
     }
     if (!shown) speech3d.style.display = "none"
   } else {
-    speech3d.style.display = "none"
+    speech3d.style.display = "none"; npccard.classList.add("hidden")
     // 2D camera: follow the avatar, clamped to the world (centre an axis smaller than the view)
     const halfW = canvas.width / (2 * zoom), halfH = canvas.height / (2 * zoom)
     let cx = avatar ? avatar.x : WORLD_W / 2
