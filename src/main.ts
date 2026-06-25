@@ -42,10 +42,13 @@ function showNpcCard(c: Creature | null) {
     if (parts) relsRow = `<div class="nc-row">${parts}</div>`
   }
   const dyn = world.dynasty(c.surname)
+  const par = c.parents ? c.parents.map((pid) => world.creatures.find((x) => x.id === pid)).filter(Boolean) : []
+  const parLine = par.length ? `<div class="nc-row">👪 hijo/a de ${par.map((p) => p!.name).join(" y ")}${c.children > 0 ? ` · ${c.children} hijos` : ""}</div>` : c.children > 0 ? `<div class="nc-row">👪 ${c.children} hijos</div>` : ""
   npccard.innerHTML = `
     <div class="nc-name">${c.name} ${c.surname}</div>
     <div class="nc-row">${c.profession || "sin oficio"}${L && L.mastery > 0.6 ? " 🛠️ maestro/a" : L && L.mastery > 0.3 ? " · oficial" : ""} · ${Math.round(ageYears(c))} años · ${rel} ${repTag}</div>
     <div class="nc-row">🏛 casa ${c.surname} · ${dyn.size} ${dyn.size === 1 ? "miembro" : "miembros"}${dyn.rep > 0.3 ? " · linaje admirado" : dyn.rep < -0.3 ? " · linaje en desgracia" : ""}</div>
+    ${parLine}
     ${L ? `<div class="nc-inner">${emo ? emo + " · " : ""}${innerLine(c)}</div>` : ""}
     ${L ? `<div class="nc-row">🎯 ${L.goal} <span class="rbar"><i style="width:${Math.round(L.goalProg * 100)}%"></i></span></div><div class="nc-row">🎨 ${L.hobby} · «${L.quirk}»</div>` : ""}
     ${relsRow}
@@ -832,7 +835,8 @@ function loop() {
         const r = canvas3d.getBoundingClientRect(), p = project3D(line.who.x, line.who.y, r.width, r.height)
         if (p.front) {
           const hd = heard(line.text, countries[active].lang)
-          speech3d.textContent = `${line.who.name}: ${hd.text}`; speech3d.className = hd.understood ? "" : "foreign"
+          const we = line.who.life && line.who.life.emoInt > 0.25 ? (EMO as Record<string, string>)[line.who.life.emotion] || "" : ""
+          speech3d.textContent = `${we} ${line.who.name}: ${hd.text}`.trim(); speech3d.className = hd.understood ? "" : "foreign"
           speech3d.style.left = `${p.x}px`; speech3d.style.top = `${p.y}px`; speech3d.style.display = "block"; shown = true
         }
       }
