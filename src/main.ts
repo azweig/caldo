@@ -41,9 +41,11 @@ function showNpcCard(c: Creature | null) {
     const parts = [fr ? `💚 ${fr.o!.name}` : "", rv ? `💔 ${rv.o!.name}` : ""].filter(Boolean).join(" · ")
     if (parts) relsRow = `<div class="nc-row">${parts}</div>`
   }
+  const dyn = world.dynasty(c.surname)
   npccard.innerHTML = `
     <div class="nc-name">${c.name} ${c.surname}</div>
     <div class="nc-row">${c.profession || "sin oficio"} · ${Math.round(ageYears(c))} años · ${rel} ${repTag}</div>
+    <div class="nc-row">🏛 casa ${c.surname} · ${dyn.size} ${dyn.size === 1 ? "miembro" : "miembros"}${dyn.rep > 0.3 ? " · linaje admirado" : dyn.rep < -0.3 ? " · linaje en desgracia" : ""}</div>
     ${L ? `<div class="nc-inner">${emo ? emo + " · " : ""}${innerLine(c)}</div>` : ""}
     ${L ? `<div class="nc-row">🎯 ${L.goal} <span class="rbar"><i style="width:${Math.round(L.goalProg * 100)}%"></i></span></div><div class="nc-row">🎨 ${L.hobby} · «${L.quirk}»</div>` : ""}
     ${relsRow}

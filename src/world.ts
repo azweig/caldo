@@ -118,6 +118,13 @@ export interface Sample { pop: number; speed: number; vision: number; size: numb
 
 const GIVEN = ["ka", "mu", "ri", "to", "na", "se", "lo", "vi", "za", "po", "ne", "shi", "ru", "ba", "ko", "mi", "te", "la", "do", "fa"]
 const SURNAMES = ["Vdel", "Korr", "Mire", "Saum", "Theli", "Nax", "Orbe", "Pell", "Yuni", "Drav", "Esma", "Quil", "Fenn", "Ulmo", "Razi", "Bhen", "Cira", "Wode", "Junn", "Mola"]
+// when a couple founds their own household the family tree BRANCHES: one line absorbs the other, or a wholly
+// new blended surname is born (a new dynasty). this is what makes lineages split + recombine over generations.
+function foundSurname(a: string, b: string): string {
+  if (Math.random() < 0.5) return a.length >= b.length ? a : b // one line carries on
+  const s = a.slice(0, Math.max(2, Math.ceil(a.length / 2))) + b.slice(Math.floor(b.length / 2)).toLowerCase()
+  return s[0].toUpperCase() + s.slice(1)
+}
 const rnd = <T>(a: T[]): T => a[Math.floor(Math.random() * a.length)]
 function given(): string {
   let s = ""; const n = 2 + Math.floor(Math.random() * 2)
@@ -434,6 +441,12 @@ export class World {
     for (const f of this.food) { const d = (f.x - c.x) ** 2 + (f.y - c.y) ** 2; if (d < bd) { bd = d; best = f } }
     return best
   }
+  // a family line: how many living members share the surname + their collective standing (dynasty reputation)
+  dynasty(surname: string): { size: number; rep: number } {
+    let size = 0, rep = 0
+    for (const c of this.creatures) if (!c.isAvatar && c.surname === surname) { size++; rep += c.life?.rep || 0 }
+    return { size, rep: size ? rep / size : 0 }
+  }
   nearestGarden(c: Creature): Garden {
     let best = this.gardens[0], bd = Infinity
     for (const g of this.gardens) { const d = (g.x - c.x) ** 2 + (g.y - c.y) ** 2; if (d < bd) { bd = d; best = g } }
@@ -749,6 +762,11 @@ export class World {
         if (!best) continue
         a.partner = best.id; best.partner = a.id; taken.add(a.id); taken.add(best.id)
         feel(a, "enamorado", 0.85); feel(best, "enamorado", 0.85); bond(a, best.id, 0.7); bond(best, a.id, 0.7)
+        // they LEAVE their parents to found their own household — the family tree branches into a new line
+        if (this.houses.length < 130 && Math.random() < 0.65) {
+          const sn = foundSurname(a.surname, best.surname); const nh = this.addHouse(sn)
+          if (nh) { a.home = nh; best.home = nh; a.surname = sn; best.surname = sn }
+        }
         if (a.life?.goalKey === "amor") a.life.goalProg = Math.min(1, a.life.goalProg + 0.5)
         if (best.life?.goalKey === "amor") best.life.goalProg = Math.min(1, best.life.goalProg + 0.5)
         this.logDeed({ day: this.clockDays, gen: a.generation, who: a.id, name: `${a.name} ${a.surname}`, kind: "boda", text: `se unió a ${best.name} ${best.surname}`, impact: 3 })
