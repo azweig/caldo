@@ -3,6 +3,7 @@
 // possessed character in third person. The simulation stays in the 2D engine; this only renders.
 
 import * as THREE from "three"
+import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js"
 import { World, Creature, House, WORLD_W, WORLD_H, BLOCK } from "./world"
 
 const S = 0.045 // world px → 3D units
@@ -36,6 +37,7 @@ export function init3D(canvas: HTMLCanvasElement, _creatureImgs: HTMLImageElemen
     r.rotation.x = -Math.PI / 2; r.visible = false; scene.add(r); rings.push(r)
     const sh = new THREE.Mesh(shadowGeo, new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.32 }))
     sh.rotation.x = -Math.PI / 2; sh.visible = false; scene.add(sh); shadows.push(sh) // grounding shadow
+    const mg = new THREE.Group(); mg.visible = false; scene.add(mg); modelPool.push(mg) // holds a 3D character model
   }
   ready = true
 }
@@ -108,6 +110,32 @@ function personName(c: Creature, era: number): string {
   const sex = c.id % 2 ? "m" : "f"
   const v = (c.genome.sprite + c.id) % 2 // heritable (genome) + a touch of individual variation
   return `${eraTier(era)}_${roleOf(c)}_${sex}_${v}`
+}
+// the 3D MODEL is shared across both variants (only era×role×sex were converted to GLB)
+function modelName(c: Creature, era: number): string {
+  const sex = c.id % 2 ? "m" : "f"
+  return `${eraTier(era)}_${roleOf(c)}_${sex}_0`
+}
+
+// ── real 3D character meshes (TripoSR GLBs) with a billboard fallback while a model loads ──
+const gltf = new GLTFLoader()
+const modelCache = new Map<string, THREE.Object3D>()
+const modelLoading = new Set<string>()
+const modelPool: THREE.Group[] = []
+function loadBase(name: string) {
+  if (modelCache.has(name) || modelLoading.has(name)) return
+  modelLoading.add(name)
+  gltf.load(`/glb/${name}.glb`, (g) => {
+    const root = g.scene
+    const box = new THREE.Box3().setFromObject(root)
+    const size = new THREE.Vector3(); box.getSize(size)
+    const s = 1 / (size.y || 1) // normalise to unit height
+    const c = box.getCenter(new THREE.Vector3())
+    root.scale.setScalar(s)
+    root.position.set(-c.x * s, -box.min.y * s, -c.z * s) // feet at y=0, centred on x/z
+    const wrap = new THREE.Group(); wrap.add(root)
+    modelCache.set(name, wrap)
+  }, undefined, () => modelLoading.delete(name))
 }
 
 function boxBuilding(x: number, y: number, w: number, h: number, height: number, mat: THREE.Material): THREE.Mesh {
@@ -189,6 +217,7 @@ export function renderInterior(world: World, me: Creature, h: House, rx: number,
   if (builtFor !== world || builtEra !== world.era) buildTown(world)
   if (intFor !== h || !intGroup) buildInterior(world, h)
   if (town) town.visible = false; intGroup!.visible = true
+  for (const mg of modelPool) mg.visible = false // interior uses billboards
   let i = 0
   const put = (c: Creature, x: number, z: number, scale: number, ringCol: number) => {
     const sp = pool[i]; sp.visible = true; const name = personName(c, world.era)
@@ -222,19 +251,28 @@ export function render3D(world: World, me: Creature, yaw: number, pitch = 0) {
     .slice(0, pool.length - 1)
   let i = 0
   const place = (c: Creature, scale: number, ringCol: number) => {
-    const sp = pool[i]; sp.visible = true
-    const name = personName(c, world.era)
-    sp.material.map = loadPerson(name); sp.material.needsUpdate = true
-    const asp = peopleAspect.get(name) ?? 0.5
-    sp.position.set(c.x * S, scale / 2 + 0.05, c.y * S); sp.scale.set(scale * asp, scale, 1) // keep aspect
     const r = rings[i]; r.visible = true; (r.material as THREE.MeshBasicMaterial).color.setHex(ringCol)
-    r.position.set(c.x * S, 0.06, c.y * S); r.scale.setScalar(scale * asp * 0.95)
-    const sh = shadows[i]; sh.visible = true; sh.position.set(c.x * S, 0.04, c.y * S); sh.scale.setScalar(scale * asp * 0.8) // grounding
+    r.position.set(c.x * S, 0.06, c.y * S); r.scale.setScalar(scale * 0.5)
+    const sh = shadows[i]; sh.visible = true; sh.position.set(c.x * S, 0.04, c.y * S); sh.scale.setScalar(scale * 0.42)
+    const mn = modelName(c, world.era); loadBase(mn)
+    const base = modelCache.get(mn); const slot = modelPool[i]
+    if (base) { // real 3D mesh
+      pool[i].visible = false; slot.visible = true
+      if (slot.userData.name !== mn) { slot.clear(); slot.add(base.clone()); slot.userData.name = mn }
+      slot.position.set(c.x * S, 0, c.y * S); slot.scale.setScalar(scale)
+      if (Math.abs(c.vx) + Math.abs(c.vy) > 0.1) slot.rotation.y = -Math.atan2(c.vy, c.vx) - Math.PI / 2 // face where they walk
+    } else { // billboard fallback while the model loads
+      slot.visible = false
+      const sp = pool[i]; sp.visible = true; const pn = personName(c, world.era)
+      sp.material.map = loadPerson(pn); sp.material.needsUpdate = true
+      const asp = peopleAspect.get(pn) ?? 0.5
+      sp.position.set(c.x * S, scale / 2 + 0.05, c.y * S); sp.scale.set(scale * asp, scale, 1)
+    }
     i++
   }
   place(me, 2.0, 0x46c8ff) // you — cyan ring
   for (const { c } of near) { if (i >= pool.length) break; place(c, 1.3 + c.genome.size * 0.45, relColor(me, c)) }
-  for (; i < pool.length; i++) { pool[i].visible = false; rings[i].visible = false; shadows[i].visible = false }
+  for (; i < pool.length; i++) { pool[i].visible = false; rings[i].visible = false; shadows[i].visible = false; modelPool[i].visible = false }
 
   // GROUND-LEVEL over-the-shoulder camera — yaw from A/D + mouse, pitch from dragging the mouse up/down
   const mx = me.x * S, mz = me.y * S
