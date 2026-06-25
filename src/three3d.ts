@@ -127,9 +127,11 @@ function loadBase(name: string) {
   modelLoading.add(name)
   gltf.load(`/glb/${name}.glb`, (g) => {
     const root = g.scene
+    root.rotation.x = -Math.PI / 2 // TripoSR meshes come out lying down → stand them upright
+    root.updateMatrixWorld(true)
     const box = new THREE.Box3().setFromObject(root)
     const size = new THREE.Vector3(); box.getSize(size)
-    const s = 1 / (size.y || 1) // normalise to unit height
+    const s = 1 / (size.y || 1) // normalise to unit height (now that it's upright)
     const c = box.getCenter(new THREE.Vector3())
     root.scale.setScalar(s)
     root.position.set(-c.x * s, -box.min.y * s, -c.z * s) // feet at y=0, centred on x/z
