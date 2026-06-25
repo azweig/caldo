@@ -13,7 +13,7 @@ import { eraName, professionSpace, ERAS } from "./civ"
 import { ENNEAGRAM } from "./psyche"
 import { LangCode, WRITE_LANG, langName, heard } from "./i18n"
 import { CivConfig, RELIGIONS, buildCountries, foodSystem, transportOf, transportLevel } from "./civconfig"
-import { init3D, resize3D, render3D, renderInterior, ROOM, pick3D } from "./three3d"
+import { init3D, resize3D, render3D, renderInterior, ROOM, pick3D, project3D } from "./three3d"
 import { wealthStats, influentialByGen } from "./society"
 import { composeWork, cachedWork } from "./works"
 
@@ -22,6 +22,7 @@ const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v
 const canvas = document.getElementById("world") as HTMLCanvasElement
 const ctx = canvas.getContext("2d")!
 const canvas3d = document.getElementById("world3d") as HTMLCanvasElement
+const speech3d = document.getElementById("speech3d") as HTMLDivElement
 // drag the 3D view to look around (yaw + pitch); a CLICK (no drag) on a person talks to them
 let dragging = false, dragX = 0, dragY = 0, dragDist = 0
 canvas3d.addEventListener("mousedown", (e) => { dragging = true; dragX = e.clientX; dragY = e.clientY; dragDist = 0 })
@@ -688,7 +689,7 @@ function nearAvatarPair(): [Creature, Creature] | null {
   return null
 }
 function tryAmbient() {
-  if (ambient || chatting || frame < ambientCool || !avatar) return
+  if (ambient || chatting || frame < ambientCool || !(possessed || avatar)) return
   const pair = nearAvatarPair()
   if (!pair) return
   ambientCool = frame + 99999 // lock while generating
@@ -788,7 +789,22 @@ function loop() {
   if (possessed) {
     if (insideHouse) renderInterior(world, possessed, insideHouse, roomX, roomZ, camYaw3d, camPitch3d)
     else render3D(world, possessed, camYaw3d, camPitch3d) // immersive 3D while you live a life
+    // floating speech bubble for overheard chatter
+    let shown = false
+    if (ambient && !insideHouse) {
+      const line = ambient.lines[ambient.idx]
+      if (line && (line.who.x - possessed.x) ** 2 + (line.who.y - possessed.y) ** 2 < OVERHEAR * OVERHEAR) {
+        const r = canvas3d.getBoundingClientRect(), p = project3D(line.who.x, line.who.y, r.width, r.height)
+        if (p.front) {
+          const hd = heard(line.text, countries[active].lang)
+          speech3d.textContent = `${line.who.name}: ${hd.text}`; speech3d.className = hd.understood ? "" : "foreign"
+          speech3d.style.left = `${p.x}px`; speech3d.style.top = `${p.y}px`; speech3d.style.display = "block"; shown = true
+        }
+      }
+    }
+    if (!shown) speech3d.style.display = "none"
   } else {
+    speech3d.style.display = "none"
     // 2D camera: follow the avatar, clamped to the world (centre an axis smaller than the view)
     const halfW = canvas.width / (2 * zoom), halfH = canvas.height / (2 * zoom)
     let cx = avatar ? avatar.x : WORLD_W / 2

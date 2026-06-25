@@ -310,6 +310,12 @@ export function renderInterior(world: World, me: Creature, h: House, rx: number,
 }
 export const ROOM = { W: RW, D: RD }
 
+// world (x,y) → screen pixels, for floating DOM speech bubbles over the 3D view
+export function project3D(wx: number, wy: number, w: number, h: number): { x: number; y: number; front: boolean } {
+  const v = new THREE.Vector3(wx * S, 2.2, wy * S).project(camera)
+  return { x: (v.x * 0.5 + 0.5) * w, y: (-v.y * 0.5 + 0.5) * h, front: v.z < 1 }
+}
+
 // which creature did you click? — project the nearby people to the screen + take the closest to the cursor
 export function pick3D(world: World, me: Creature, sx: number, sy: number, w: number, h: number): Creature | null {
   if (!ready) return null

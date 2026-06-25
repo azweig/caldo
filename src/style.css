@@ -127,6 +127,8 @@ body { font-family: ui-monospace, "SF Mono", Menlo, monospace; color: #dfe7ee; }
 .possess-actions button.dim { opacity: 0.4; }
 .possess-actions button:disabled { cursor: not-allowed; opacity: 0.28; }
 .possess-hint { margin-top: 10px; font-size: 11px; color: #5f7384; text-align: center; }
+#speech3d { position: absolute; display: none; transform: translate(-50%, -100%); background: rgba(10,16,24,0.9); color: #eaf2ff; border: 1px solid rgba(150,180,220,0.35); border-radius: 10px; padding: 5px 10px; font-size: 13px; max-width: 280px; pointer-events: none; z-index: 7; box-shadow: 0 4px 16px rgba(0,0,0,0.4); }
+#speech3d.foreign { color: #9fb0c4; font-style: italic; }
 #pspeed { background: rgba(120,180,255,0.18); border: 1px solid rgba(120,180,255,0.4); color: #cfe2ff; border-radius: 6px; padding: 1px 7px; font: inherit; font-size: 11px; cursor: pointer; }
 #pspeed:hover { background: rgba(120,180,255,0.34); }
 .ptoast { margin-top: 10px; font-size: 12px; color: #ffd76a; text-align: center; background: rgba(255, 214, 128, 0.12); border-radius: 8px; padding: 6px 8px; }
