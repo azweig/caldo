@@ -144,9 +144,11 @@ function personName(c: Creature, era: number): string {
   return `${eraTier(era)}_${roleOf(c)}_${sex}_${v}`
 }
 // the 3D MODEL is shared across both variants (only era×role×sex were converted to GLB)
-function modelName(c: Creature, era: number): string {
-  const sex = c.id % 2 ? "m" : "f"
-  return `${eraTier(era)}_${roleOf(c)}_${sex}_0`
+function modelName(c: Creature, _era: number): string {
+  // TEST: only 4 anime models exist for now → map every creature to one of them by role
+  const role = roleOf(c) // commoner | merchant | scholar | warrior
+  const sex = role === "merchant" || role === "scholar" ? "f" : "m"
+  return `anime_${role}_${sex}`
 }
 
 // ── real 3D character meshes (TripoSR GLBs) with a billboard fallback while a model loads ──
@@ -157,10 +159,9 @@ const modelPool: THREE.Group[] = []
 function loadBase(name: string) {
   if (modelCache.has(name) || modelLoading.has(name)) return
   modelLoading.add(name)
-  gltf.load(`/glb/${name}.glb`, (g) => {
+  gltf.load(`/glb_anime/${name}.glb`, (g) => {
     const root = g.scene
-    root.rotation.x = -Math.PI / 2 // TripoSR meshes come out lying down → stand them upright
-    root.updateMatrixWorld(true)
+    root.updateMatrixWorld(true) // TRELLIS meshes already come upright (Y-up)
     const box = new THREE.Box3().setFromObject(root)
     const size = new THREE.Vector3(); box.getSize(size)
     const s = 1 / (size.y || 1) // normalise to unit height (now that it's upright)
