@@ -5,7 +5,7 @@
 
 import { Genome, randomGenome, recombine } from "./genome"
 import { Psyche, randomPsyche, inheritPsyche } from "./psyche"
-import { Cat, Boosts, Prof, PROFS, TECHS, availableProfs, nextTech, economyOf, professionTitle, eraName } from "./civ"
+import { Cat, Boosts, Prof, Tech, PROFS, TECHS, availableProfs, availableTechs, canAdvanceEra, economyOf, professionTitle, eraName } from "./civ"
 import { pickReligion, EconSystem } from "./civconfig"
 import { genPerson, inheritDark, classify, DarkTriad, Archetype } from "./population"
 import { runSociety } from "./society"
@@ -20,6 +20,19 @@ export const WORLD_H = 1900
 export const BLOCK = 300       // street grid spacing
 export const ROAD_HALF = 20    // half street width
 const MARGIN = 60
+// how strongly a mind/trade fits what a tech needs (drives the emergent discovery rate)
+const INNOV_RATE = 0.55
+const RELATED: Record<string, Cat[]> = {
+  saber: ["enseñanza", "espíritu", "arte"], ingeniería: ["construcción", "oficio"], construcción: ["ingeniería", "oficio"],
+  salud: ["cuidado", "saber"], comida: ["exploración", "cuidado"], exploración: ["comida", "defensa"], comercio: ["liderazgo"],
+  liderazgo: ["comercio", "espíritu"], arte: ["espíritu", "saber"], espíritu: ["arte", "saber"], defensa: ["oficio", "exploración"],
+  oficio: ["construcción", "ingeniería"], enseñanza: ["saber"], cuidado: ["salud", "comida"],
+}
+function driveMatch(cat: Cat | "" | undefined, drive: Cat): number {
+  if (!cat) return 0.45 // a forager with no trade is a curious generalist
+  if (cat === drive) return 2.5 // your life's work
+  return RELATED[drive]?.includes(cat as Cat) ? 1.1 : 0.4
+}
 
 const MATURITY_YEARS = 16
 const REPRO_COOLDOWN = 150  // recovery between pregnancies (gestation is on top) — ~5 months
@@ -142,6 +155,8 @@ export class World {
   discovered = new Set<string>()
   era = 0
   recentTech = ""
+  techProgress = new Map<string, number>() // per-tech effort accumulated by aldeanos working on it
+  techTop = new Map<string, { id: number; name: string; surname: string; prof: string; amt: number }>() // best mind on each
   techBoost: Boosts = { food: 0, health: 0, research: 0, learn: 0, life: 0 }
   econ: Boosts = { food: 0, health: 0, research: 0, learn: 0, life: 0 }
   profCounts: Partial<Record<Cat, number>> = {}
@@ -225,7 +240,7 @@ export class World {
   private applyStartEra(era: number) {
     if (era <= 0) return
     for (const t of TECHS) {
-      if (t.e > era) continue
+      if (t.e >= era) continue // earlier eras are settled; the current era is still to be discovered
       this.discovered.add(t.n)
       if (t.b) { const tb = this.techBoost as unknown as Record<string, number>, nb = t.b as Record<string, number>; for (const k of Object.keys(t.b)) tb[k] += nb[k] }
       if (t.n === "Universidad" && !this.universities.length) this.universities.push({ x: WORLD_W * 0.5 - 64, y: WORLD_H * 0.5 - 54, w: 128, h: 104 })
@@ -272,8 +287,19 @@ export class World {
 
   private logEvent(text: string) { this.chronicle.push({ day: this.clockDays, text }); if (this.chronicle.length > 80) this.chronicle.shift() }
   researchProgress(): { name: string; frac: number } {
-    const nt = nextTech(this.discovered, this.era)
-    return nt ? { name: nt.n, frac: Math.max(0, Math.min(1, this.research / nt.cost)) } : { name: "—", frac: 1 }
+    const avail = availableTechs(this.discovered, this.era)
+    if (!avail.length) return { name: "—", frac: 1 }
+    let best = avail[0], bf = -1 // show whichever idea is closest to a breakthrough
+    for (const t of avail) { const f = (this.techProgress.get(t.n) || 0) / t.cost; if (f > bf) { bf = f; best = t } }
+    return { name: best.n, frac: Math.max(0, Math.min(1, bf)) }
+  }
+  private discoverTech(t: Tech) {
+    this.discovered.add(t.n); this.recentTech = t.n; this.techProgress.delete(t.n)
+    if (t.b) { const tb = this.techBoost as unknown as Record<string, number>, nb = t.b as Record<string, number>; for (const k of Object.keys(t.b)) tb[k] += nb[k] }
+    if (t.n === "Universidad" && !this.universities.length) this.universities.push({ x: WORLD_W * 0.5 - 64, y: WORLD_H * 0.5 - 54, w: 128, h: 104 })
+    const top = this.techTop.get(t.n)
+    this.logEvent(`${top ? `${top.name} ${top.surname} (${top.prof})` : "el pueblo"} ideó ${t.n}`)
+    if (top) this.deeds.push({ day: this.clockDays, gen: this.peakGen, who: top.id, name: top.name, kind: "descubrimiento", text: `ideó ${t.n}`, impact: 16 })
   }
 
   // ── persistence: a civilisation survives reloads until you start a new one ──
@@ -433,25 +459,34 @@ export class World {
     this.tick++; this.clockDays++
     { let n = Math.min(this.foodTarget - this.food.length, 2 + Math.ceil(this.creatures.length * 0.5)); while (n-- > 0) this.scatterFood() } // regrow food fast enough to feed a growing town
 
-    // ── civilisation: research → discoveries (advance the era, boost the economy, unlock professions) ──
-    this.research += this.econ.research * (1 + this.techBoost.research) * 0.5
-    let nt = nextTech(this.discovered, this.era)
-    while (nt && this.research >= nt.cost) {
-      this.research -= nt.cost; this.discovered.add(nt.n); this.recentTech = nt.n
-      if (nt.b) { const tb = this.techBoost as unknown as Record<string, number>, nb = nt.b as Record<string, number>; for (const k of Object.keys(nt.b)) tb[k] += nb[k] }
-      const prevEra = this.era
-      if (nt.e > this.era) this.era = nt.e
-      if (nt.n === "Universidad" && !this.universities.length) this.universities.push({ x: WORLD_W * 0.5 - 64, y: WORLD_H * 0.5 - 54, w: 128, h: 104 })
-      // credit a living scholar as the named inventor, and chronicle it
-      let inv: Creature | null = null
-      for (const c of this.creatures) {
-        if (c.isAvatar || (c.profCat !== "saber" && c.profCat !== "ingeniería" && c.profCat !== "enseñanza")) continue
-        if (!inv || c.knowledge > inv.knowledge) inv = c
+    // ── civilisation: EMERGENT discoveries — real aldeanos get IDEAS and try to BUILD them ──
+    // no global counter: progress on a tech only comes from actual mature, educated, curious individuals
+    // whose mind/trade fits what the tech needs. a town of dim, unschooled people simply doesn't advance.
+    const avail = availableTechs(this.discovered, this.era)
+    if (avail.length) {
+      const minK = 6 + this.era * 3 // you need enough learning to even attempt the era's ideas
+      const boost = 1 + this.techBoost.research * 0.08
+      for (const v of this.creatures) {
+        if (v.isAvatar || !isMature(v) || v.knowledge < minK) continue
+        // this mind is drawn to a tech that fits their trade, and to things near a breakthrough
+        let pick: Tech | null = null, ps = -1
+        for (const t of avail) {
+          const score = driveMatch(v.profCat, t.drive) + ((this.techProgress.get(t.n) || 0) / t.cost) * 0.6
+          if (score > ps) { ps = score; pick = t }
+        }
+        if (!pick) continue
+        const m = driveMatch(v.profCat, pick.drive)
+        if (m < 0.5 && Math.random() > 0.25) continue // outside your field you only dabble
+        const curiosity = 0.7 + (v.archetype === "emprendedor" || v.archetype === "líder" ? 0.5 : 0)
+        const contrib = v.genome.intellect * (v.knowledge / 100) * m * curiosity * boost * INNOV_RATE
+        this.techProgress.set(pick.n, (this.techProgress.get(pick.n) || 0) + contrib)
+        const top = this.techTop.get(pick.n) // remember the most capable mind that worked on it = the inventor
+        if (!top || contrib > top.amt) this.techTop.set(pick.n, { id: v.id, name: v.name, surname: v.surname, prof: v.profession || "aldeano", amt: contrib })
       }
-      this.logEvent(`${inv ? `${inv.name} ${inv.surname} (${inv.profession})` : "el pueblo"} descubrió ${nt.n}`)
-      if (this.era > prevEra) this.logEvent(`✦ amanece la era ${eraName(this.era)}`)
-      nt = nextTech(this.discovered, this.era)
+      for (const t of avail) if ((this.techProgress.get(t.n) || 0) >= t.cost) this.discoverTech(t)
     }
+    // a milestone-gated era advance: all keystones + enough of the era's discoveries (a civ-style tech tree)
+    if (this.era < 18 && canAdvanceEra(this.discovered, this.era)) { this.era++; this.logEvent(`✦ amanece la era ${eraName(this.era)}`) }
     // plague: a rare epidemic that can take the wise and tip the village into a dark age
     if (this.clockDays > this.plagueUntil + 1500 && Math.random() < 0.00012) {
       this.plagueUntil = this.clockDays + 130 + Math.floor(Math.random() * 160)

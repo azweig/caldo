@@ -9,7 +9,7 @@ import { loadAssets } from "./sprites"
 import { drawWorld, drawChart } from "./render"
 import { respond, greeting, remember, ambientDialogue } from "./chat"
 import { Msg, setLlm, pingLLM, autoDetect, llmConfigured, llmUrl, llmModel } from "./llm"
-import { eraName, professionSpace, ERAS } from "./civ"
+import { eraName, professionSpace, ERAS, eraProgress } from "./civ"
 import { ENNEAGRAM } from "./psyche"
 import { LangCode, WRITE_LANG, langName, heard } from "./i18n"
 import { CivConfig, RELIGIONS, buildCountries, foodSystem, transportOf, transportLevel } from "./civconfig"
@@ -588,6 +588,7 @@ function updateHud() {
   const aAge = avatar ? Math.round(ageYears(avatar)) : 0
   const bar = "█".repeat(Math.round(e / 10)).padEnd(13, "·")
   const rp = world.researchProgress()
+  const ep = eraProgress(world.discovered, world.era)
   const relCount: Record<string, number> = {}
   for (const c of wild) if (c.religion) relCount[c.religion] = (relCount[c.religion] || 0) + 1
   const topRel = Object.entries(relCount).sort((a, b) => b[1] - a[1])[0]
@@ -603,6 +604,7 @@ function updateHud() {
     <div class="stat"><span>religión</span> ${topRel ? `${topRel[0]} ${Math.round(100 * topRel[1] / (wild.length || 1))}%` : "—"} · <span>ambiciosos</span> ${psychos}</div>
     <div class="stat"><span>saber 📚</span> ${Math.round(world.wisdom)} · <span>oficios</span> ${professionSpace().toLocaleString()} · <span>univ.</span> ${world.universities.length}</div>
     <div class="stat"><span>investigando</span> ${rp.name} <span class="rbar"><i style="width:${Math.round(rp.frac * 100)}%"></i></span></div>
+    <div class="stat"><span>hitos era</span> ${ep.got}/${ep.total} · 🔑 ${ep.keysGot}/${ep.keys} para avanzar</div>
     ${world.recentTech ? `<div class="stat"><span>💡 último</span> ${world.recentTech}</div>` : ""}
     <div class="stat energy"><span>vos</span> ${aAge}a · ${bar} ${Math.round(e)}</div>
     <div class="hint">${possessed ? `🎭 poseés a <b>${possessed.name}</b> · P para soltar` : (!chatting && chatTarget) ? `▸ <b>E</b> hablar · <b>P</b> poseer a ${chatTarget.name}` : "WASD moverte · E hablar · P poseer · espacio pausa"}</div>
