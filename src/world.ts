@@ -418,7 +418,8 @@ export class World {
       while (b.social.length > 6) b.social.shift()
       // they form a BOND — warmer when their natures click, cooler when they clash or one is manipulative
       const click = ((a.psyche.five.a + b.psyche.five.a) / 2 - 0.4) - Math.abs(a.psyche.five.e - b.psyche.five.e) * 0.25
-      bond(a, b.id, click * 0.07); bond(b, a.id, click * 0.07)
+      const kin = a.surname === b.surname ? 0.08 : 0 // blood ties bind warmer
+      bond(a, b.id, click * 0.07 + kin); bond(b, a.id, click * 0.07 + kin)
       if (a.dark.mach > 0.6 && Math.random() < 0.25) bond(b, a.id, -0.12) // betrayed trust sours the tie
       // GOSSIP: they trade word of a third person, so reputation travels and shapes how others see them
       const third = wild[Math.floor(Math.random() * wild.length)]
@@ -668,6 +669,7 @@ export class World {
             child.religion = Math.random() < 0.85 ? (Math.random() < 0.5 ? c.religion : (mate ? mate.religion : c.religion)) : pickReligion(this.religionsCfg)
             child.powerHungry = Math.random() < this.psychopathy * ((c.powerHungry || (mate && mate.powerHungry)) ? 1.8 : 1)
             child.dark = inheritDark(c.dark, mate ? mate.dark : c.dark); child.archetype = classify(child.psyche.five, child.dark)
+            if (child.life) child.life.rep = (((c.life?.rep || 0) + (mate?.life?.rep || 0)) / 2) * 0.4 // born into the family's standing
             newborns.push(child); this.births++
             if (child.generation > this.peakGen) this.peakGen = child.generation
           }
@@ -687,14 +689,19 @@ export class World {
     const survSet = new Set(survivors.map((c) => c.id))
     for (const dead of this.creatures) {
       if (dead.isAvatar || survSet.has(dead.id)) continue
+      const heirs: Creature[] = [] // their estate passes to the family
       for (const m of survivors) {
         if (!m.life) continue
         const partner = m.partner === dead.id
-        const kin = partner || m.home === dead.home || (dead.parents?.includes(m.id) ?? false) || (m.parents?.includes(dead.id) ?? false)
+        const child = dead.parents?.includes(m.id) || m.parents?.includes(dead.id)
+        const kin = partner || m.home === dead.home || (child ?? false)
         if (!kin) continue
         feel(m, "afligido", partner ? 0.95 : 0.7); m.mental = Math.max(0, m.mental - (partner ? 14 : 7))
         m.life.condition = "duelo"; m.life.condDays = Math.max(m.life.condDays, partner ? 45 : 22)
+        m.social.push(`perdí a ${dead.name} ${dead.surname}`); while (m.social.length > 6) m.social.shift() // they carry the memory
+        if (partner || child) heirs.push(m) // INHERITANCE: estate splits among partner + children
       }
+      if (heirs.length && dead.money > 0) { const share = dead.money / heirs.length; for (const h of heirs) h.money += share }
     }
     this.creatures = survivors.concat(newborns)
 
