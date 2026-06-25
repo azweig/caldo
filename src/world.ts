@@ -285,6 +285,15 @@ export class World {
     const pop = this.profPop[p.n] || 0
     w *= 0.5 + 0.55 * Math.log1p(pop) + (pop > 0 ? 0.4 : 0) // social learning: known trades are easier to enter
     w *= 1 + 1.2 / (1 + (this.profCounts[p.c] || 0)) // village need: under-filled categories pull harder
+    // WHERE you grow up shapes your trade: by the fields → farming; by the university → scholarship; by the plaza → trade
+    const hx = c.home.x + c.home.w / 2, hy = c.home.y + c.home.h / 2
+    const dG = this.gardens.length ? Math.min(...this.gardens.map((g) => (g.x - hx) ** 2 + (g.y - hy) ** 2)) : 1e12
+    const dU = this.universities[0] ? (this.universities[0].x + 64 - hx) ** 2 + (this.universities[0].y - hy) ** 2 : 1e12
+    const dC = (WORLD_W / 2 - hx) ** 2 + (WORLD_H / 2 - hy) ** 2
+    const near = Math.min(dG, dU, dC)
+    if (near === dG && (p.c === "comida" || p.c === "cuidado")) w *= 1.6
+    else if (near === dU && (p.c === "saber" || p.c === "ingeniería" || p.c === "salud")) w *= 1.6
+    else if (near === dC && (p.c === "comercio" || p.c === "liderazgo" || p.c === "arte")) w *= 1.5
     return w
   }
   private assignProfession(c: Creature) {
@@ -296,6 +305,18 @@ export class World {
     for (let i = 0; i < pool.length; i++) { r -= weights[i]; if (r <= 0) { chosen = pool[i]; break } }
     c.profBase = chosen.n; c.profCat = chosen.c
     c.profession = professionTitle(chosen, this.era, c.id)
+    if (c.life) {
+      c.life.vocFit = 0.5 // recomputed next tick from the new trade
+      if (chosen.n === c.heritProf) { c.life.mastery = Math.max(c.life.mastery, 0.22); feel(c, "orgulloso", 0.4) } // raised in the family craft → a head start
+    }
+  }
+  // a deeply mismatched, unhappy worker may RETRAIN into a trade that fits them better (career change)
+  private maybeRetrain(c: Creature) {
+    if (!c.life || !c.profBase || c.life.vocFit > 0.4 || c.mental > 45 || c.life.mastery > 0.5) return
+    if (Math.random() > 0.04) return
+    const prev = c.profBase; c.heritProf = "" // free choice this time
+    c.profBase = ""; c.life.mastery = 0; this.assignProfession(c)
+    if (c.profBase !== prev) { feel(c, "esperanzado", 0.5); this.logEvent(`${c.name} ${c.surname} dejó de ser ${prev} y aprendió ${c.profBase}`) }
   }
 
   private logEvent(text: string) { this.chronicle.push({ day: this.clockDays, text }); if (this.chronicle.length > 80) this.chronicle.shift() }
@@ -736,6 +757,7 @@ export class World {
       for (const c of wild) if (c.profCat && isMature(c)) {
         const pay = c.profCat === "comercio" || c.profCat === "liderazgo" ? 7.5 : c.profCat === "saber" || c.profCat === "ingeniería" ? 6.5 : c.profCat === "salud" ? 6 : 4.5
         c.money += pay * eraPay * (1 + (c.life?.mastery || 0) * 0.6) // a master of their craft earns more; supporting a big family on a low wage strains it
+        this.maybeRetrain(c) // the deeply unhappy may switch trades
       }
 
       // ── demographics: form couples, then conceive (logistic growth toward a tech-scaled capacity) ──
