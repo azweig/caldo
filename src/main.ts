@@ -704,6 +704,14 @@ function loop() {
     if (steps) worldAffairs(steps)
     if (possessBusy && world.clockMinutes >= possessBusy.until) finishBusy()
   }
+  // smooth real-time walking for the people you can SEE in 3D (the once-a-day sim step alone looks frozen)
+  if (possessed && !paused) {
+    for (const c of world.creatures) {
+      if (c === possessed || c.isAvatar || c.controlled) continue
+      const dx = c.x - possessed.x, dy = c.y - possessed.y
+      if (dx * dx + dy * dy < 680 * 680) { c.x += c.vx * 0.3; c.y += c.vy * 0.3 }
+    }
+  }
   if (avatar && !possessed) avatar.energy = Math.max(60, Math.min(150, avatar.energy)) // immortal observer
   if (possessed) possessed.energy = Math.max(0, possessed.energy) // possessed: real hunger you manage (won't die)
   // advance / start overheard chatter

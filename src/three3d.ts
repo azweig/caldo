@@ -24,11 +24,12 @@ export function init3D(canvas: HTMLCanvasElement, _creatureImgs: HTMLImageElemen
   renderer = new THREE.WebGLRenderer({ canvas, antialias: false })
   renderer.setPixelRatio(Math.min(2, window.devicePixelRatio))
   scene = new THREE.Scene()
-  scene.background = new THREE.Color(0x0a0e16)
-  scene.fog = new THREE.Fog(0x0a0e16, 55, 240) // see down the street, fade the far horizon
+  scene.background = new THREE.Color(0x3a4866) // dusk sky, not pitch black
+  scene.fog = new THREE.Fog(0x3a4866, 70, 280) // see down the street, fade the far horizon
   camera = new THREE.PerspectiveCamera(60, 1, 0.1, 600)
-  scene.add(new THREE.AmbientLight(0x8a9ec0, 0.95))
-  const sun = new THREE.DirectionalLight(0xfff0d8, 0.6); sun.position.set(30, 60, 20); scene.add(sun)
+  scene.add(new THREE.AmbientLight(0xffffff, 1.5)) // bright ambient so characters read clearly
+  scene.add(new THREE.HemisphereLight(0xcfe0ff, 0x60543a, 1.1)) // sky/ground fill
+  const sun = new THREE.DirectionalLight(0xfff0d8, 1.0); sun.position.set(30, 60, 20); scene.add(sun)
   const ringGeo = new THREE.RingGeometry(0.5, 0.74, 22)
   const shadowGeo = new THREE.CircleGeometry(0.5, 18)
   for (let i = 0; i < 64; i++) {
@@ -82,6 +83,30 @@ function eraTex(era: number) {
   return { wall: "wall_neon", roof: "roof_metal", ground: "ground_neon" }
 }
 const hashf = (n: number) => { const x = Math.sin(n * 12.9898) * 43758.5453; return x - Math.floor(x) } // stable per-house pseudo-random
+
+// each house picks from a SET of era-appropriate wall/roof materials → the street stops looking uniform
+const matCache = new Map<string, THREE.MeshLambertMaterial>()
+function matFor(name: string): THREE.MeshLambertMaterial {
+  let m = matCache.get(name); if (!m) { m = new THREE.MeshLambertMaterial({ map: tex(name, 2) }); matCache.set(name, m) }
+  return m
+}
+function eraWalls(era: number): string[] {
+  if (era <= 1) return ["wall_mud", "wall_wood"]
+  if (era <= 4) return ["wall_wood", "wall_mud", "wall_plaster"]
+  if (era <= 6) return ["wall_stone", "wall_plaster", "wall_wood"]
+  if (era <= 8) return ["wall_plaster", "wall_stone", "wall_brick"]
+  if (era <= 9) return ["wall_brick", "wall_stone", "wall_concrete"]
+  if (era <= 11) return ["wall_concrete", "wall_brick", "wall_glass"]
+  if (era <= 14) return ["wall_glass", "wall_concrete", "wall_neon"]
+  return ["wall_neon", "wall_glass"]
+}
+function eraRoofs(era: number): string[] {
+  if (era <= 1) return ["roof_thatch"]
+  if (era <= 4) return ["roof_thatch", "roof_shingle"]
+  if (era <= 7) return ["roof_clay", "roof_shingle", "roof_slate"]
+  if (era <= 11) return ["roof_slate", "roof_clay", "roof_metal"]
+  return ["roof_metal", "roof_slate"]
+}
 
 // ── people sprites (SDXL-generated, rembg cut-outs) chosen by era + role + sex + a heritable variant ──
 const peopleTex = new Map<string, THREE.Texture>()
@@ -169,10 +194,11 @@ function buildTown(world: World) {
     disc.rotation.x = -Math.PI / 2; disc.position.set(gd.x * S, 0.05, gd.y * S); town.add(disc)
   }
   // textured houses with per-house VARIETY in height + roof style (deterministic by position → stable)
-  const wallMat = new THREE.MeshLambertMaterial({ map: tex(E.wall, 2) })
-  const roofMat = new THREE.MeshLambertMaterial({ map: tex(E.roof, 2) })
+  const walls = eraWalls(world.era), roofs = eraRoofs(world.era)
   for (const h of world.houses) {
     const r = hashf(h.x + h.y * 0.7)
+    const wallMat = matFor(walls[Math.floor(hashf(h.x * 1.7 + 3) * 997) % walls.length])
+    const roofMat = matFor(roofs[Math.floor(hashf(h.y * 2.3 + 7) * 997) % roofs.length])
     const bh = 3.0 + r * 3.6 // some squat, some tall
     const w = h.w * S * (1.0 + hashf(h.x) * 0.45), d = h.h * S * (1.0 + hashf(h.y) * 0.45)
     const cx = (h.x + h.w / 2) * S, cz = (h.y + h.h / 2) * S
