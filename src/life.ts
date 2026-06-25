@@ -138,6 +138,8 @@ export function lifeTick(c: Creature, partnerAlive: boolean, householdSize: numb
   // ELDERS earn quiet respect for their years + wisdom (their reputation slowly rises)
   const age = c.ageDays / 360
   if (age > 55) L.rep = Math.min(1, L.rep + 0.0006 * Math.min(20, age - 55))
+  // FORGIVENESS: the warm-hearted let old grudges fade; the cold nurse them
+  if (f.a > 0.6) for (const k of Object.keys(L.rels)) { const v = L.rels[+k]; if (v < 0) { L.rels[+k] = Math.min(0, v + 0.012); if (L.rels[+k] > -0.05) delete L.rels[+k] } }
 }
 function goalDrift(c: Creature): number {
   const L = c.life!; switch (L.goalKey) {

@@ -441,7 +441,10 @@ export class World {
       // they form a BOND — warmer when their natures click, cooler when they clash or one is manipulative
       const click = ((a.psyche.five.a + b.psyche.five.a) / 2 - 0.4) - Math.abs(a.psyche.five.e - b.psyche.five.e) * 0.25
       const kin = a.surname === b.surname ? 0.08 : 0 // blood ties bind warmer
-      bond(a, b.id, click * 0.07 + kin); bond(b, a.id, click * 0.07 + kin)
+      const neigh = (a.home.x - b.home.x) ** 2 + (a.home.y - b.home.y) ** 2 < 160 * 160 ? 0.05 : 0 // neighbours grow close
+      if (a.irritability > 0.6 && b.irritability > 0.6 && Math.random() < 0.4) { // two short tempers → a quarrel
+        bond(a, b.id, -0.18); bond(b, a.id, -0.18); feel(a, "enojado", 0.5); feel(b, "enojado", 0.5)
+      } else { bond(a, b.id, click * 0.07 + kin + neigh); bond(b, a.id, click * 0.07 + kin + neigh) }
       if (a.dark.mach > 0.6 && Math.random() < 0.25) bond(b, a.id, -0.12) // betrayed trust sours the tie
       // GOSSIP: they trade word of a third person, so reputation travels and shapes how others see them
       const third = wild[Math.floor(Math.random() * wild.length)]
@@ -779,6 +782,11 @@ export class World {
         if (c.partner || !c.life || c.psyche.five.o < 0.62 || c.money < 18 || this.houses.length >= 130) continue
         const ay = ageYears(c); if (ay < 18 || ay > 30) continue
         if (Math.random() < 0.012) { const nh = this.addHouse(c.surname); if (nh) { c.home = nh; c.money -= 12; feel(c, "esperanzado", 0.6); c.mental = Math.min(100, c.mental + 6); this.logEvent(`${c.name} ${c.surname} dejó la casa familiar para hacer su propia vida`) } }
+      }
+      // FRIENDS HELP each other: someone with means quietly lends a hand to a poor close friend
+      for (const c of wild) {
+        if (!c.life || c.money < 20) continue
+        for (const k of Object.keys(c.life.rels)) if (c.life.rels[+k] > 0.5) { const fr = byId.get(+k); if (fr && fr.money < 4 && Math.random() < 0.3) { fr.money += 6; c.money -= 6; feel(fr, "alegre", 0.4); break } }
       }
 
       // ── demographics: form couples, then conceive (logistic growth toward a tech-scaled capacity) ──
