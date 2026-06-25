@@ -13,6 +13,7 @@ import { eraName, professionSpace, ERAS, eraProgress } from "./civ"
 import { ENNEAGRAM } from "./psyche"
 import { LangCode, WRITE_LANG, langName, heard } from "./i18n"
 import { CivConfig, RELIGIONS, buildCountries, foodSystem, transportOf, transportLevel } from "./civconfig"
+import { ethosOf, cultureReligions } from "./cultures"
 import { init3D, resize3D, render3D, renderInterior, ROOM, pick3D, project3D } from "./three3d"
 import { wealthStats, influentialByGen } from "./society"
 import { composeWork, cachedWork } from "./works"
@@ -594,7 +595,7 @@ function updateHud() {
   const topRel = Object.entries(relCount).sort((a, b) => b[1] - a[1])[0]
   const psychos = wild.filter((c) => c.powerHungry).length
   hud.innerHTML = `
-    <div class="stat"><span>país</span> <b style="color:#fff">${countries[active]?.flag || ""} ${countries[active]?.name || ""}</b> · ${world.gov === "monarquía" ? "👑 monarquía" : "🏛 república"} · ${world.system === "capitalista" ? "💵 capitalista" : world.system === "socialista" ? "🤝 socialista" : "⛓ dictadura"}</div>
+    <div class="stat"><span>pueblo</span> <b style="color:#fff">${countries[active]?.flag || ""} ${countries[active]?.name || ""}</b>${world.cultureEthos ? ` · <i style="color:#cdbf9a">${world.cultureEthos}</i>` : ""} · ${world.gov === "monarquía" ? "👑 monarquía" : "🏛 república"} · ${world.system === "capitalista" ? "💵 capitalista" : world.system === "socialista" ? "🤝 socialista" : "⛓ dictadura"}</div>
     ${world.monarch ? `<div class="stat"><span>monarca</span> ${world.monarch.name} ${world.monarch.surname}${world.monarch.powerHungry ? " (déspota)" : ""}</div>` : ""}
     <div class="stat"><span>población</span> ${wild.length} · <span>familias</span> ${families}</div>
     <div class="stat"><span>edad media</span> ${avgAge}a · <span>enfermos ✚</span> ${sick}</div>
@@ -864,10 +865,20 @@ function startRunning() {
   if (!loopStarted) { loopStarted = true; setScale(scaleIndex); loop() }
 }
 function newGame(cfg: CivConfig) {
-  countries = cfg.countries.map((c, i) => ({
-    name: c.name, flag: c.flag, lang: c.lang,
-    world: new World(spriteCount, i, { startEra: cfg.startEra, religions: cfg.religions, violence: cfg.violence, psychopathy: cfg.psychopathy, gov: c.gov, system: c.system }),
-  }))
+  countries = cfg.countries.map((c, i) => {
+    const eth = ethosOf(c.culture) // the culture decides aggression, faith + which techs they chase
+    return {
+      name: c.name, flag: c.flag, lang: c.lang,
+      world: new World(spriteCount, i, {
+        startEra: cfg.startEra,
+        religions: cultureReligions(c.culture),
+        violence: Math.max(0, Math.min(1, eth.aggression * (0.7 + cfg.violence))),
+        psychopathy: Math.max(cfg.psychopathy, eth.psycho),
+        gov: c.gov, system: c.system,
+        culture: { name: c.culture.name, ethos: c.culture.ethos, bias: eth.bias },
+      }),
+    }
+  })
   active = 0; world = countries[0].world; avatar = world.addAvatar()
   startRunning(); saveGame()
 }

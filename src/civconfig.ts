@@ -4,9 +4,10 @@
 // behaves accordingly (a stone-age civ has no tech and lives off foraging; a modern one is industrial).
 
 import { LangCode } from "./i18n"
+import { Culture, CULTURES } from "./cultures"
 
 export type Gov = "monarquía" | "república"
-export interface CountryCfg { name: string; flag: string; gov: Gov; lang: LangCode; system: EconSystem }
+export interface CountryCfg { name: string; flag: string; gov: Gov; lang: LangCode; system: EconSystem; culture: Culture }
 export interface CivConfig {
   startEra: number
   religions: { name: string; pct: number }[] // weights (need not sum to 100)
@@ -41,9 +42,6 @@ export const TRANSPORT = [
 export function transportOf(era: number): string { return TRANSPORT[Math.max(0, Math.min(TRANSPORT.length - 1, era))] }
 export function transportLevel(era: number): number { return Math.max(0, Math.min(6, Math.floor(era / 3))) } // 0..6 reach between countries
 
-const NAME_POOL = ["Solandia", "Norvik", "Akahara", "Verdane", "Kessaria", "Tolmir", "Bramwell", "Yssel", "Drennan", "Mokoa", "Ulania", "Pravik", "Caldoria", "Ostmark"]
-const FLAGS = ["🟧", "🔵", "🟣", "🟢", "🔴", "🟡", "⚪", "🟤", "🔶", "🔷", "🟩", "🟥", "🟦", "🟪"]
-
 export type EconSystem = "capitalista" | "socialista" | "dictadura"
 export const ECON_SYSTEMS: EconSystem[] = ["capitalista", "socialista", "dictadura"]
 
@@ -51,11 +49,14 @@ export function buildCountries(monarchies: number, republics: number): CountryCf
   const out: CountryCfg[] = []
   // a monarchy leans authoritarian (dictatorship); republics alternate capitalist / socialist — for variety
   const sysFor = (gov: Gov, i: number): EconSystem => gov === "monarquía" ? "dictadura" : (i % 2 ? "socialista" : "capitalista")
-  const add = (gov: Gov, i: number) => out.push({ name: NAME_POOL[i % NAME_POOL.length], flag: FLAGS[i % FLAGS.length], gov, lang: (i % 2 ? "en" : "es") as LangCode, system: sysFor(gov, i) })
+  const pool = [...CULTURES].sort(() => Math.random() - 0.5) // each town gets a RANDOM distinct culture
+  const add = (gov: Gov, i: number) => { const cul = pool[i % pool.length]; out.push({ name: cul.name, flag: cul.flag, gov, lang: (i % 2 ? "en" : "es") as LangCode, system: sysFor(gov, i), culture: cul }) }
   let i = 0
   for (let m = 0; m < monarchies; m++) add("monarquía", i++)
   for (let r = 0; r < republics; r++) add("república", i++)
-  return out.length ? out.slice(0, 6) : [{ name: "Solandia", flag: "🟧", gov: "república", lang: "es", system: "capitalista" }, { name: "Norvik", flag: "🔵", gov: "monarquía", lang: "en", system: "dictadura" }]
+  if (out.length) return out.slice(0, 6)
+  const a = pool[0], b = pool[1]
+  return [{ name: a.name, flag: a.flag, gov: "república", lang: "es", system: "capitalista", culture: a }, { name: b.name, flag: b.flag, gov: "monarquía", lang: "en", system: "dictadura", culture: b }]
 }
 
 export function defaultConfig(): CivConfig {

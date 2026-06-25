@@ -110,7 +110,7 @@ export interface Creature {
 // a notable act, logged so we can later rank the most INFLUENTIAL people per generation
 export interface Deed { day: number; gen: number; who: number; name: string; kind: string; text: string; impact: number; content?: string }
 
-export interface WorldOpts { startEra: number; religions: { name: string; pct: number }[]; violence: number; psychopathy: number; gov: "monarquía" | "república"; system?: EconSystem }
+export interface WorldOpts { startEra: number; religions: { name: string; pct: number }[]; violence: number; psychopathy: number; gov: "monarquía" | "república"; system?: EconSystem; culture?: { name: string; ethos: string; bias: Partial<Record<Cat, number>> } }
 
 export interface Sample { pop: number; speed: number; vision: number; size: number; metabolism: number; intellect: number; knowledge: number }
 
@@ -155,6 +155,9 @@ export class World {
   discovered = new Set<string>()
   era = 0
   recentTech = ""
+  cultureName = "" // this town's people (Inca, Azteca, …) — shapes which techs they're drawn to + how fast
+  cultureEthos = "" // their way of being (guerrera, sacerdotal, mercante, …)
+  cultureBias: Partial<Record<Cat, number>> = {} // per-driver innovation multiplier (their evolution path)
   techProgress = new Map<string, number>() // per-tech effort accumulated by aldeanos working on it
   techTop = new Map<string, { id: number; name: string; surname: string; prof: string; amt: number }>() // best mind on each
   techBoost: Boosts = { food: 0, health: 0, research: 0, learn: 0, life: 0 }
@@ -191,6 +194,7 @@ export class World {
     if (opts) {
       this.gov = opts.gov; this.violence = opts.violence; this.psychopathy = opts.psychopathy; this.system = opts.system ?? this.system
       this.religionsCfg = opts.religions.length ? opts.religions : this.religionsCfg
+      if (opts.culture) { this.cultureName = opts.culture.name; this.cultureEthos = opts.culture.ethos; this.cultureBias = opts.culture.bias }
     }
     if (skipSeed) return // fromState() will populate everything
 
@@ -306,11 +310,12 @@ export class World {
   toState() {
     const hi = new Map<House, number>(); this.houses.forEach((h, i) => hi.set(h, i))
     const C = (c: Creature) => ({ id: c.id, x: c.x, y: c.y, e: c.energy, ad: c.ageDays, ls: c.lifespanDays, gen: c.generation, nm: c.name, sn: c.surname, h: hi.get(c.home) ?? 0, k: c.knowledge, pf: c.profession, pb: c.profBase, pc: c.profCat, hp: c.heritProf, sick: c.sick, ch: c.children, par: c.parents, rel: c.religion, pw: c.powerHungry, g: c.genome, ps: c.psyche, mem: c.memory, soc: c.social, gh: c.goingHome, pt: c.partner, pg: c.pregnant, mny: c.money, dk: c.dark, arc: c.archetype, crm: c.crimes, biz: c.business, hl: c.health, mt: c.mental, ir: c.irritability })
-    return { region: this.region, gov: this.gov, system: this.system, era: this.era, clockDays: this.clockDays, clockMinutes: this.clockMinutes, tick: this.tick, research: this.research, discovered: [...this.discovered], techBoost: this.techBoost, wisdom: this.wisdom, births: this.births, deaths: this.deaths, peakGen: this.peakGen, plagueUntil: this.plagueUntil, violence: this.violence, psychopathy: this.psychopathy, religionsCfg: this.religionsCfg, chronicle: this.chronicle.slice(-60), houses: this.houses, gardens: this.gardens, schools: this.schools, universities: this.universities, airport: this.airport, monarch: this.monarch?.id ?? null, deeds: this.deeds.slice(-300), creatures: this.creatures.filter((c) => !c.isAvatar).map(C) }
+    return { region: this.region, gov: this.gov, system: this.system, era: this.era, cultureName: this.cultureName, cultureEthos: this.cultureEthos, cultureBias: this.cultureBias, clockDays: this.clockDays, clockMinutes: this.clockMinutes, tick: this.tick, research: this.research, discovered: [...this.discovered], techBoost: this.techBoost, wisdom: this.wisdom, births: this.births, deaths: this.deaths, peakGen: this.peakGen, plagueUntil: this.plagueUntil, violence: this.violence, psychopathy: this.psychopathy, religionsCfg: this.religionsCfg, chronicle: this.chronicle.slice(-60), houses: this.houses, gardens: this.gardens, schools: this.schools, universities: this.universities, airport: this.airport, monarch: this.monarch?.id ?? null, deeds: this.deeds.slice(-300), creatures: this.creatures.filter((c) => !c.isAvatar).map(C) }
   }
   static fromState(s: any, spriteCount: number): World {
     const w = new World(spriteCount, s.region, undefined, true)
     w.gov = s.gov; w.system = s.system || "capitalista"; w.era = s.era; w.clockDays = s.clockDays; w.clockMinutes = s.clockMinutes ?? s.clockDays * 1440; w.tick = s.tick; w.research = s.research
+    w.cultureName = s.cultureName || ""; w.cultureEthos = s.cultureEthos || ""; w.cultureBias = s.cultureBias || {}
     w.discovered = new Set<string>(s.discovered || []); w.techBoost = s.techBoost; w.wisdom = s.wisdom
     w.births = s.births; w.deaths = s.deaths; w.peakGen = s.peakGen; w.plagueUntil = s.plagueUntil
     w.violence = s.violence; w.psychopathy = s.psychopathy; w.religionsCfg = s.religionsCfg
@@ -471,14 +476,15 @@ export class World {
         // this mind is drawn to a tech that fits their trade, and to things near a breakthrough
         let pick: Tech | null = null, ps = -1
         for (const t of avail) {
-          const score = driveMatch(v.profCat, t.drive) + ((this.techProgress.get(t.n) || 0) / t.cost) * 0.6
+          // their trade-fit + how close it is to done + their CULTURE's leaning toward this kind of tech
+          const score = driveMatch(v.profCat, t.drive) + ((this.techProgress.get(t.n) || 0) / t.cost) * 0.6 + ((this.cultureBias[t.drive] ?? 1) - 1) * 0.7
           if (score > ps) { ps = score; pick = t }
         }
         if (!pick) continue
         const m = driveMatch(v.profCat, pick.drive)
         if (m < 0.5 && Math.random() > 0.25) continue // outside your field you only dabble
         const curiosity = 0.7 + (v.archetype === "emprendedor" || v.archetype === "líder" ? 0.5 : 0)
-        const contrib = v.genome.intellect * (v.knowledge / 100) * m * curiosity * boost * INNOV_RATE
+        const contrib = v.genome.intellect * (v.knowledge / 100) * m * curiosity * boost * INNOV_RATE * (this.cultureBias[pick.drive] ?? 1)
         this.techProgress.set(pick.n, (this.techProgress.get(pick.n) || 0) + contrib)
         const top = this.techTop.get(pick.n) // remember the most capable mind that worked on it = the inventor
         if (!top || contrib > top.amt) this.techTop.set(pick.n, { id: v.id, name: v.name, surname: v.surname, prof: v.profession || "aldeano", amt: contrib })
