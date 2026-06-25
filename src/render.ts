@@ -8,6 +8,27 @@ import { TRAIT_BOUNDS } from "./genome"
 
 export interface Cam { x: number; y: number; zoom: number }
 
+// the 2D view now uses the SAME generated characters as the 3D (so they match) + pixel-art house sprites
+const imgCache = new Map<string, HTMLImageElement>()
+function pix(path: string): HTMLImageElement {
+  let im = imgCache.get(path); if (!im) { im = new Image(); im.src = path; imgCache.set(path, im) }
+  return im
+}
+function eraTier2D(era: number): string {
+  if (era <= 1) return "prehist"; if (era <= 4) return "ancient"; if (era <= 7) return "medieval"
+  if (era <= 9) return "renais"; if (era <= 11) return "industrial"; if (era <= 14) return "modern"; return "future"
+}
+function roleOf2D(c: Creature): string {
+  const cat = c.profCat
+  if (cat === "comercio" || cat === "liderazgo") return "merchant"
+  if (cat === "defensa") return "warrior"
+  if (cat === "saber" || cat === "enseñanza" || cat === "ingeniería" || cat === "arte" || cat === "espíritu" || cat === "salud") return "scholar"
+  return "commoner"
+}
+function personImg(c: Creature, era: number): HTMLImageElement {
+  return pix(`/people/${eraTier2D(era)}_${roleOf2D(c)}_${c.id % 2 ? "m" : "f"}_${(c.genome.sprite + c.id) % 2}.png`)
+}
+
 let vehT = 0 // real-time animation clock for vehicles (so they move even when the world is slow)
 const seedR = (s: number) => { const x = Math.sin(s) * 43758.5453; return x - Math.floor(x) }
 // vehicles appear with the era: carts (3+), trains (9+), cars (10+), planes (11+). Decorative, on roads.
@@ -101,20 +122,16 @@ export function drawWorld(
   }
 
   // houses
+  const hImg = pix(`/pix_houses/${eraTier2D(world.era)}.png`)
   for (const h of world.houses) {
     const n = present.get(h) || 0
-    ctx.fillStyle = `hsl(${h.hue}, 30%, ${n > 0 ? 43 : 35}%)`
-    ctx.fillRect(h.x, h.y, h.w, h.h)
-    // windows — warm + lit when someone's home, dark otherwise
-    ctx.fillStyle = n > 0 ? "rgba(255,212,128,0.92)" : "rgba(16,26,36,0.85)"
-    ctx.fillRect(h.x + 9, h.y + 13, 13, 12)
-    ctx.fillRect(h.x + h.w - 22, h.y + 13, 13, 12)
-    // roof
-    ctx.fillStyle = `hsl(${h.hue}, 38%, 27%)`
-    ctx.beginPath(); ctx.moveTo(h.x - 5, h.y); ctx.lineTo(h.x + h.w + 5, h.y); ctx.lineTo(h.x + h.w / 2, h.y - 22); ctx.closePath(); ctx.fill()
-    // door — glows if occupied
-    ctx.fillStyle = n > 0 ? "rgba(255,200,110,0.55)" : "rgba(0,0,0,0.5)"
-    ctx.fillRect(h.x + h.w / 2 - 7, h.y + h.h - 17, 14, 17)
+    if (hImg.naturalWidth > 0) { // pixel-art house sprite, sized to the lot (roof rises above)
+      const hw = h.w * 1.7, hh = hw * (hImg.naturalHeight / hImg.naturalWidth)
+      ctx.imageSmoothingEnabled = false; ctx.globalAlpha = n > 0 ? 1 : 0.82
+      ctx.drawImage(hImg, h.x + h.w / 2 - hw / 2, h.y + h.h - hh, hw, hh); ctx.globalAlpha = 1
+    } else { // fallback rectangle until the sprite loads
+      ctx.fillStyle = `hsl(${h.hue}, 30%, ${n > 0 ? 43 : 35}%)`; ctx.fillRect(h.x, h.y, h.w, h.h)
+    }
     // head-count badge
     if (n > 0) {
       const txt = `👥 ${n}`
@@ -172,7 +189,7 @@ export function drawWorld(
   }
 
   // creatures
-  for (const c of world.creatures) { if (!c.isAvatar) drawCreature(ctx, c, assets) }
+  for (const c of world.creatures) { if (!c.isAvatar) drawCreature(ctx, c, world.era) }
 
   if (chatTarget) {
     ctx.strokeStyle = "rgba(120,200,255,0.18)"; ctx.lineWidth = 1
@@ -192,7 +209,7 @@ export function drawWorld(
   if (avatar) {
     ctx.strokeStyle = "#ffd76a"; ctx.lineWidth = 2.5
     ctx.beginPath(); ctx.arc(avatar.x, avatar.y, 20 + avatar.genome.size * 8, 0, Math.PI * 2); ctx.stroke()
-    drawCreature(ctx, avatar, assets)
+    drawCreature(ctx, avatar, world.era)
     label(ctx, "Tú", avatar.x, avatar.y - 24 - avatar.genome.size * 10, "#ffe6a3")
   }
 
@@ -241,10 +258,10 @@ function drawMinimap(ctx: CanvasRenderingContext2D, world: World, avatar: Creatu
   ctx.strokeRect(ox + (cam.x - halfW) * sx, oy + (cam.y - halfH) * sy, 2 * halfW * sx, 2 * halfH * sy)
 }
 
-function drawCreature(ctx: CanvasRenderingContext2D, c: Creature, assets: Assets) {
-  const img = assets.creatures[c.genome.sprite % assets.creatures.length]
+function drawCreature(ctx: CanvasRenderingContext2D, c: Creature, era: number) {
+  const img = personImg(c, era)
   const ageScale = c.isAvatar || isMature(c) ? 1 : 0.5 + 0.5 * Math.min(1, ageYears(c) / 16)
-  const w = (22 + c.genome.size * 18) * ageScale
+  const w = (24 + c.genome.size * 16) * ageScale
   // inside their own house → drawn faint (they "went in"; the lit windows represent them)
   const hh = c.home
   const indoors = !c.isAvatar && c.x > hh.x - 2 && c.x < hh.x + hh.w + 2 && c.y > hh.y - 8 && c.y < hh.y + hh.h + 2
@@ -260,7 +277,7 @@ function drawCreature(ctx: CanvasRenderingContext2D, c: Creature, assets: Assets
   ctx.globalAlpha = (c.isAvatar ? 1 : Math.max(0.45, Math.min(1, c.energy / 70))) * dim
   ctx.translate(c.x, c.y)
   if (c.facing < 0) ctx.scale(-1, 1)
-  if (img && img.naturalWidth > 0) { ctx.imageSmoothingEnabled = false; ctx.drawImage(img, -w / 2, -w, w, w) }
+  if (img && img.naturalWidth > 0) { ctx.imageSmoothingEnabled = true; const ph = w * 1.7; ctx.drawImage(img, -w / 2, -ph, w, ph) } // full-body, feet on the ground
   else { ctx.fillStyle = `hsl(${c.genome.hue}, 60%, 60%)`; ctx.beginPath(); ctx.arc(0, -w / 2, w / 2, 0, Math.PI * 2); ctx.fill() }
   ctx.restore()
 
