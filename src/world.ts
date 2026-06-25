@@ -402,11 +402,11 @@ export class World {
   // the town GROWS: build a house in a free lot (the world stops being static as the population rises)
   private addHouse(surname: string): House | null {
     const cols = Math.floor(WORLD_W / BLOCK), rows = Math.floor(WORLD_H / BLOCK)
-    for (let t = 0; t < 14; t++) {
-      const cx = BLOCK * (1 + Math.floor(Math.random() * (cols - 1))) + BLOCK / 2 + (Math.random() * 40 - 20)
-      const cy = BLOCK * (1 + Math.floor(Math.random() * (rows - 1))) + BLOCK / 2 + (Math.random() * 30 - 15)
+    for (let t = 0; t < 36; t++) {
+      const cx = BLOCK * (1 + Math.floor(Math.random() * (cols - 1))) + BLOCK / 2 + (Math.random() * 56 - 28)
+      const cy = BLOCK * (1 + Math.floor(Math.random() * (rows - 1))) + BLOCK / 2 + (Math.random() * 44 - 22)
       let ok = true
-      for (const h of this.houses) if ((h.x + h.w / 2 - cx) ** 2 + (h.y + h.h / 2 - cy) ** 2 < 86 * 86) { ok = false; break }
+      for (const h of this.houses) if ((h.x + h.w / 2 - cx) ** 2 + (h.y + h.h / 2 - cy) ** 2 < 66 * 66) { ok = false; break }
       if (ok) { const h: House = { x: cx - 29, y: cy - 25, w: 58, h: 50, surname, hue: (this.houses.length * 47) % 360 }; this.houses.push(h); return h }
     }
     return null
