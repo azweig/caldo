@@ -102,7 +102,10 @@ export function runSociety(w: World, wild: Creature[]) {
       if (lawKey === "robo") { const loot = Math.min(Math.max(0, victim.money), 10 + price * 5); victim.money -= loot; c.money += loot }
       w.logDeed({ day: w.clockDays, gen: c.generation, who: c.id, name: `${c.name} ${c.surname}`, kind: "crimen", text: lawKey === "inmoralidad" ? "cometió adulterio" : `robó a ${victim.name} ${victim.surname}`, impact: -4 })
       if (c.life) c.life.rep = Math.max(-1, c.life.rep - 0.2)
-      feel(victim, "enojado", 0.7); bond(victim, c.id, -0.6) // the victim resents the thief
+      if (lawKey === "inmoralidad") { // an affair — the betrayed partner burns with jealousy
+        const sp = w.creatures.find((o) => o.id === c.partner)
+        if (sp?.life && Math.random() < 0.5) { feel(sp, "celoso", 0.85); sp.mental = Math.max(0, sp.mental - 10); bond(sp, c.id, -0.7); if (Math.random() < 0.5) { sp.partner = 0; c.partner = 0; sp.pregnant = 0 } }
+      } else { feel(victim, "enojado", 0.7); bond(victim, c.id, -0.6) } // the victim resents the thief
       if (caught) { c.money -= price * 10 * (0.4 + 0.6 * law.severity); w.logDeed({ day: w.clockDays, gen: c.generation, who: c.id, name: `${c.name} ${c.surname}`, kind: "justicia", text: "multado por el tribunal", impact: 0 }) }
     }
   }

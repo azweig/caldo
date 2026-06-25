@@ -34,11 +34,19 @@ function showNpcCard(c: Creature | null) {
   const L = c.life
   const emo = L && L.emoInt > 0.2 && L.emotion !== "neutral" ? `${(EMO as Record<string, string>)[L.emotion] || ""} ${L.emotion}` : ""
   const repTag = L ? (L.rep > 0.35 ? "🌟 admirado/a" : L.rep < -0.35 ? "⚠️ mal visto/a" : "") : ""
+  let relsRow = ""
+  if (L && Object.keys(L.rels).length) {
+    const es = Object.entries(L.rels).map(([id, v]) => ({ o: world.creatures.find((x) => x.id === +id), v })).filter((e) => e.o)
+    const fr = es.filter((e) => e.v > 0.3).sort((a, b) => b.v - a.v)[0], rv = es.filter((e) => e.v < -0.3).sort((a, b) => a.v - b.v)[0]
+    const parts = [fr ? `💚 ${fr.o!.name}` : "", rv ? `💔 ${rv.o!.name}` : ""].filter(Boolean).join(" · ")
+    if (parts) relsRow = `<div class="nc-row">${parts}</div>`
+  }
   npccard.innerHTML = `
     <div class="nc-name">${c.name} ${c.surname}</div>
     <div class="nc-row">${c.profession || "sin oficio"} · ${Math.round(ageYears(c))} años · ${rel} ${repTag}</div>
     ${L ? `<div class="nc-inner">${emo ? emo + " · " : ""}${innerLine(c)}</div>` : ""}
     ${L ? `<div class="nc-row">🎯 ${L.goal} <span class="rbar"><i style="width:${Math.round(L.goalProg * 100)}%"></i></span></div><div class="nc-row">🎨 ${L.hobby} · «${L.quirk}»</div>` : ""}
+    ${relsRow}
     <div class="nc-row">🧠 ${Math.round(c.mental)} · 😤 ${Math.round(c.irritability * 100)}% · 🍔 ${Math.round(c.energy)}${L && L.condition ? ` · <b style="color:#d68">${L.condition}</b>` : ""}</div>
     <div class="nc-acts"><button id="nc-talk">💬 Hablar</button>${canCourt ? '<button id="nc-court">💘 Cortejar</button>' : ""}<button id="nc-x">✕</button></div>`
   npccard.classList.remove("hidden")

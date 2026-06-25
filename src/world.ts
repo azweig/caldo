@@ -622,6 +622,7 @@ export class World {
       // gestation → BIRTH (pairing + conception happen in the periodic demographics block below)
       if (!c.isAvatar && c.pregnant > 0) {
         c.pregnant--
+        if (c.life && Math.random() < 0.02) feel(c, "esperanzado", 0.45) // carrying a life, full of hope
         if (c.pregnant <= 0 && this.creatures.length + newborns.length < POP_CAP) {
           const mate = byId.get(c.partner)
           const mateG = mate ? mate.genome : randomGenome(this.spriteCount), mateP = mate ? mate.psyche : randomPsyche() // unknown father if out of wedlock
