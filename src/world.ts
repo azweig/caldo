@@ -451,6 +451,11 @@ export class World {
       if (third !== a && third !== b && third.life && Math.abs(third.life.rep) > 0.15) {
         bond(a, third.id, third.life.rep * 0.04); bond(b, third.id, third.life.rep * 0.04)
       }
+      // MENTORSHIP: when a master and a novice of the same trade meet, the novice learns the craft
+      if (a.profCat && a.profCat === b.profCat && a.life && b.life) {
+        const jr = a.life.mastery < b.life.mastery ? a : b, sr = jr === a ? b : a
+        if ((sr.life!.mastery - jr.life!.mastery) > 0.2) { jr.life!.mastery = Math.min(1, jr.life!.mastery + 0.012); jr.social.push(`aprendí del oficio con ${sr.name}`); while (jr.social.length > 6) jr.social.shift() }
+      }
     }
   }
 
@@ -566,7 +571,11 @@ export class World {
       for (const t of avail) if ((this.techProgress.get(t.n) || 0) >= t.cost) this.discoverTech(t)
     }
     // a milestone-gated era advance: all keystones + enough of the era's discoveries (a civ-style tech tree)
-    if (this.era < 18 && canAdvanceEra(this.discovered, this.era)) { this.era++; this.logEvent(`✦ amanece la era ${eraName(this.era)}`) }
+    if (this.era < 18 && canAdvanceEra(this.discovered, this.era)) {
+      this.era++; this.logEvent(`✦ amanece la era ${eraName(this.era)}`)
+      const np = PROFS.filter((p) => p.e === this.era).slice(0, 3).map((p) => p.n) // each generation gains new trades to learn
+      if (np.length) this.logEvent(`se abren nuevos oficios: ${np.join(", ")}`)
+    }
     // FESTIVAL: a few times a year the whole town gathers to celebrate — spirits, fun + togetherness lift
     if (this.clockDays > 0 && this.clockDays % 90 === 0) {
       for (const c of this.creatures) if (!c.isAvatar && c.life) { c.mental = Math.min(100, c.mental + 4); c.life.fun = Math.min(100, c.life.fun + 35); c.life.social = Math.min(100, c.life.social + 22); feel(c, "alegre", 0.55) }
@@ -775,6 +784,7 @@ export class World {
       for (const c of wild) if (c.profCat && isMature(c)) {
         const pay = c.profCat === "comercio" || c.profCat === "liderazgo" ? 7.5 : c.profCat === "saber" || c.profCat === "ingeniería" ? 6.5 : c.profCat === "salud" ? 6 : 4.5
         c.money += pay * eraPay * (1 + (c.life?.mastery || 0) * 0.6) // a master of their craft earns more; supporting a big family on a low wage strains it
+        if (c.life && c.life.intent === "trabajar") c.life.mastery = Math.min(1, c.life.mastery + 0.0025) // deliberate practice hones the craft
         this.maybeRetrain(c) // the deeply unhappy may switch trades
       }
       // INDEPENDENCE: a restless, independent young adult leaves the family home to make their own way
