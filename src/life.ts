@@ -16,6 +16,25 @@ export interface Life {
   rep: number                                  // reputation -1..1 (spread by word of mouth)
   rels: Record<number, number>                 // id → bond -1 (enemy) .. +1 (close friend)
   condition: string; condDays: number          // chronic: "" | "duelo" | "depresión" | "adicción" | "trauma"
+  intent: string                               // what this MIND wants to do right now (its own choice)
+}
+
+// each person decides for THEMSELVES what to do: their most pressing need wins, weighted by who they are.
+// this is the autonomous "brain" — two people in the same spot will choose differently.
+export function decideIntent(c: Creature): string {
+  const L = c.life; if (!L) return "vagar"
+  const f = c.psyche.five
+  if (c.energy < 92) return "comer"                                   // hunger first
+  if (L.rest < 28) return "descansar"
+  if (L.social < 30 + f.e * 22) return "socializar"                  // extraverts seek company much sooner
+  if (L.fun < 26) return "disfrutar"
+  if (!c.partner && L.goalKey === "amor" && Math.random() < 0.4) return "cortejar"
+  if (c.profCat && (f.c > 0.45 || L.goalKey === "rico" || L.goalKey === "obra" || L.goalKey === "poder")) return "trabajar"
+  return Math.random() < 0.45 ? "socializar" : "trabajar"           // the rest potter between people + work
+}
+export const INTENT_LABEL: Record<string, string> = {
+  comer: "buscando comida", descansar: "yendo a descansar", socializar: "buscando compañía",
+  disfrutar: "buscando un rato de ocio", cortejar: "buscando el amor", trabajar: "yendo a trabajar", vagar: "vagando",
 }
 
 export const EMO = {
@@ -58,7 +77,7 @@ export function newLife(c: Creature): Life {
     goal: g.goal, goalKey: g.key, goalProg: 0,
     vocFit: 0.5, mastery: 0,
     hobby: pickHobby(c), quirk: QUIRKS[(c.id * 7) % QUIRKS.length],
-    rep: 0, rels: {}, condition: "", condDays: 0,
+    rep: 0, rels: {}, condition: "", condDays: 0, intent: "vagar",
   }
 }
 
@@ -136,5 +155,6 @@ export function innerLine(c: Creature): string {
   const L = c.life; if (!L) return ""
   const need = L.rest < 25 ? "agotada" : c.energy < 35 ? "con hambre" : L.social < 22 ? "sola" : L.fun < 22 ? "aburrida" : "tranquila"
   const emo = L.emoInt > 0.25 && L.emotion !== "neutral" ? ` · ${(EMO as Record<string, string>)[L.emotion] || ""} ${L.emotion}` : ""
-  return `${need}${emo} · sueña con ${L.goal.toLowerCase()}`
+  const now = INTENT_LABEL[L.intent] ? ` · ahora ${INTENT_LABEL[L.intent]}` : ""
+  return `${need}${emo}${now} · sueña con ${L.goal.toLowerCase()}`
 }

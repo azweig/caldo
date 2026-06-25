@@ -6,7 +6,7 @@
 import { Genome, randomGenome, recombine } from "./genome"
 import { Psyche, randomPsyche, inheritPsyche } from "./psyche"
 import { Cat, Boosts, Prof, Tech, PROFS, TECHS, availableProfs, availableTechs, canAdvanceEra, economyOf, professionTitle, eraName } from "./civ"
-import { Life, newLife, lifeTick, feel, bond } from "./life"
+import { Life, newLife, lifeTick, feel, bond, decideIntent } from "./life"
 import { pickReligion, EconSystem } from "./civconfig"
 import { genPerson, inheritDark, classify, DarkTriad, Archetype } from "./population"
 import { runSociety } from "./society"
@@ -444,6 +444,22 @@ export class World {
     for (const s of this.schools) { const d = (s.x + s.w / 2 - c.x) ** 2 + (s.y + s.h / 2 - c.y) ** 2; if (d < bd) { bd = d; best = s } }
     return best
   }
+  // where an aldeano goes to ACT ON their own intent — work at their trade's place, mingle at the plaza, etc.
+  private intentTarget(c: Creature, intent: string): { x: number; y: number } {
+    const home = { x: c.home.x + c.home.w / 2, y: c.home.y + c.home.h + 14 }
+    const plaza = { x: WORLD_W / 2, y: WORLD_H / 2 } // the town centre, where people gather
+    if (intent === "descansar") return home
+    if (intent === "socializar" || intent === "cortejar") return plaza
+    if (intent === "disfrutar") { const g = this.nearestGarden(c); return { x: g.x, y: g.y } } // hobbies happen out in the open
+    if (intent === "trabajar") {
+      const cat = c.profCat
+      if (cat === "enseñanza") { const s = this.nearestSchool(c); return { x: s.x + s.w / 2, y: s.y + s.h / 2 } }
+      if ((cat === "saber" || cat === "ingeniería" || cat === "salud") && this.universities[0]) { const u = this.universities[0]; return { x: u.x + u.w / 2, y: u.y + u.h / 2 } }
+      if (cat === "comida" || cat === "cuidado") { const g = this.nearestGarden(c); return { x: g.x, y: g.y } }
+      return plaza // merchants, leaders, crafters work the market/town centre
+    }
+    return home
+  }
   nearestCreature(c: Creature, radius: number, filter?: (o: Creature) => boolean): Creature | null {
     let best: Creature | null = null, bd = radius * radius
     for (const o of this.creatures) {
@@ -545,10 +561,14 @@ export class World {
           if (ageYears(c) < 6) { tx = c.home.x + c.home.w / 2; ty = c.home.y + c.home.h + 14 }
           else { const s = this.nearestSchool(c); tx = s.x + s.w / 2; ty = s.y + s.h / 2 }
         } else {
+          // AUTONOMY: each adult decides for themselves. hunger always overrides; otherwise they act on
+          // their OWN intent (work, seek company, rest, leisure, court) — two people choose differently.
           if (c.energy < GO_FORAGE_AT) c.goingHome = false
           else if (c.energy > GO_HOME_AT) c.goingHome = true
-          if (c.goingHome) { tx = c.home.x + c.home.w / 2; ty = c.home.y + c.home.h + 14 }
-          else { const f = this.nearestFood(c, c.genome.vision * 3); const g = this.nearestGarden(c); tx = f ? f.x : g.x; ty = f ? f.y : g.y }
+          if (c.life && (this.clockDays + c.id) % 3 === 0) c.life.intent = decideIntent(c)
+          const intent = c.life?.intent || "comer"
+          if (c.energy < GO_FORAGE_AT || intent === "comer") { const f = this.nearestFood(c, c.genome.vision * 3); const gd = this.nearestGarden(c); tx = f ? f.x : gd.x; ty = f ? f.y : gd.y }
+          else { const t = this.intentTarget(c, intent); tx = t.x; ty = t.y }
         }
         const [vx, vy] = this.roadSteer(c, tx, ty)
         c.vx = vx; c.vy = vy
