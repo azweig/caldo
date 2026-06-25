@@ -128,7 +128,7 @@ body { font-family: ui-monospace, "SF Mono", Menlo, monospace; color: #dfe7ee; }
 .possess-actions button:disabled { cursor: not-allowed; opacity: 0.28; }
 .possess-hint { margin-top: 10px; font-size: 11px; color: #5f7384; text-align: center; }
 #speech3d { position: absolute; display: none; transform: translate(-50%, -100%); background: rgba(10,16,24,0.9); color: #eaf2ff; border: 1px solid rgba(150,180,220,0.35); border-radius: 10px; padding: 5px 10px; font-size: 13px; max-width: 280px; pointer-events: none; z-index: 7; box-shadow: 0 4px 16px rgba(0,0,0,0.4); }
-#npccard { position: absolute; left: 14px; bottom: 110px; width: 280px; z-index: 9; background: rgba(12,17,26,0.96); border: 1px solid rgba(255,210,128,0.35); border-radius: 12px; padding: 12px 14px; box-shadow: 0 6px 22px rgba(0,0,0,0.5); }
+#npccard { position: absolute; right: 16px; bottom: 16px; width: 280px; z-index: 9; background: rgba(12,17,26,0.96); border: 1px solid rgba(255,210,128,0.35); border-radius: 12px; padding: 12px 14px; box-shadow: 0 6px 22px rgba(0,0,0,0.5); }
 #npccard .nc-name { color: #ffe6a3; font-weight: bold; font-size: 15px; margin-bottom: 5px; }
 #npccard .nc-row { color: #aebccd; font-size: 12px; margin: 2px 0; }
 #npccard .nc-acts { display: flex; gap: 6px; margin-top: 10px; }
