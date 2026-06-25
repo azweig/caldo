@@ -13,7 +13,7 @@ import { eraName, professionSpace, ERAS } from "./civ"
 import { ENNEAGRAM } from "./psyche"
 import { LangCode, WRITE_LANG, langName, heard } from "./i18n"
 import { CivConfig, RELIGIONS, buildCountries, foodSystem, transportOf, transportLevel } from "./civconfig"
-import { init3D, resize3D, render3D, renderInterior, ROOM } from "./three3d"
+import { init3D, resize3D, render3D, renderInterior, ROOM, pick3D } from "./three3d"
 import { wealthStats, influentialByGen } from "./society"
 import { composeWork, cachedWork } from "./works"
 
@@ -22,12 +22,20 @@ const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v
 const canvas = document.getElementById("world") as HTMLCanvasElement
 const ctx = canvas.getContext("2d")!
 const canvas3d = document.getElementById("world3d") as HTMLCanvasElement
-// drag the mouse on the 3D view to look around (yaw + pitch); buttons stay clickable
-let dragging = false, dragX = 0, dragY = 0
-canvas3d.addEventListener("mousedown", (e) => { dragging = true; dragX = e.clientX; dragY = e.clientY })
-window.addEventListener("mouseup", () => { dragging = false })
+// drag the 3D view to look around (yaw + pitch); a CLICK (no drag) on a person talks to them
+let dragging = false, dragX = 0, dragY = 0, dragDist = 0
+canvas3d.addEventListener("mousedown", (e) => { dragging = true; dragX = e.clientX; dragY = e.clientY; dragDist = 0 })
+window.addEventListener("mouseup", (e) => {
+  if (dragging && dragDist < 7 && possessed && !insideHouse && !chatting) {
+    const r = canvas3d.getBoundingClientRect()
+    const t = pick3D(world, possessed, e.clientX - r.left, e.clientY - r.top, r.width, r.height)
+    if (t) { chatTarget = t; openChat(t) } // click a person → talk to them
+  }
+  dragging = false
+})
 window.addEventListener("mousemove", (e) => {
   if (!dragging || !possessed) return
+  dragDist += Math.abs(e.clientX - dragX) + Math.abs(e.clientY - dragY)
   camYaw3d += (e.clientX - dragX) * 0.005
   camPitch3d = Math.max(-0.55, Math.min(0.9, camPitch3d - (e.clientY - dragY) * 0.005))
   dragX = e.clientX; dragY = e.clientY
@@ -430,8 +438,8 @@ function doAction(act: string) {
 possessEl.querySelectorAll("button[data-act]").forEach((b) => b.addEventListener("click", () => { doAction((b as HTMLElement).dataset.act!); (b as HTMLElement).blur() }))
 
 function nearestTalkable(): Creature | null { const me = possessed || avatar; return me ? world.nearestCreature(me, CHAT_RANGE, (o) => !o.isAvatar && o !== possessed) : null }
-function openChat() {
-  const t = nearestTalkable()
+function openChat(target?: Creature) {
+  const t = target ?? nearestTalkable()
   if (!t) return
   chatTarget = t; chatting = true; session = []
   if (!paused) { paused = true; pausedByChat = true; pauseBtn.textContent = "▶" }
@@ -501,8 +509,8 @@ function driveControlled(me: Creature) {
     if (insideHouse) { // moving inside a room (local coords); walk out the front door to leave
       me.vx = me.vy = 0
       if (fwd) {
-        roomX = clamp(roomX + Math.cos(camYaw3d) * fwd * 0.12, -ROOM.W / 2 + 0.6, ROOM.W / 2 - 0.6)
-        roomZ = clamp(roomZ + Math.sin(camYaw3d) * fwd * 0.12, -ROOM.D / 2 + 0.6, ROOM.D / 2 - 0.6)
+        roomX = clamp(roomX + Math.cos(camYaw3d) * fwd * 0.26, -ROOM.W / 2 + 0.6, ROOM.W / 2 - 0.6)
+        roomZ = clamp(roomZ + Math.sin(camYaw3d) * fwd * 0.26, -ROOM.D / 2 + 0.6, ROOM.D / 2 - 0.6)
         if (roomZ > ROOM.D / 2 - 0.75 && Math.abs(roomX) < 1.1) exitHouse()
       }
       return
@@ -680,7 +688,7 @@ function blockedByHouse(x: number, y: number, mover?: Creature): boolean {
 function houseAtDoor(c: Creature): House | null {
   for (const h of world.houses) {
     const dx = c.x - (h.x + h.w / 2), dy = c.y - (h.y + h.h)
-    if (dx * dx + dy * dy < 44 * 44) return h // standing at the south door
+    if (dx * dx + dy * dy < 64 * 64) return h // standing near the south door
   }
   return null
 }

@@ -266,6 +266,21 @@ function buildInterior(world: World, h: House) {
   wall(RD, RW / 2, 0, Math.PI / 2)    // right
   wall(RW / 2 - 1.2, -(RW / 4 + 0.6), RD / 2, 0)  // front (split for a door gap)
   wall(RW / 2 - 1.2, RW / 4 + 0.6, RD / 2, 0)
+  // furniture so the home actually feels lived-in
+  const future = world.era >= 12
+  const wood = new THREE.MeshLambertMaterial({ color: future ? 0x556070 : 0x6b4a2c })
+  const cloth = new THREE.MeshLambertMaterial({ color: future ? 0x2f6f86 : 0x7a3838 })
+  const box = (w: number, hh: number, d: number, x: number, y: number, z: number, m: THREE.Material) => { const b = new THREE.Mesh(new THREE.BoxGeometry(w, hh, d), m); b.position.set(x, y, z); intGroup!.add(b) }
+  box(2.2, 0.45, 3.2, -RW / 2 + 1.6, 0.22, -RD / 2 + 2.2, wood)        // bed frame
+  box(2.0, 0.3, 3.0, -RW / 2 + 1.6, 0.6, -RD / 2 + 2.2, cloth)         // mattress
+  box(2.8, 0.22, 1.7, 1.5, 1.0, -0.5, wood)                            // table top
+  for (const [sx, sz] of [[0.4, -1.2], [2.6, -1.2], [0.4, 0.2], [2.6, 0.2]]) box(0.2, 1.0, 0.2, sx, 0.5, sz, wood) // table legs
+  box(1.0, 0.5, 1.0, 1.5, 0.85, 1.4, wood)                             // stool
+  box(2.2, 1.5, 0.6, RW / 2 - 1.4, 0.75, -RD / 2 + 0.4, new THREE.MeshLambertMaterial({ color: 0x3b3b3f })) // hearth
+  const fire = new THREE.Mesh(new THREE.SphereGeometry(0.45, 8, 8), new THREE.MeshBasicMaterial({ color: future ? 0x4ad0ff : 0xff7a2a }))
+  fire.position.set(RW / 2 - 1.4, 0.55, -RD / 2 + 0.55); intGroup.add(fire)
+  const fl = new THREE.PointLight(future ? 0x6ad0ff : 0xff8030, 1.4, 14); fl.position.set(RW / 2 - 1.4, 1.3, -RD / 2 + 1.2); intGroup.add(fl)
+  box(1.8, 1.1, 0.8, RW / 2 - 1.2, 0.55, RD / 2 - 2, wood)             // chest / shelf
   scene.add(intGroup); intFor = h
 }
 export function renderInterior(world: World, me: Creature, h: House, rx: number, rz: number, yaw: number, pitch: number) {
@@ -294,6 +309,24 @@ export function renderInterior(world: World, me: Creature, h: House, rx: number,
   renderer.render(scene, camera)
 }
 export const ROOM = { W: RW, D: RD }
+
+// which creature did you click? — project the nearby people to the screen + take the closest to the cursor
+export function pick3D(world: World, me: Creature, sx: number, sy: number, w: number, h: number): Creature | null {
+  if (!ready) return null
+  const v = new THREE.Vector3()
+  let best: Creature | null = null, bestD = 75 * 75
+  for (const c of world.creatures) {
+    if (c === me || c.isAvatar) continue
+    const dx = c.x - me.x, dy = c.y - me.y
+    if (dx * dx + dy * dy > 600 * 600) continue
+    v.set(c.x * S, 1.0, c.y * S).project(camera)
+    if (v.z > 1) continue // behind the camera
+    const px = (v.x * 0.5 + 0.5) * w, py = (-v.y * 0.5 + 0.5) * h
+    const d = (px - sx) ** 2 + (py - sy) ** 2
+    if (d < bestD) { bestD = d; best = c }
+  }
+  return best
+}
 
 export function render3D(world: World, me: Creature, yaw: number, pitch = 0) {
   if (!ready) return
