@@ -329,7 +329,7 @@ function routineDest(c: Creature, hour: number): { x: number; y: number; sleep: 
   const home = { x: c.home.x + c.home.w / 2, y: c.home.y + c.home.h + 18 }
   if (hour >= 22 || hour < 7) return { ...home, sleep: true } // night → home, asleep (still)
   if (hour >= 8 && hour < 17) { // work / school by day
-    if (age >= 6 && age < 18) { const s = nearestPt(world.schools, c); if (s) return { x: s.x + (s.w || 0) / 2, y: s.y + (s.h || 0) + 20, sleep: false } }
+    if (age >= 6 && age < 18) { const s = nearestPt(world.schools, c); if (s) return { x: s.x, y: s.y + 26, sleep: false } }
     else if (age >= 18) {
       if (world.era < 2) { const g = nearestPt(world.gardens, c); if (g) return { x: g.x, y: g.y, sleep: false } } // forage in early eras
       const wp = workplaceOf(c); if (wp) return { x: wp.x, y: wp.y, sleep: false }
