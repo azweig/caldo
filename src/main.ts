@@ -4,7 +4,7 @@
 // Conversation pauses the world automatically, so you can talk at any time scale.
 
 import "./style.css"
-import { World, Creature, formatClock, ageYears, isMature, seasonOf, SEASONS, WORLD_W, WORLD_H } from "./world"
+import { World, Creature, House, formatClock, ageYears, isMature, seasonOf, SEASONS, WORLD_W, WORLD_H } from "./world"
 import { loadAssets } from "./sprites"
 import { drawWorld, drawChart } from "./render"
 import { respond, greeting, remember, ambientDialogue } from "./chat"
@@ -13,7 +13,7 @@ import { eraName, professionSpace, ERAS } from "./civ"
 import { ENNEAGRAM } from "./psyche"
 import { LangCode, WRITE_LANG, langName, heard } from "./i18n"
 import { CivConfig, RELIGIONS, buildCountries, foodSystem, transportOf, transportLevel } from "./civconfig"
-import { init3D, resize3D, render3D } from "./three3d"
+import { init3D, resize3D, render3D, renderInterior, ROOM } from "./three3d"
 import { wealthStats, influentialByGen } from "./society"
 
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v))
@@ -79,6 +79,8 @@ let possessBusy: { until: number; label: string; reward: "work" | "study" } | nu
 let flashMsg = "", flashUntil = 0 // transient toast in the possession panel
 let camYaw3d = Math.PI / 2 // 3rd-person camera facing (A/D turn it; W/S walk along it)
 let camPitch3d = 0 // vertical look (drag the mouse up/down)
+let insideHouse: House | null = null // the house you've entered (interior view)
+let roomX = 0, roomZ = 0 // your position inside the room (3D units)
 let chatTarget: Creature | null = null
 let paused = false
 let scaleIndex = 0
@@ -267,13 +269,13 @@ const possessEl = document.getElementById("possess") as HTMLDivElement
 const possessBody = document.getElementById("possess-body")!
 function togglePossess() {
   if (possessed) { // release → back to the 2D god-view
-    possessed.controlled = false; possessed = null; possessTarget = null
+    possessed.controlled = false; possessed = null; possessTarget = null; insideHouse = null
     possessEl.classList.add("hidden"); hud.classList.remove("hidden"); canvas3d.classList.add("hidden")
     return
   }
   const t = nearestTalkable()
   if (!t) return
-  possessed = t; t.controlled = true; possessTarget = null; possessBusy = null; camYaw3d = Math.PI / 2
+  possessed = t; t.controlled = true; possessTarget = null; possessBusy = null; insideHouse = null; camYaw3d = Math.PI / 2
   init3D(canvas3d, assets.creatures); resize3D(canvas.width, canvas.height) // real 3D, only while possessing
   canvas3d.classList.remove("hidden"); possessEl.classList.remove("hidden"); hud.classList.add("hidden")
   renderPossess()
@@ -329,6 +331,13 @@ function actionState(act: string): ActState {
     const t = courtTargetNear(c)
     return t ? { ok: true, reason: `cortejar a ${t.name} (puede negarse)` } : { ok: false, reason: "no hay soltero/a cerca" }
   }
+  if (act === "enter") {
+    if (insideHouse) return { ok: true, reason: "salir de la casa" }
+    const h = houseAtDoor(c)
+    if (!h) return { ok: false, reason: "acercate a la puerta de una casa" }
+    if (!mayEnter(c, h)) return { ok: false, reason: "la puerta está cerrada (no te dejan pasar)" }
+    return { ok: true, reason: c.home === h ? "entrar a tu casa" : "te dejan pasar" }
+  }
   if (act === "child") {
     if (!c.partner) return { ok: false, reason: "necesitás una pareja" }
     const p = world.creatures.find((o) => o.id === c.partner)
@@ -371,6 +380,8 @@ function renderPossess() {
     ;(b as HTMLButtonElement).title = st.reason
     b.classList.toggle("dim", !st.ok)
   })
+  const eb = possessEl.querySelector('button[data-act="enter"]') as HTMLButtonElement | null
+  if (eb) eb.textContent = insideHouse ? "🚪 Salir" : "🚪 Entrar"
 }
 function doAction(act: string) {
   const c = possessed; if (!c) return
@@ -388,6 +399,9 @@ function doAction(act: string) {
       if (Math.random() < clamp(p, 0.12, 0.9)) { c.partner = t.id; t.partner = c.id; world.chronicle.push({ day: world.clockDays, text: `${c.name} y ${t.name} se enamoraron ❤️` }); flash(`¡${t.name} aceptó! ❤️`) }
       else flash(`${t.name} te rechazó 💔`)
     }
+  } else if (act === "enter") {
+    if (insideHouse) { exitHouse(); flash("saliste 🚪") }
+    else { const h = houseAtDoor(c); if (h && mayEnter(c, h)) { enterHouse(h); flash(c.home === h ? "entraste a tu casa 🏠" : "te dejaron pasar 🚪") } }
   } else if (act === "child") {
     const p = world.creatures.find((o) => o.id === c.partner)
     if (p) { if (Math.random() < 0.7) { c.pregnant = 210 + Math.floor(Math.random() * 60); flash("¡van a tener un hijo! 🤰") } else flash(`${p.name} no quiere ahora`) }
@@ -465,6 +479,15 @@ function driveControlled(me: Creature) {
     if (left) camYaw3d -= 0.05
     if (right) camYaw3d += 0.05
     const fwd = (up ? 1 : 0) - (down ? 1 : 0)
+    if (insideHouse) { // moving inside a room (local coords); walk out the front door to leave
+      me.vx = me.vy = 0
+      if (fwd) {
+        roomX = clamp(roomX + Math.cos(camYaw3d) * fwd * 0.12, -ROOM.W / 2 + 0.6, ROOM.W / 2 - 0.6)
+        roomZ = clamp(roomZ + Math.sin(camYaw3d) * fwd * 0.12, -ROOM.D / 2 + 0.6, ROOM.D / 2 - 0.6)
+        if (roomZ > ROOM.D / 2 - 0.75 && Math.abs(roomX) < 1.1) exitHouse()
+      }
+      return
+    }
     if (fwd) { possessTarget = null; me.vx = Math.cos(camYaw3d) * fwd * AV_SPEED; me.vy = Math.sin(camYaw3d) * fwd * AV_SPEED }
     else if (possessTarget) { // auto-walk to an action destination + turn to face it
       const tx = possessTarget.x - me.x, ty = possessTarget.y - me.y, d = Math.hypot(tx, ty)
@@ -634,6 +657,23 @@ function blockedByHouse(x: number, y: number, mover?: Creature): boolean {
   return false
 }
 
+// ── house entry: only through the door, and only if the owner lets you (or it's your home) ──
+function houseAtDoor(c: Creature): House | null {
+  for (const h of world.houses) {
+    const dx = c.x - (h.x + h.w / 2), dy = c.y - (h.y + h.h)
+    if (dx * dx + dy * dy < 44 * 44) return h // standing at the south door
+  }
+  return null
+}
+function mayEnter(c: Creature, h: House): boolean {
+  if (c.home === h) return true // your own home
+  const occ = world.creatures.filter((o) => o.home === h && !o.isAvatar && isMature(o))
+  if (!occ.length) return true // nobody home
+  return occ.some((o) => o.surname === c.surname || o.partner === c.id) // family or partner lets you in
+}
+function enterHouse(h: House) { insideHouse = h; roomX = 0; roomZ = ROOM.D / 2 - 1.2; camYaw3d = -Math.PI / 2 }
+function exitHouse() { const h = insideHouse; insideHouse = null; if (h && possessed) { possessed.x = h.x + h.w / 2; possessed.y = h.y + h.h + 24; camYaw3d = Math.PI / 2 } }
+
 function loop() {
   frame++
   zoom += (targetZoom - zoom) * 0.12 // smooth cinematic zoom toward the target
@@ -672,7 +712,8 @@ function loop() {
   chatTarget = chatting ? chatTarget : nearestTalkable()
 
   if (possessed) {
-    render3D(world, possessed, camYaw3d, camPitch3d) // immersive 3D while you live a life
+    if (insideHouse) renderInterior(world, possessed, insideHouse, roomX, roomZ, camYaw3d, camPitch3d)
+    else render3D(world, possessed, camYaw3d, camPitch3d) // immersive 3D while you live a life
   } else {
     // 2D camera: follow the avatar, clamped to the world (centre an axis smaller than the view)
     const halfW = canvas.width / (2 * zoom), halfH = canvas.height / (2 * zoom)

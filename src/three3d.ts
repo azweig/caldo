@@ -3,7 +3,7 @@
 // possessed character in third person. The simulation stays in the 2D engine; this only renders.
 
 import * as THREE from "three"
-import { World, Creature, WORLD_W, WORLD_H, BLOCK } from "./world"
+import { World, Creature, House, WORLD_W, WORLD_H, BLOCK } from "./world"
 
 const S = 0.045 // world px → 3D units
 
@@ -12,6 +12,7 @@ let scene: THREE.Scene
 let camera: THREE.PerspectiveCamera
 let pool: THREE.Sprite[] = []
 let rings: THREE.Mesh[] = []
+let shadows: THREE.Mesh[] = []
 let town: THREE.Group | null = null
 let builtFor: World | null = null
 let builtEra = -1 // rebuild the town when the era (architecture) changes
@@ -28,10 +29,13 @@ export function init3D(canvas: HTMLCanvasElement, _creatureImgs: HTMLImageElemen
   scene.add(new THREE.AmbientLight(0x8a9ec0, 0.95))
   const sun = new THREE.DirectionalLight(0xfff0d8, 0.6); sun.position.set(30, 60, 20); scene.add(sun)
   const ringGeo = new THREE.RingGeometry(0.5, 0.74, 22)
+  const shadowGeo = new THREE.CircleGeometry(0.5, 18)
   for (let i = 0; i < 64; i++) {
     const sp = new THREE.Sprite(new THREE.SpriteMaterial({ transparent: true, depthWrite: false })); sp.visible = false; scene.add(sp); pool.push(sp)
     const r = new THREE.Mesh(ringGeo, new THREE.MeshBasicMaterial({ transparent: true, opacity: 0.85, side: THREE.DoubleSide }))
     r.rotation.x = -Math.PI / 2; r.visible = false; scene.add(r); rings.push(r)
+    const sh = new THREE.Mesh(shadowGeo, new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.32 }))
+    sh.rotation.x = -Math.PI / 2; sh.visible = false; scene.add(sh); shadows.push(sh) // grounding shadow
   }
   ready = true
 }
@@ -159,9 +163,57 @@ function buildTown(world: World) {
   scene.add(town); builtFor = world; builtEra = world.era
 }
 
+// ── house interiors: a simple room you enter through the door ──
+let intGroup: THREE.Group | null = null
+let intFor: House | null = null
+const RW = 15, RD = 11, RH = 4 // room dimensions (units)
+function buildInterior(world: World, h: House) {
+  if (intGroup) { scene.remove(intGroup); intGroup.traverse((o) => (o as THREE.Mesh).geometry?.dispose()) }
+  intGroup = new THREE.Group()
+  const E = eraTex(world.era)
+  const floor = new THREE.Mesh(new THREE.PlaneGeometry(RW, RD), new THREE.MeshLambertMaterial({ map: tex(E.ground === "ground_grass" ? "ground_dirt" : E.ground, 3) }))
+  floor.rotation.x = -Math.PI / 2; intGroup.add(floor)
+  const ceil = new THREE.Mesh(new THREE.PlaneGeometry(RW, RD), new THREE.MeshLambertMaterial({ color: 0x17130d }))
+  ceil.rotation.x = Math.PI / 2; ceil.position.y = RH; intGroup.add(ceil)
+  const wm = new THREE.MeshLambertMaterial({ map: tex(E.wall, 2), side: THREE.DoubleSide })
+  const wall = (w: number, x: number, z: number, ry: number) => { const m = new THREE.Mesh(new THREE.PlaneGeometry(w, RH), wm); m.position.set(x, RH / 2, z); m.rotation.y = ry; intGroup!.add(m) }
+  wall(RW, 0, -RD / 2, 0)             // back
+  wall(RD, -RW / 2, 0, Math.PI / 2)   // left
+  wall(RD, RW / 2, 0, Math.PI / 2)    // right
+  wall(RW / 2 - 1.2, -(RW / 4 + 0.6), RD / 2, 0)  // front (split for a door gap)
+  wall(RW / 2 - 1.2, RW / 4 + 0.6, RD / 2, 0)
+  scene.add(intGroup); intFor = h
+}
+export function renderInterior(world: World, me: Creature, h: House, rx: number, rz: number, yaw: number, pitch: number) {
+  if (!ready) return
+  if (builtFor !== world || builtEra !== world.era) buildTown(world)
+  if (intFor !== h || !intGroup) buildInterior(world, h)
+  if (town) town.visible = false; intGroup!.visible = true
+  let i = 0
+  const put = (c: Creature, x: number, z: number, scale: number, ringCol: number) => {
+    const sp = pool[i]; sp.visible = true; const name = personName(c, world.era)
+    sp.material.map = loadPerson(name); sp.material.needsUpdate = true
+    const asp = peopleAspect.get(name) ?? 0.5
+    sp.position.set(x, scale / 2 + 0.05, z); sp.scale.set(scale * asp, scale, 1)
+    const r = rings[i]; r.visible = true; (r.material as THREE.MeshBasicMaterial).color.setHex(ringCol); r.position.set(x, 0.05, z); r.scale.setScalar(scale * asp * 0.95)
+    const sh = shadows[i]; sh.visible = true; sh.position.set(x, 0.03, z); sh.scale.setScalar(scale * asp * 0.8)
+    i++
+  }
+  put(me, rx, rz, 2.0, 0x46c8ff)
+  const occ = world.creatures.filter((c) => c.home === h && c !== me && !c.isAvatar).slice(0, 6)
+  occ.forEach((c, k) => put(c, -RW / 2 + 2 + (k % 3) * 2.5, -RD / 2 + 2 + Math.floor(k / 3) * 2.5, 1.5, relColor(me, c)))
+  for (; i < pool.length; i++) { pool[i].visible = false; rings[i].visible = false; shadows[i].visible = false }
+  const cp = Math.cos(pitch)
+  const cx = rx - Math.cos(yaw) * 3.0, cy = 2.0, cz = rz - Math.sin(yaw) * 3.0
+  camera.position.set(cx, cy, cz); camera.lookAt(cx + Math.cos(yaw) * 9 * cp, cy + Math.sin(pitch) * 9, cz + Math.sin(yaw) * 9 * cp)
+  renderer.render(scene, camera)
+}
+export const ROOM = { W: RW, D: RD }
+
 export function render3D(world: World, me: Creature, yaw: number, pitch = 0) {
   if (!ready) return
   if (builtFor !== world || builtEra !== world.era) buildTown(world)
+  if (town) town.visible = true; if (intGroup) intGroup.visible = false
 
   const near = world.creatures
     .filter((c) => c !== me && !c.isAvatar)
@@ -177,11 +229,12 @@ export function render3D(world: World, me: Creature, yaw: number, pitch = 0) {
     sp.position.set(c.x * S, scale / 2 + 0.05, c.y * S); sp.scale.set(scale * asp, scale, 1) // keep aspect
     const r = rings[i]; r.visible = true; (r.material as THREE.MeshBasicMaterial).color.setHex(ringCol)
     r.position.set(c.x * S, 0.06, c.y * S); r.scale.setScalar(scale * asp * 0.95)
+    const sh = shadows[i]; sh.visible = true; sh.position.set(c.x * S, 0.04, c.y * S); sh.scale.setScalar(scale * asp * 0.8) // grounding
     i++
   }
-  place(me, 2.1, 0x46c8ff) // you — cyan ring, larger since the camera is right behind you
+  place(me, 2.0, 0x46c8ff) // you — cyan ring
   for (const { c } of near) { if (i >= pool.length) break; place(c, 1.3 + c.genome.size * 0.45, relColor(me, c)) }
-  for (; i < pool.length; i++) { pool[i].visible = false; rings[i].visible = false }
+  for (; i < pool.length; i++) { pool[i].visible = false; rings[i].visible = false; shadows[i].visible = false }
 
   // GROUND-LEVEL over-the-shoulder camera — yaw from A/D + mouse, pitch from dragging the mouse up/down
   const mx = me.x * S, mz = me.y * S
