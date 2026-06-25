@@ -140,14 +140,16 @@ export function wealthStats(w: World) {
 
 // the most INFLUENTIAL people, grouped by generation (by total deed impact), with what they did
 export function influentialByGen(w: World, perGen = 3) {
-  const byPerson = new Map<number, { name: string; gen: number; impact: number; deeds: string[] }>()
+  type Work = { kind: string; text: string; content: string }
+  const byPerson = new Map<number, { name: string; gen: number; impact: number; deeds: string[]; works: Work[] }>()
   for (const d of w.deeds) {
     let e = byPerson.get(d.who)
-    if (!e) { e = { name: d.name, gen: d.gen, impact: 0, deeds: [] }; byPerson.set(d.who, e) }
+    if (!e) { e = { name: d.name, gen: d.gen, impact: 0, deeds: [], works: [] }; byPerson.set(d.who, e) }
     e.impact += d.impact
     if (["libro", "obra", "negocio", "crimen", "descubrimiento", "sindicato", "subversivo", "reforma", "represión"].includes(d.kind)) e.deeds.push(d.text)
+    if ((d.kind === "libro" || d.kind === "obra") && d.content) e.works.push({ kind: d.kind, text: d.text, content: d.content })
   }
-  const gens = new Map<number, { name: string; impact: number; deeds: string[] }[]>()
+  const gens = new Map<number, { name: string; impact: number; deeds: string[]; works: Work[] }[]>()
   for (const e of byPerson.values()) { const a = gens.get(e.gen) || []; a.push(e); gens.set(e.gen, a) }
   return [...gens.entries()].sort((a, b) => a[0] - b[0]).map(([gen, arr]) => ({
     gen, people: arr.sort((a, b) => Math.abs(b.impact) - Math.abs(a.impact)).slice(0, perGen),

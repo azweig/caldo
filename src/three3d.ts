@@ -17,6 +17,7 @@ let shadows: THREE.Mesh[] = []
 let town: THREE.Group | null = null
 let builtFor: World | null = null
 let builtEra = -1 // rebuild the town when the era (architecture) changes
+let walkT = 0 // real-time clock for the fake walk animation
 let ready = false
 
 export function init3D(canvas: HTMLCanvasElement, _creatureImgs: HTMLImageElement[]) {
@@ -24,12 +25,18 @@ export function init3D(canvas: HTMLCanvasElement, _creatureImgs: HTMLImageElemen
   renderer = new THREE.WebGLRenderer({ canvas, antialias: false })
   renderer.setPixelRatio(Math.min(2, window.devicePixelRatio))
   scene = new THREE.Scene()
-  scene.background = new THREE.Color(0x3a4866) // dusk sky, not pitch black
-  scene.fog = new THREE.Fog(0x3a4866, 70, 280) // see down the street, fade the far horizon
-  camera = new THREE.PerspectiveCamera(60, 1, 0.1, 600)
-  scene.add(new THREE.AmbientLight(0xffffff, 1.5)) // bright ambient so characters read clearly
-  scene.add(new THREE.HemisphereLight(0xcfe0ff, 0x60543a, 1.1)) // sky/ground fill
-  const sun = new THREE.DirectionalLight(0xfff0d8, 1.0); sun.position.set(30, 60, 20); scene.add(sun)
+  scene.fog = new THREE.Fog(0xaebdd2, 110, 360) // pale-horizon haze
+  camera = new THREE.PerspectiveCamera(60, 1, 0.1, 900)
+  scene.add(new THREE.AmbientLight(0xffffff, 2.0)) // very bright ambient so characters never go dark
+  scene.add(new THREE.HemisphereLight(0xdfeaff, 0x8a7c5a, 1.2))
+  const sun = new THREE.DirectionalLight(0xfff4e0, 1.1); sun.position.set(40, 80, 30); scene.add(sun)
+  // sky dome — a pleasant daytime gradient
+  const sc = document.createElement("canvas"); sc.width = 4; sc.height = 256
+  const sg = sc.getContext("2d")!; const grad = sg.createLinearGradient(0, 0, 0, 256)
+  grad.addColorStop(0, "#3f6fb5"); grad.addColorStop(0.55, "#8fb0d8"); grad.addColorStop(1, "#cdd9e6")
+  sg.fillStyle = grad; sg.fillRect(0, 0, 4, 256)
+  const skyTex = new THREE.CanvasTexture(sc); skyTex.colorSpace = THREE.SRGBColorSpace
+  scene.add(new THREE.Mesh(new THREE.SphereGeometry(500, 20, 16), new THREE.MeshBasicMaterial({ map: skyTex, side: THREE.BackSide, fog: false })))
   const ringGeo = new THREE.RingGeometry(0.5, 0.74, 22)
   const shadowGeo = new THREE.CircleGeometry(0.5, 18)
   for (let i = 0; i < 64; i++) {
@@ -160,6 +167,9 @@ function loadBase(name: string) {
     const c = box.getCenter(new THREE.Vector3())
     root.scale.setScalar(s)
     root.position.set(-c.x * s, -box.min.y * s, -c.z * s) // feet at y=0, centred on x/z
+    root.traverse((o) => { // unlit + vertex colours → the characters are always clearly visible, never dark
+      if (o instanceof THREE.Mesh) { const old = o.material as THREE.MeshStandardMaterial; o.material = new THREE.MeshBasicMaterial({ vertexColors: true, map: old.map ?? null }) }
+    })
     const wrap = new THREE.Group(); wrap.add(root)
     modelCache.set(name, wrap)
   }, undefined, () => modelLoading.delete(name))
@@ -216,6 +226,24 @@ function buildTown(world: World) {
   const civicMat = new THREE.MeshLambertMaterial({ map: tex(world.era >= 12 ? "wall_glass" : "wall_stone", 2) })
   for (const s of world.schools) town.add(boxBuilding(s.x, s.y, s.w, s.h, 5.0, civicMat))
   for (const u of world.universities) town.add(boxBuilding(u.x, u.y, u.w, u.h, 6.5, civicMat))
+  // ── the world has EDGES now: grass beyond, a perimeter wall, and a forest ──
+  const WW = WORLD_W * S, WH = WORLD_H * S
+  const outer = new THREE.Mesh(new THREE.PlaneGeometry(WW * 3, WH * 3), new THREE.MeshLambertMaterial({ map: tex("ground_grass", 60) }))
+  outer.rotation.x = -Math.PI / 2; outer.position.set(WW / 2, -0.06, WH / 2); town.add(outer)
+  const wmat = matFor(walls[0]); const wallH = 7, wallT = 1.5
+  const boundary = (w: number, x: number, z: number, ry: number) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w, wallH, wallT), wmat); m.position.set(x, wallH / 2, z); m.rotation.y = ry; town!.add(m) }
+  boundary(WW + wallT, WW / 2, 0, 0); boundary(WW + wallT, WW / 2, WH, 0)
+  boundary(WH + wallT, 0, WH / 2, Math.PI / 2); boundary(WH + wallT, WW, WH / 2, Math.PI / 2)
+  const trunkMat = new THREE.MeshLambertMaterial({ color: 0x5a4028 }), leafMat = new THREE.MeshLambertMaterial({ color: world.era >= 15 ? 0x335a6a : 0x2f6a32 })
+  const trunkGeo = new THREE.CylinderGeometry(0.3, 0.45, 2, 6), leafGeo = new THREE.ConeGeometry(1.7, 3.6, 7)
+  for (let i = 0; i < 90; i++) { // a forest ringing the town, outside the wall
+    const a = hashf(i * 3.1) * Math.PI * 2, rad = (WW * 0.6) + hashf(i * 7.7) * WW * 0.7
+    const x = WW / 2 + Math.cos(a) * rad, z = WH / 2 + Math.sin(a) * rad * (WH / WW)
+    const tree = new THREE.Group()
+    const trunk = new THREE.Mesh(trunkGeo, trunkMat); trunk.position.y = 1
+    const leaf = new THREE.Mesh(leafGeo, leafMat); leaf.position.y = 3.6
+    tree.add(trunk, leaf); tree.position.set(x, 0, z); tree.scale.setScalar(1 + hashf(i) * 0.8); town.add(tree)
+  }
   scene.add(town); builtFor = world; builtEra = world.era
 }
 
@@ -269,6 +297,7 @@ export const ROOM = { W: RW, D: RD }
 
 export function render3D(world: World, me: Creature, yaw: number, pitch = 0) {
   if (!ready) return
+  walkT += 0.016
   if (builtFor !== world || builtEra !== world.era) buildTown(world)
   if (town) town.visible = true; if (intGroup) intGroup.visible = false
 
@@ -287,8 +316,11 @@ export function render3D(world: World, me: Creature, yaw: number, pitch = 0) {
     if (base) { // real 3D mesh
       pool[i].visible = false; slot.visible = true
       if (slot.userData.name !== mn) { slot.clear(); slot.add(base.clone()); slot.userData.name = mn }
-      slot.position.set(c.x * S, 0, c.y * S); slot.scale.setScalar(scale)
-      if (Math.abs(c.vx) + Math.abs(c.vy) > 0.1) slot.rotation.y = -Math.atan2(c.vy, c.vx) - Math.PI / 2 // face where they walk
+      const moving = Math.abs(c.vx) + Math.abs(c.vy) > 0.12
+      const bob = moving ? Math.abs(Math.sin(walkT * 9 + c.id)) * 0.13 : 0 // fake walk bounce (no rig)
+      slot.position.set(c.x * S, bob, c.y * S); slot.scale.setScalar(scale)
+      if (moving) { slot.rotation.y = -Math.atan2(c.vy, c.vx) - Math.PI / 2; slot.rotation.z = Math.sin(walkT * 9 + c.id) * 0.07 }
+      else slot.rotation.z = 0
     } else { // billboard fallback while the model loads
       slot.visible = false
       const sp = pool[i]; sp.visible = true; const pn = personName(c, world.era)

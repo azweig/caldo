@@ -257,7 +257,9 @@ function legendsHTML(): string {
   return gens.slice().reverse().map((g) =>
     `<h3>Generación ${g.gen}</h3>` + g.people.map((p) =>
       `<div class="srow"><span>${p.name}</span><b style="color:${p.impact >= 0 ? "#8fe3a0" : "#e0788a"}">${p.impact >= 0 ? "+" : ""}${p.impact}</b></div>` +
-      `<div class="sline">${p.deeds.slice(-3).join(" · ") || "figura de su tiempo"}</div>`).join("")
+      `<div class="sline">${p.deeds.slice(-3).join(" · ") || "figura de su tiempo"}</div>` +
+      p.works.slice(-3).map((w) => `<div class="work">${w.kind === "libro" ? "📖" : "🖼️"} <i>${w.text}</i><div class="excerpt">${w.content}</div></div>`).join("")
+    ).join("")
   ).join("")
 }
 function toggleLegends() { if (legendsEl.classList.contains("hidden")) legendsBody.innerHTML = legendsHTML(); legendsEl.classList.toggle("hidden") }
@@ -704,12 +706,14 @@ function loop() {
     if (steps) worldAffairs(steps)
     if (possessBusy && world.clockMinutes >= possessBusy.until) finishBusy()
   }
-  // smooth real-time walking for the people you can SEE in 3D (the once-a-day sim step alone looks frozen)
+  // everyone walks SMOOTHLY toward whatever they're doing (home/work/forage), not just when you're near.
+  // people right next to you slow down so you can actually talk to them instead of them walking off.
   if (possessed && !paused) {
     for (const c of world.creatures) {
       if (c === possessed || c.isAvatar || c.controlled) continue
       const dx = c.x - possessed.x, dy = c.y - possessed.y
-      if (dx * dx + dy * dy < 680 * 680) { c.x += c.vx * 0.3; c.y += c.vy * 0.3 }
+      const k = dx * dx + dy * dy < 95 * 95 ? 0.05 : 0.32
+      c.x += c.vx * k; c.y += c.vy * k
     }
   }
   if (avatar && !possessed) avatar.energy = Math.max(60, Math.min(150, avatar.energy)) // immortal observer
