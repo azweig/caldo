@@ -135,7 +135,7 @@ function buildTown(world: World) {
   scene.add(town); builtFor = world; builtEra = world.era
 }
 
-export function render3D(world: World, me: Creature, yaw: number) {
+export function render3D(world: World, me: Creature, yaw: number, pitch = 0) {
   if (!ready) return
   if (builtFor !== world || builtEra !== world.era) buildTown(world)
 
@@ -157,9 +157,11 @@ export function render3D(world: World, me: Creature, yaw: number) {
   for (const { c } of near) { if (i >= pool.length) break; place(c, 1.3 + c.genome.size * 0.45, relColor(me, c)) }
   for (; i < pool.length; i++) { pool[i].visible = false; rings[i].visible = false }
 
-  // GROUND-LEVEL over-the-shoulder camera — you walk the streets at the little person's height
+  // GROUND-LEVEL over-the-shoulder camera — yaw from A/D + mouse, pitch from dragging the mouse up/down
   const mx = me.x * S, mz = me.y * S
-  camera.position.set(mx - Math.cos(yaw) * 3.4, 2.0, mz - Math.sin(yaw) * 3.4)
-  camera.lookAt(mx + Math.cos(yaw) * 12, 1.25, mz + Math.sin(yaw) * 12)
+  const cx = mx - Math.cos(yaw) * 3.4, cy = 2.0, cz = mz - Math.sin(yaw) * 3.4
+  camera.position.set(cx, cy, cz)
+  const cp = Math.cos(pitch)
+  camera.lookAt(cx + Math.cos(yaw) * 10 * cp, cy + Math.sin(pitch) * 10, cz + Math.sin(yaw) * 10 * cp)
   renderer.render(scene, camera)
 }

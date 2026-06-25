@@ -21,6 +21,16 @@ const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v
 const canvas = document.getElementById("world") as HTMLCanvasElement
 const ctx = canvas.getContext("2d")!
 const canvas3d = document.getElementById("world3d") as HTMLCanvasElement
+// drag the mouse on the 3D view to look around (yaw + pitch); buttons stay clickable
+let dragging = false, dragX = 0, dragY = 0
+canvas3d.addEventListener("mousedown", (e) => { dragging = true; dragX = e.clientX; dragY = e.clientY })
+window.addEventListener("mouseup", () => { dragging = false })
+window.addEventListener("mousemove", (e) => {
+  if (!dragging || !possessed) return
+  camYaw3d += (e.clientX - dragX) * 0.005
+  camPitch3d = Math.max(-0.55, Math.min(0.9, camPitch3d - (e.clientY - dragY) * 0.005))
+  dragX = e.clientX; dragY = e.clientY
+})
 
 function resize() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; resize3D(window.innerWidth, window.innerHeight) }
 resize()
@@ -68,6 +78,7 @@ let possessTarget: { x: number; y: number } | null = null
 let possessBusy: { until: number; label: string; reward: "work" | "study" } | null = null // working/studying a shift
 let flashMsg = "", flashUntil = 0 // transient toast in the possession panel
 let camYaw3d = Math.PI / 2 // 3rd-person camera facing (A/D turn it; W/S walk along it)
+let camPitch3d = 0 // vertical look (drag the mouse up/down)
 let chatTarget: Creature | null = null
 let paused = false
 let scaleIndex = 0
@@ -648,7 +659,7 @@ function loop() {
   chatTarget = chatting ? chatTarget : nearestTalkable()
 
   if (possessed) {
-    render3D(world, possessed, camYaw3d) // immersive 3D while you live a life
+    render3D(world, possessed, camYaw3d, camPitch3d) // immersive 3D while you live a life
   } else {
     // 2D camera: follow the avatar, clamped to the world (centre an axis smaller than the view)
     const halfW = canvas.width / (2 * zoom), halfH = canvas.height / (2 * zoom)
