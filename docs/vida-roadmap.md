@@ -79,3 +79,39 @@ Todo lo demás cuelga de estos 4 sistemas base:
 5. **Vida interior visible** (#46) — para que SE VEA todo lo anterior al clickear.
 
 Con esos 5, los agentes pasan de "forrajear-reproducir-morir" a "desear, luchar, relacionarse, crear, sufrir, trascender" — y el resto (hobbies, ceremonias, cortejo, chisme) se vuelve fácil de sumar encima.
+
+---
+
+# Estado de implementación (3 fases, commiteadas + validadas headless)
+
+**✅ Hechas y sólidas (~30):** necesidades (rest/social/fun) · sueño/soledad/aburrimiento · emociones discretas + reacciones a eventos (nacimiento→alegría, muerte→duelo, robo→ira, invento/obra→orgullo, infidelidad→celos) · aura emocional 2D · metas de vida + progreso · vocación + maestría (→ mejor sueldo) · hobby + manía · relaciones con fuerza (amigos/rivales) · reputación + chisme · cortejo por compatibilidad + bodas · divorcio con dolor · rencores · senescencia + respeto a ancianos · festivales · condiciones crónicas (duelo) · embarazo con esperanza · chat refleja la vida interior · vida interior visible al clickear (necesidad/emoción/meta/hobby/manía/reputación/mejor amigo/peor rival).
+
+**🟡 v1/parciales (~10):** arbitraje de necesidades (vía ánimo, no plan multi-paso) · contagio emocional (festivales/duelo) · dinámica familiar (vía notas sociales) · camarillas (emergen de los vínculos) · conversaciones NPC-NPC reales (notas + chisme, no diálogo ejecutado) · ahorro con propósito (mastery→riqueza) · vida pública.
+
+**🔴 diferidas (~6) — pendientes:** #25 creencias que deciden mecánicamente · #30 cambio de carrera · #32 dominios de saber separados · #36 mercado real con oferta/demanda · #38 deportes/competencias · #45 apariencia/ropa por personalidad.
+
+# Próximos 40 (para revisar)
+
+## J. Mente autónoma con IA (LLM)
+1. Pensamientos en voz alta (un thought IA al pasar el mouse). 2. Decisiones grandes (casarse/crimen/mudarse) consultadas a la IA con su personalidad. 3. Conversaciones NPC-NPC reales por IA que cambian opiniones. 4. Diarios personales que podés leer. 5. Sueños nocturnos que reflejan miedos/deseos.
+
+## K. Mundo vivo (entorno)
+6. Clima y estaciones con efecto (sequías, inviernos, cosechas). 7. Recursos finitos + geografía (ríos/bosques/minas). 8. Desastres (incendios/inundaciones/terremotos). 9. Animales/ganado/mascotas. 10. El pueblo crece físicamente (barrios, plaza, murallas).
+
+## L. Economía profunda
+11. Mercado con oferta/demanda + precios fluctuantes. 12. Propiedad (tierra/casas/talleres) que se compra/hereda. 13. Clases sociales emergentes + movilidad. 14. Gremios que negocian. 15. Comercio entre pueblos (caravanas/rutas).
+
+## M. Política e historia emergente
+16. Líderes con políticas reales (impuestos/leyes) que se apoyan/resisten. 17. Facciones, elecciones, golpes, revoluciones. 18. Guerras entre pueblos con consecuencias (conquista/refugiados). 19. Leyes que evolucionan (la cultura escribe sus normas). 20. Crónica histórica narrada por IA.
+
+## N. Cultura emergente
+21. Arte/música/libros con contenido real que otros consumen + opinan. 22. Idiomas que derivan por cultura. 23. Modas que se contagian y pasan. 24. Mitos y leyendas sobre héroes/eventos. 25. Religiones que nacen, se dividen (cismas), compiten.
+
+## O. Familia y generaciones
+26. Árbol genealógico navegable + dinastías. 27. Estilos de crianza que moldean hijos. 28. Herencia + disputas familiares. 29. Parecido familiar visible. 30. Memoria familiar (recordar a los abuelos).
+
+## P. Salud y cuerpo
+31. Enfermedades específicas con síntomas + contagio. 32. Adicciones con espiral + recuperación. 33. Discapacidad/heridas permanentes. 34. Genética: enfermedades hereditarias + talentos raros. 35. Medicina que mejora con la era.
+
+## Q. Herramientas del jugador / dios
+36. Línea de tiempo (rebobinar/ver historia). 37. Grafo social + árbol familiar navegable. 38. Seguir a una persona y ver su vida entera. 39. Intervenir como dios (bendecir/maldecir/eventos). 40. Estadísticas/gráficos de la civilización (estilo Gapminder).
