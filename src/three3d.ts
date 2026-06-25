@@ -24,7 +24,7 @@ export function init3D(canvas: HTMLCanvasElement, creatureImgs: HTMLImageElement
   renderer.setPixelRatio(Math.min(2, window.devicePixelRatio))
   scene = new THREE.Scene()
   scene.background = new THREE.Color(0x0a0e16)
-  scene.fog = new THREE.Fog(0x0a0e16, 30, 165)
+  scene.fog = new THREE.Fog(0x0a0e16, 55, 240) // see down the street, fade the far horizon
   camera = new THREE.PerspectiveCamera(60, 1, 0.1, 600)
   scene.add(new THREE.AmbientLight(0x8a9ec0, 0.9))
   const sun = new THREE.DirectionalLight(0xfff0d8, 0.6); sun.position.set(30, 60, 20); scene.add(sun)
@@ -94,12 +94,18 @@ function buildTown(world: World) {
   // textured ground (tiled)
   const ground = new THREE.Mesh(new THREE.PlaneGeometry(WORLD_W * S, WORLD_H * S), new THREE.MeshLambertMaterial({ map: tex(E.ground, 42) }))
   ground.rotation.x = -Math.PI / 2; ground.position.set(WORLD_W * S / 2, 0, WORLD_H * S / 2); town.add(ground)
-  // streets: subtle in old eras, glowing neon grid in the far future
-  const pts: number[] = []
-  for (let x = BLOCK; x < WORLD_W; x += BLOCK) pts.push(x * S, 0.03, 0, x * S, 0.03, WORLD_H * S)
-  for (let y = BLOCK; y < WORLD_H; y += BLOCK) pts.push(0, 0.03, y * S, WORLD_W * S, 0.03, y * S)
-  const gg = new THREE.BufferGeometry(); gg.setAttribute("position", new THREE.Float32BufferAttribute(pts, 3))
-  town.add(new THREE.LineSegments(gg, new THREE.LineBasicMaterial({ color: world.era >= 15 ? 0x3a78ff : 0x101820, transparent: true, opacity: world.era >= 15 ? 0.45 : 0.18 })))
+  // streets: actual road strips along the block grid (so they READ at ground level)
+  const roadMat = new THREE.MeshBasicMaterial({ color: world.era >= 15 ? 0x18324e : 0x33291d })
+  const roadW = 66 * S
+  for (let x = BLOCK; x < WORLD_W; x += BLOCK) { const q = new THREE.Mesh(new THREE.PlaneGeometry(roadW, WORLD_H * S), roadMat); q.rotation.x = -Math.PI / 2; q.position.set(x * S, 0.02, WORLD_H * S / 2); town.add(q) }
+  for (let y = BLOCK; y < WORLD_H; y += BLOCK) { const q = new THREE.Mesh(new THREE.PlaneGeometry(WORLD_W * S, roadW), roadMat); q.rotation.x = -Math.PI / 2; q.position.set(WORLD_W * S / 2, 0.02, y * S); town.add(q) }
+  if (world.era >= 15) { // glowing centre lines only in the neon future
+    const pts: number[] = []
+    for (let x = BLOCK; x < WORLD_W; x += BLOCK) pts.push(x * S, 0.04, 0, x * S, 0.04, WORLD_H * S)
+    for (let y = BLOCK; y < WORLD_H; y += BLOCK) pts.push(0, 0.04, y * S, WORLD_W * S, 0.04, y * S)
+    const gg = new THREE.BufferGeometry(); gg.setAttribute("position", new THREE.Float32BufferAttribute(pts, 3))
+    town.add(new THREE.LineSegments(gg, new THREE.LineBasicMaterial({ color: 0x3a9bff, transparent: true, opacity: 0.5 })))
+  }
   for (const gd of world.gardens) {
     const disc = new THREE.Mesh(new THREE.CircleGeometry(95 * S, 18), new THREE.MeshBasicMaterial({ color: 0x2c5a38, transparent: true, opacity: 0.4 }))
     disc.rotation.x = -Math.PI / 2; disc.position.set(gd.x * S, 0.05, gd.y * S); town.add(disc)
@@ -147,13 +153,13 @@ export function render3D(world: World, me: Creature, yaw: number) {
     r.position.set(c.x * S, 0.06, c.y * S); r.scale.setScalar(scale * 0.62)
     i++
   }
-  place(me, 1.7, 0x46c8ff) // you — cyan ring
+  place(me, 2.1, 0x46c8ff) // you — cyan ring, larger since the camera is right behind you
   for (const { c } of near) { if (i >= pool.length) break; place(c, 1.3 + c.genome.size * 0.45, relColor(me, c)) }
   for (; i < pool.length; i++) { pool[i].visible = false; rings[i].visible = false }
 
-  // third-person camera sitting behind your facing (main owns the yaw, driven by A/D)
+  // GROUND-LEVEL over-the-shoulder camera — you walk the streets at the little person's height
   const mx = me.x * S, mz = me.y * S
-  camera.position.set(mx - Math.cos(yaw) * 11, 7, mz - Math.sin(yaw) * 11)
-  camera.lookAt(mx + Math.cos(yaw) * 6, 1.4, mz + Math.sin(yaw) * 6)
+  camera.position.set(mx - Math.cos(yaw) * 3.4, 2.0, mz - Math.sin(yaw) * 3.4)
+  camera.lookAt(mx + Math.cos(yaw) * 12, 1.25, mz + Math.sin(yaw) * 12)
   renderer.render(scene, camera)
 }
