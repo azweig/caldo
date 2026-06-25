@@ -624,7 +624,8 @@ export class World {
           const ay = ageYears(c)
           if (c.life && this.universities[0] && ay >= 18 && ay <= 27 && c.psyche.five.c + c.psyche.five.o > 1.05 && c.energy > GO_FORAGE_AT && Math.random() < 0.5) c.life.intent = "estudiar"
           const intent = c.life?.intent || "comer"
-          if (c.energy < GO_FORAGE_AT || intent === "comer") { const f = this.nearestFood(c, c.genome.vision * 3); const gd = this.nearestGarden(c); tx = f ? f.x : gd.x; ty = f ? f.y : gd.y }
+          // hunger only commands them when they're genuinely hungry; the rest of the time they live their OWN life
+          if (c.energy < 62 || intent === "comer") { const f = this.nearestFood(c, c.genome.vision * 3); const gd = this.nearestGarden(c); tx = f ? f.x : gd.x; ty = f ? f.y : gd.y }
           else { const t = this.intentTarget(c, intent); tx = t.x; ty = t.y }
         }
         const [vx, vy] = this.roadSteer(c, tx, ty)
@@ -646,6 +647,11 @@ export class World {
       if (c.sick) upkeep *= SICK_EXTRA
       c.energy -= upkeep
       if (!c.isAvatar && !isMature(c)) c.energy = Math.min(MAX_ENERGY, c.energy + 0.6) // the family feeds the children (well above their upkeep, so they don't starve before growing up)
+      // A MEAL AT HOME: settled adults eat stored/bought food when home — so they don't forage all day and
+      // actually have time to LIVE (work, socialise, study). In later eras the meal costs a little coin.
+      if (!c.isAvatar && isMature(c) && c.energy < MAX_ENERGY) {
+        if ((c.x - (c.home.x + c.home.w / 2)) ** 2 + (c.y - (c.home.y + c.home.h + 14)) ** 2 < 80 * 80) c.energy = Math.min(MAX_ENERGY, c.energy + 6) // the household's stored harvest
+      }
 
       const mouth = 16 + g.size * 9
       for (let i = this.food.length - 1; i >= 0; i--) {

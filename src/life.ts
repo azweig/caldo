@@ -24,7 +24,7 @@ export interface Life {
 export function decideIntent(c: Creature): string {
   const L = c.life; if (!L) return "vagar"
   const f = c.psyche.five
-  if (c.energy < 92) return "comer"                                   // hunger first
+  if (c.energy < 62) return "comer"                                   // only genuinely hungry → eat; otherwise live your life
   if (L.rest < 28) return "descansar"
   if (L.social < 30 + f.e * 22) return "socializar"                  // extraverts seek company much sooner
   if (L.fun < 26) return "disfrutar"
