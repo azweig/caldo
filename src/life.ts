@@ -122,6 +122,7 @@ export function lifeTick(c: Creature, partnerAlive: boolean, householdSize: numb
   if (L.social < 22) { drag += 0.4; feel(c, "triste", 0.35) }
   if (L.fun < 22) { drag += 0.3; feel(c, "aburrido", 0.4) }
   if (L.social > 70 && L.fun > 70 && c.partner) feel(c, "alegre", 0.3) // a full, connected life lifts the spirit
+  if (Math.random() < 0.02) feel(c, Math.random() < 0.7 ? "alegre" : "triste", 0.24) // the small good + bad days of an ordinary life
   c.mental = clamp(c.mental - drag)
   c.irritability = Math.max(0, Math.min(1, c.irritability + (L.rest < 25 ? 0.012 : -0.004)))
   // emotion fades back to neutral

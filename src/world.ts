@@ -418,7 +418,7 @@ export class World {
   private socialNotes(a: Creature, b: Creature): [string, string] {
     const sameHome = a.home === b.home
     const gap = ageYears(a) - ageYears(b)
-    const topic = rnd([this.prettyTopic(a), this.prettyTopic(b), "la cosecha", "los viejos tiempos", "el clima", "los jardines", "la familia"])
+    const topic = rnd([this.prettyTopic(a), this.prettyTopic(b), "la cosecha", "los viejos tiempos", "el clima", "los jardines", "la familia", "los precios del mercado", "un vecino", "un bebé recién nacido", "una boda", "los chismes del pueblo", "el cansancio del trabajo", "una fiesta", "los hijos"])
     if (a.profCat === "enseñanza" && !isMature(b)) return [`le enseñé a ${b.name} en la escuela`, `mi maestro ${a.name} me enseñó de ${topic}`]
     if (b.profCat === "enseñanza" && !isMature(a)) return [`mi maestro ${b.name} me enseñó de ${topic}`, `le enseñé a ${a.name} en la escuela`]
     if (sameHome && Math.abs(gap) > 13) {
@@ -569,6 +569,11 @@ export class World {
       for (const c of this.creatures) if (!c.isAvatar && c.life) { c.mental = Math.min(100, c.mental + 4); c.life.fun = Math.min(100, c.life.fun + 35); c.life.social = Math.min(100, c.life.social + 22); feel(c, "alegre", 0.55) }
       this.logEvent(`✦ el pueblo celebra una fiesta`)
     }
+    // SEASONS colour daily life: a hard winter weighs on everyone, a bright spring lifts them
+    const season = seasonOf(this.clockDays)
+    if (this.tick % 10 === 0) for (const c of this.creatures) if (!c.isAvatar && c.life) { if (season === 3) c.life.fun = Math.max(0, c.life.fun - 1.2); else if (season === 0) c.life.fun = Math.min(100, c.life.fun + 0.8) }
+    // MARKET DAY: a few times a month merchants gather at the plaza to trade — extra coin + a hum of gossip
+    if (this.clockDays % 14 === 0) for (const c of this.creatures) if (!c.isAvatar && c.life && (c.profCat === "comercio" || c.profCat === "oficio")) { c.money += 6; c.life.social = Math.min(100, c.life.social + 14) }
     // plague: a rare epidemic that can take the wise and tip the village into a dark age
     if (this.clockDays > this.plagueUntil + 1500 && Math.random() < 0.00012) {
       this.plagueUntil = this.clockDays + 130 + Math.floor(Math.random() * 160)
