@@ -93,6 +93,9 @@ let roomX = 0, roomZ = 0 // your position inside the room (3D units)
 let chatTarget: Creature | null = null
 let paused = false
 let scaleIndex = 0
+// while possessing, time runs near-real-time so you can live the day; a small button steps 1x→2x→3x→5x (min/s)
+const POSSESS_SPEEDS = [1, 2, 3, 5]
+let possessSpeedIdx = 0
 let chatting = false
 let pausedByChat = false
 let session: Msg[] = []
@@ -119,6 +122,13 @@ function setScale(i: number) {
 }
 function togglePause() { paused = !paused; pauseBtn.textContent = paused ? "▶" : "⏸" }
 speedSlider.addEventListener("input", () => { setScale(+speedSlider.value); speedSlider.blur() })
+const pspeedBtn = document.getElementById("pspeed") as HTMLButtonElement
+pspeedBtn.addEventListener("click", (e) => {
+  e.stopPropagation()
+  possessSpeedIdx = (possessSpeedIdx + 1) % POSSESS_SPEEDS.length
+  pspeedBtn.textContent = `⏩ ${POSSESS_SPEEDS[possessSpeedIdx]}x`
+  pspeedBtn.blur()
+})
 pauseBtn.addEventListener("click", () => { togglePause(); pauseBtn.blur() })
 
 // ── ⚙ LLM settings (point the creatures' voice at your GPU box's Ollama) ──
@@ -735,7 +745,8 @@ function loop() {
     me.x = clamp(me.x, 60, WORLD_W - 60); me.y = clamp(me.y, 60, WORLD_H - 60)
   }
   if (!paused) {
-    const minPerFrame = SCALES[scaleIndex].rate / 60 // in-world minutes added this frame (~60fps)
+    const rate = possessed ? POSSESS_SPEEDS[possessSpeedIdx] : SCALES[scaleIndex].rate // 3D = near real-time, capped 5x
+    const minPerFrame = rate / 60 // in-world minutes added this frame (~60fps)
     let steps = 0
     for (const cn of countries) {
       let add = minPerFrame
