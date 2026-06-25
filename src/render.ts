@@ -5,6 +5,7 @@
 import { World, Creature, House, ageYears, isMature, seasonOf, WORLD_W, WORLD_H, BLOCK, ROAD_HALF } from "./world"
 import { Assets } from "./sprites"
 import { TRAIT_BOUNDS } from "./genome"
+import { EMO } from "./life"
 
 export interface Cam { x: number; y: number; zoom: number }
 
@@ -291,6 +292,11 @@ function drawCreature(ctx: CanvasRenderingContext2D, c: Creature, era: number) {
     ctx.font = "bold 12px ui-monospace, monospace"; ctx.textAlign = "center"
     ctx.fillStyle = "rgba(0,0,0,0.5)"; ctx.fillText("✚", c.x + 1, c.y - w - 3)
     ctx.fillStyle = "#8fe39a"; ctx.fillText("✚", c.x, c.y - w - 4); ctx.textAlign = "left"
+  }
+  // a felt emotion floats over the head (only when strong, so it reads as a living reaction not clutter)
+  if (!c.isAvatar && c.life && c.life.emoInt > 0.4 && c.life.emotion !== "neutral") {
+    const e = (EMO as Record<string, string>)[c.life.emotion]
+    if (e) { ctx.font = "16px serif"; ctx.textAlign = "center"; ctx.fillText(e, c.x, c.y - w - (c.sick ? 18 : 6)); ctx.textAlign = "left" }
   }
 }
 

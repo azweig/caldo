@@ -5,6 +5,7 @@
 
 import type { World, Creature } from "./world"
 import { ageYears, isMature } from "./world"
+import { feel, bond } from "./life"
 import { conscience, NOAHIDE } from "./morality"
 import { runPolitics } from "./politics"
 
@@ -96,9 +97,12 @@ export function runSociety(w: World, wild: Creature[]) {
       const vi = w.creatures.indexOf(victim); if (vi >= 0) { w.creatures.splice(vi, 1); w.deaths++; w.deathCauses.violencia++ }
       w.logDeed({ day: w.clockDays, gen: c.generation, who: c.id, name: `${c.name} ${c.surname}`, kind: "crimen", text: `asesinó a ${victim.name} ${victim.surname}`, impact: -20 })
       if (caught) { const ci = w.creatures.indexOf(c); if (ci >= 0) { w.creatures.splice(ci, 1); w.deaths++ }; w.logDeed({ day: w.clockDays, gen: c.generation, who: c.id, name: `${c.name} ${c.surname}`, kind: "justicia", text: "ejecutado por el tribunal", impact: 0 }) }
+      if (c.life) c.life.rep = Math.max(-1, c.life.rep - 0.5) // a killer's name is cursed
     } else {
       if (lawKey === "robo") { const loot = Math.min(Math.max(0, victim.money), 10 + price * 5); victim.money -= loot; c.money += loot }
       w.logDeed({ day: w.clockDays, gen: c.generation, who: c.id, name: `${c.name} ${c.surname}`, kind: "crimen", text: lawKey === "inmoralidad" ? "cometió adulterio" : `robó a ${victim.name} ${victim.surname}`, impact: -4 })
+      if (c.life) c.life.rep = Math.max(-1, c.life.rep - 0.2)
+      feel(victim, "enojado", 0.7); bond(victim, c.id, -0.6) // the victim resents the thief
       if (caught) { c.money -= price * 10 * (0.4 + 0.6 * law.severity); w.logDeed({ day: w.clockDays, gen: c.generation, who: c.id, name: `${c.name} ${c.surname}`, kind: "justicia", text: "multado por el tribunal", impact: 0 }) }
     }
   }
@@ -118,6 +122,7 @@ export function runSociety(w: World, wild: Creature[]) {
       w.logDeed({ day: w.clockDays, gen: c.generation, who: c.id, name: `${c.name} ${c.surname}`, kind: "obra", text: `creó ${title}`, impact, content: ART_DESC[Math.floor(Math.random() * ART_DESC.length)] })
     }
     w.wisdom = Math.min(100, w.wisdom + impact * 0.04)
+    if (c.life) { feel(c, "orgulloso", 0.8); c.life.rep = Math.min(1, c.life.rep + 0.15); if (c.life.goalKey === "obra") c.life.goalProg = Math.min(1, c.life.goalProg + 0.18) } // the artist's pride + renown
   }
 }
 

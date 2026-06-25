@@ -131,6 +131,9 @@ body { font-family: ui-monospace, "SF Mono", Menlo, monospace; color: #dfe7ee; }
 #npccard { position: absolute; right: 16px; bottom: 16px; width: 280px; z-index: 9; background: rgba(12,17,26,0.96); border: 1px solid rgba(255,210,128,0.35); border-radius: 12px; padding: 12px 14px; box-shadow: 0 6px 22px rgba(0,0,0,0.5); }
 #npccard .nc-name { color: #ffe6a3; font-weight: bold; font-size: 15px; margin-bottom: 5px; }
 #npccard .nc-row { color: #aebccd; font-size: 12px; margin: 2px 0; }
+#npccard .nc-inner { color: #cdbf9a; font-size: 12px; font-style: italic; margin: 4px 0; }
+#npccard .nc-row .rbar { display: inline-block; width: 70px; height: 6px; background: rgba(255,255,255,0.12); border-radius: 3px; vertical-align: middle; overflow: hidden; }
+#npccard .nc-row .rbar i { display: block; height: 100%; background: linear-gradient(90deg,#8fe3a0,#ffe6a3); }
 #npccard .nc-acts { display: flex; gap: 6px; margin-top: 10px; }
 #npccard .nc-acts button { flex: 1; background: rgba(120,180,255,0.18); border: 1px solid rgba(120,180,255,0.4); color: #cfe2ff; border-radius: 8px; padding: 6px 8px; font: inherit; font-size: 12px; cursor: pointer; }
 #npccard .nc-acts button:hover { background: rgba(120,180,255,0.34); }

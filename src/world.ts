@@ -6,6 +6,7 @@
 import { Genome, randomGenome, recombine } from "./genome"
 import { Psyche, randomPsyche, inheritPsyche } from "./psyche"
 import { Cat, Boosts, Prof, Tech, PROFS, TECHS, availableProfs, availableTechs, canAdvanceEra, economyOf, professionTitle, eraName } from "./civ"
+import { Life, newLife, lifeTick, feel, bond } from "./life"
 import { pickReligion, EconSystem } from "./civconfig"
 import { genPerson, inheritDark, classify, DarkTriad, Archetype } from "./population"
 import { runSociety } from "./society"
@@ -105,6 +106,7 @@ export interface Creature {
   health: number     // 0..100 physical health — falls if they can't afford food/housing → illness/death
   mental: number     // 0..100 mental health — falls under poverty, loss, repression → drives bad behaviour
   irritability: number // 0..1 — rises with stress + low mental health; tips them toward conflict/crime
+  life?: Life        // the inner life: needs, emotion, goal, vocation, hobby, quirk, relationships, reputation
 }
 
 // a notable act, logged so we can later rank the most INFLUENTIAL people per generation
@@ -303,13 +305,17 @@ export class World {
     if (t.n === "Universidad" && !this.universities.length) this.universities.push({ x: WORLD_W * 0.5 - 64, y: WORLD_H * 0.5 - 54, w: 128, h: 104 })
     const top = this.techTop.get(t.n)
     this.logEvent(`${top ? `${top.name} ${top.surname} (${top.prof})` : "el pueblo"} ideó ${t.n}`)
-    if (top) this.deeds.push({ day: this.clockDays, gen: this.peakGen, who: top.id, name: top.name, kind: "descubrimiento", text: `ideó ${t.n}`, impact: 16 })
+    if (top) {
+      this.deeds.push({ day: this.clockDays, gen: this.peakGen, who: top.id, name: top.name, kind: "descubrimiento", text: `ideó ${t.n}`, impact: 16 })
+      const inv = this.creatures.find((c) => c.id === top.id) // the inventor swells with pride + earns renown
+      if (inv?.life) { feel(inv, "orgulloso", 0.85); inv.life.rep = Math.min(1, inv.life.rep + 0.25); inv.life.goalProg = Math.min(1, inv.life.goalProg + 0.12) }
+    }
   }
 
   // ── persistence: a civilisation survives reloads until you start a new one ──
   toState() {
     const hi = new Map<House, number>(); this.houses.forEach((h, i) => hi.set(h, i))
-    const C = (c: Creature) => ({ id: c.id, x: c.x, y: c.y, e: c.energy, ad: c.ageDays, ls: c.lifespanDays, gen: c.generation, nm: c.name, sn: c.surname, h: hi.get(c.home) ?? 0, k: c.knowledge, pf: c.profession, pb: c.profBase, pc: c.profCat, hp: c.heritProf, sick: c.sick, ch: c.children, par: c.parents, rel: c.religion, pw: c.powerHungry, g: c.genome, ps: c.psyche, mem: c.memory, soc: c.social, gh: c.goingHome, pt: c.partner, pg: c.pregnant, mny: c.money, dk: c.dark, arc: c.archetype, crm: c.crimes, biz: c.business, hl: c.health, mt: c.mental, ir: c.irritability })
+    const C = (c: Creature) => ({ id: c.id, x: c.x, y: c.y, e: c.energy, ad: c.ageDays, ls: c.lifespanDays, gen: c.generation, nm: c.name, sn: c.surname, h: hi.get(c.home) ?? 0, k: c.knowledge, pf: c.profession, pb: c.profBase, pc: c.profCat, hp: c.heritProf, sick: c.sick, ch: c.children, par: c.parents, rel: c.religion, pw: c.powerHungry, g: c.genome, ps: c.psyche, mem: c.memory, soc: c.social, gh: c.goingHome, pt: c.partner, pg: c.pregnant, mny: c.money, dk: c.dark, arc: c.archetype, crm: c.crimes, biz: c.business, hl: c.health, mt: c.mental, ir: c.irritability, lf: c.life })
     return { region: this.region, gov: this.gov, system: this.system, era: this.era, cultureName: this.cultureName, cultureEthos: this.cultureEthos, cultureBias: this.cultureBias, clockDays: this.clockDays, clockMinutes: this.clockMinutes, tick: this.tick, research: this.research, discovered: [...this.discovered], techBoost: this.techBoost, wisdom: this.wisdom, births: this.births, deaths: this.deaths, peakGen: this.peakGen, plagueUntil: this.plagueUntil, violence: this.violence, psychopathy: this.psychopathy, religionsCfg: this.religionsCfg, chronicle: this.chronicle.slice(-60), houses: this.houses, gardens: this.gardens, schools: this.schools, universities: this.universities, airport: this.airport, monarch: this.monarch?.id ?? null, deeds: this.deeds.slice(-300), creatures: this.creatures.filter((c) => !c.isAvatar).map(C) }
   }
   static fromState(s: any, spriteCount: number): World {
@@ -324,7 +330,8 @@ export class World {
     const byId = new Map<number, Creature>(); let maxId = 0
     w.creatures = (s.creatures || []).map((c: any) => {
       maxId = Math.max(maxId, c.id)
-      const cr: Creature = { id: c.id, x: c.x, y: c.y, vx: 0, vy: 0, energy: c.e, ageDays: c.ad, lifespanDays: c.ls, genome: c.g, generation: c.gen, name: c.nm, surname: c.sn, home: w.houses[c.h] || w.houses[0], goingHome: !!c.gh, parents: c.par, children: c.ch, sick: c.sick, sickDays: 0, lastRepro: -99999, partner: c.pt || 0, pregnant: c.pg || 0, isAvatar: false, facing: 1, psyche: c.ps, memory: c.mem || [], social: c.soc || [], knowledge: c.k, profession: c.pf, profBase: c.pb, profCat: c.pc, heritProf: c.hp || "", religion: c.rel || "", powerHungry: !!c.pw, money: c.mny || 0, controlled: false, dark: c.dk || { mach: 0.2, narc: 0.2, psycho: 0.1 }, archetype: c.arc || "promedio", crimes: c.crm || 0, business: !!c.biz, health: c.hl ?? 88, mental: c.mt ?? 78, irritability: c.ir ?? 0.3 }
+      const cr: Creature = { id: c.id, x: c.x, y: c.y, vx: 0, vy: 0, energy: c.e, ageDays: c.ad, lifespanDays: c.ls, genome: c.g, generation: c.gen, name: c.nm, surname: c.sn, home: w.houses[c.h] || w.houses[0], goingHome: !!c.gh, parents: c.par, children: c.ch, sick: c.sick, sickDays: 0, lastRepro: -99999, partner: c.pt || 0, pregnant: c.pg || 0, isAvatar: false, facing: 1, psyche: c.ps, memory: c.mem || [], social: c.soc || [], knowledge: c.k, profession: c.pf, profBase: c.pb, profCat: c.pc, heritProf: c.hp || "", religion: c.rel || "", powerHungry: !!c.pw, money: c.mny || 0, controlled: false, dark: c.dk || { mach: 0.2, narc: 0.2, psycho: 0.1 }, archetype: c.arc || "promedio", crimes: c.crm || 0, business: !!c.biz, health: c.hl ?? 88, mental: c.mt ?? 78, irritability: c.ir ?? 0.3, life: c.lf }
+      if (!cr.life) cr.life = newLife(cr)
       byId.set(cr.id, cr); return cr
     })
     w.monarch = s.monarch != null ? byId.get(s.monarch) || null : null
@@ -338,7 +345,7 @@ export class World {
     const person = genPerson()
     const ps = psyche ?? randomPsyche()
     if (!psyche) ps.five = person.five // founders + reseeds get the normally-distributed Big Five
-    return {
+    const c: Creature = {
       id: NEXT_ID++,
       x: x ?? home.x, y: y ?? home.y,
       vx: 0, vy: 0,
@@ -354,6 +361,8 @@ export class World {
       dark: person.dark, archetype: classify(ps.five, person.dark), crimes: 0, business: false,
       health: 88, mental: 78, irritability: Math.max(0.05, Math.min(0.95, ps.five.n * 0.6 + Math.random() * 0.2)),
     }
+    c.life = newLife(c)
+    return c
   }
 
   scatterFood() {
@@ -400,6 +409,15 @@ export class World {
       a.social.push(na); b.social.push(nb)
       while (a.social.length > 6) a.social.shift()
       while (b.social.length > 6) b.social.shift()
+      // they form a BOND — warmer when their natures click, cooler when they clash or one is manipulative
+      const click = ((a.psyche.five.a + b.psyche.five.a) / 2 - 0.4) - Math.abs(a.psyche.five.e - b.psyche.five.e) * 0.25
+      bond(a, b.id, click * 0.07); bond(b, a.id, click * 0.07)
+      if (a.dark.mach > 0.6 && Math.random() < 0.25) bond(b, a.id, -0.12) // betrayed trust sours the tie
+      // GOSSIP: they trade word of a third person, so reputation travels and shapes how others see them
+      const third = wild[Math.floor(Math.random() * wild.length)]
+      if (third !== a && third !== b && third.life && Math.abs(third.life.rep) > 0.15) {
+        bond(a, third.id, third.life.rep * 0.04); bond(b, third.id, third.life.rep * 0.04)
+      }
     }
   }
 
@@ -508,6 +526,8 @@ export class World {
     const newborns: Creature[] = []
     const byId = new Map<number, Creature>()
     for (const c of this.creatures) byId.set(c.id, c)
+    const homeCount = new Map<House, number>() // cheap household size, for the social need
+    for (const c of this.creatures) if (!c.isAvatar) homeCount.set(c.home, (homeCount.get(c.home) || 0) + 1)
 
     for (const c of this.creatures) {
       c.ageDays++
@@ -573,6 +593,7 @@ export class World {
         }
         // pick a trade when grown up
         if (!c.profBase && isMature(c)) this.assignProfession(c)
+        lifeTick(c, !!c.partner && byId.has(c.partner), homeCount.get(c.home) || 1) // the inner life ticks
       }
 
       const ay = ageYears(c)
@@ -612,6 +633,8 @@ export class World {
             if (child.generation > this.peakGen) this.peakGen = child.generation
           }
           c.children += litter; if (mate) mate.children += litter
+          feel(c, "alegre", 0.9); if (c.life && c.life.goalKey === "familia") c.life.goalProg = Math.min(1, c.life.goalProg + 0.12) // the joy of a newborn
+          if (mate) { feel(mate, "alegre", 0.85); if (mate.life && mate.life.goalKey === "familia") mate.life.goalProg = Math.min(1, mate.life.goalProg + 0.12) }
           c.energy -= REPRO_COST; if (mate) mate.energy = Math.max(5, mate.energy - REPRO_COST)
           c.lastRepro = this.clockDays; if (mate) mate.lastRepro = this.clockDays
           if (this.houses.length < 130 && this.creatures.length + newborns.length > this.houses.length * 2.4) { const nh = this.addHouse(c.surname); if (nh) newborns[newborns.length - 1].home = nh } // town grows
@@ -621,6 +644,19 @@ export class World {
       survivors.push(c)
     }
 
+    // GRIEF: whoever just lost a partner, parent, child or housemate carries the sorrow for weeks
+    const survSet = new Set(survivors.map((c) => c.id))
+    for (const dead of this.creatures) {
+      if (dead.isAvatar || survSet.has(dead.id)) continue
+      for (const m of survivors) {
+        if (!m.life) continue
+        const partner = m.partner === dead.id
+        const kin = partner || m.home === dead.home || (dead.parents?.includes(m.id) ?? false) || (m.parents?.includes(dead.id) ?? false)
+        if (!kin) continue
+        feel(m, "afligido", partner ? 0.95 : 0.7); m.mental = Math.max(0, m.mental - (partner ? 14 : 7))
+        m.life.condition = "duelo"; m.life.condDays = Math.max(m.life.condDays, partner ? 45 : 22)
+      }
+    }
     this.creatures = survivors.concat(newborns)
 
     if (this.tick % 20 === 0) {

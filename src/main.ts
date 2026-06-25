@@ -14,6 +14,7 @@ import { ENNEAGRAM } from "./psyche"
 import { LangCode, WRITE_LANG, langName, heard } from "./i18n"
 import { CivConfig, RELIGIONS, buildCountries, foodSystem, transportOf, transportLevel } from "./civconfig"
 import { ethosOf, cultureReligions } from "./cultures"
+import { innerLine, EMO } from "./life"
 import { init3D, resize3D, render3D, renderInterior, ROOM, pick3D, project3D } from "./three3d"
 import { wealthStats, influentialByGen } from "./society"
 import { composeWork, cachedWork } from "./works"
@@ -30,10 +31,15 @@ function showNpcCard(c: Creature | null) {
   if (!c || !possessed) { npccard.classList.add("hidden"); return }
   const rel = c.partner === possessed.id ? "💗 tu pareja" : c.surname === possessed.surname ? "💚 familia" : "🤍 vecino/a"
   const canCourt = isMature(c) && isMature(possessed) && !c.partner && !possessed.partner && c.id % 2 !== possessed.id % 2
+  const L = c.life
+  const emo = L && L.emoInt > 0.2 && L.emotion !== "neutral" ? `${(EMO as Record<string, string>)[L.emotion] || ""} ${L.emotion}` : ""
+  const repTag = L ? (L.rep > 0.35 ? "🌟 admirado/a" : L.rep < -0.35 ? "⚠️ mal visto/a" : "") : ""
   npccard.innerHTML = `
     <div class="nc-name">${c.name} ${c.surname}</div>
-    <div class="nc-row">${c.profession || "sin oficio"} · ${Math.round(ageYears(c))} años · ${rel}</div>
-    <div class="nc-row">🧠 ${Math.round(c.mental)} · 😤 ${Math.round(c.irritability * 100)}% · 🍔 ${Math.round(c.energy)}</div>
+    <div class="nc-row">${c.profession || "sin oficio"} · ${Math.round(ageYears(c))} años · ${rel} ${repTag}</div>
+    ${L ? `<div class="nc-inner">${emo ? emo + " · " : ""}${innerLine(c)}</div>` : ""}
+    ${L ? `<div class="nc-row">🎯 ${L.goal} <span class="rbar"><i style="width:${Math.round(L.goalProg * 100)}%"></i></span></div><div class="nc-row">🎨 ${L.hobby} · «${L.quirk}»</div>` : ""}
+    <div class="nc-row">🧠 ${Math.round(c.mental)} · 😤 ${Math.round(c.irritability * 100)}% · 🍔 ${Math.round(c.energy)}${L && L.condition ? ` · <b style="color:#d68">${L.condition}</b>` : ""}</div>
     <div class="nc-acts"><button id="nc-talk">💬 Hablar</button>${canCourt ? '<button id="nc-court">💘 Cortejar</button>' : ""}<button id="nc-x">✕</button></div>`
   npccard.classList.remove("hidden")
   document.getElementById("nc-talk")!.onclick = () => { showNpcCard(null); openChat(c) }
