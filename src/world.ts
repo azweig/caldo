@@ -280,7 +280,7 @@ export class World {
   }
   private profWeight(p: Prof, c: Creature): number {
     let w = this.fit(p.c, c)
-    if (p.n === c.heritProf) w *= 4 // family apprenticeship (the strongest pull)
+    if (p.n === c.heritProf) w *= c.psyche.five.o > 0.66 ? 1.3 : 4 // family trade pulls hard — unless they're the open, independent sort who forge their OWN path
     if (c.powerHungry && (p.c === "liderazgo" || p.c === "defensa")) w *= 3 // the ambitious seek power
     const pop = this.profPop[p.n] || 0
     w *= 0.5 + 0.55 * Math.log1p(pop) + (pop > 0 ? 0.4 : 0) // social learning: known trades are easier to enter
@@ -773,6 +773,12 @@ export class World {
         const pay = c.profCat === "comercio" || c.profCat === "liderazgo" ? 7.5 : c.profCat === "saber" || c.profCat === "ingeniería" ? 6.5 : c.profCat === "salud" ? 6 : 4.5
         c.money += pay * eraPay * (1 + (c.life?.mastery || 0) * 0.6) // a master of their craft earns more; supporting a big family on a low wage strains it
         this.maybeRetrain(c) // the deeply unhappy may switch trades
+      }
+      // INDEPENDENCE: a restless, independent young adult leaves the family home to make their own way
+      for (const c of wild) {
+        if (c.partner || !c.life || c.psyche.five.o < 0.62 || c.money < 18 || this.houses.length >= 130) continue
+        const ay = ageYears(c); if (ay < 18 || ay > 30) continue
+        if (Math.random() < 0.012) { const nh = this.addHouse(c.surname); if (nh) { c.home = nh; c.money -= 12; feel(c, "esperanzado", 0.6); c.mental = Math.min(100, c.mental + 6); this.logEvent(`${c.name} ${c.surname} dejó la casa familiar para hacer su propia vida`) } }
       }
 
       // ── demographics: form couples, then conceive (logistic growth toward a tech-scaled capacity) ──
