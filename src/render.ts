@@ -11,26 +11,6 @@ import { emojiOf, SPECIES, enemyEmoji } from "./animals"
 export interface Cam { x: number; y: number; zoom: number }
 
 // the 2D view now uses the SAME generated characters as the 3D (so they match) + pixel-art house sprites
-const imgCache = new Map<string, HTMLImageElement>()
-function pix(path: string): HTMLImageElement {
-  let im = imgCache.get(path); if (!im) { im = new Image(); im.src = path; imgCache.set(path, im) }
-  return im
-}
-function eraTier2D(era: number): string {
-  if (era <= 1) return "prehist"; if (era <= 4) return "ancient"; if (era <= 7) return "medieval"
-  if (era <= 9) return "renais"; if (era <= 11) return "industrial"; if (era <= 14) return "modern"; return "future"
-}
-function roleOf2D(c: Creature): string {
-  const cat = c.profCat
-  if (cat === "comercio" || cat === "liderazgo") return "merchant"
-  if (cat === "defensa") return "warrior"
-  if (cat === "saber" || cat === "enseñanza" || cat === "ingeniería" || cat === "arte" || cat === "espíritu" || cat === "salud") return "scholar"
-  return "commoner"
-}
-function personImg(c: Creature, era: number): HTMLImageElement {
-  return pix(`/people/${eraTier2D(era)}_${roleOf2D(c)}_${c.id % 2 ? "m" : "f"}_${(c.genome.sprite + c.id) % 2}.png`)
-}
-
 let vehT = 0 // real-time animation clock for vehicles (so they move even when the world is slow)
 let wT = 0   // walk-cycle clock for the people's bob + sway
 const seedR = (s: number) => { const x = Math.sin(s) * 43758.5453; return x - Math.floor(x) }
@@ -64,12 +44,16 @@ function drawVehicles(ctx: CanvasRenderingContext2D, world: World, t: number) {
   }
 }
 
+// a bright, cohesive "cozy town" palette — grass by biome × season (spring, summer, autumn, winter)
 const REGION_GROUND = [
-  ["#0f1d1a", "#121d16", "#1b1810", "#0c131b"], // templado
-  ["#101b22", "#0e1f1f", "#17191a", "#0b1016"], // frío/norteño
-  ["#1a1614", "#1d1810", "#1c140e", "#120f0e"], // cálido/desierto
-  ["#101d14", "#0e1e12", "#16190f", "#0c150f"], // selvático
+  ["#7cb15e", "#6fa854", "#b09a52", "#aeb6a4"], // templado
+  ["#74a37c", "#6f9e74", "#9aa45e", "#c2cabe"], // frío/norteño
+  ["#c6b277", "#cbb672", "#c2a35e", "#cabf94"], // cálido/desierto
+  ["#5ea65a", "#56a052", "#86994e", "#8fb086"], // selvático
 ]
+const PATH_COL = ["#cbb083", "#cbb083", "#c2a875", "#c4bca8"] // warm dirt path, paler in winter
+const SKIN = ["#f4cba6", "#ecbd92", "#d79e6f", "#bd8350", "#9c6b43", "#7a4f31"]
+const HAIR = ["#2a1d12", "#4a3220", "#6b4a2e", "#a07b44", "#1a1a1a", "#7a3a1a", "#c9c2b8"]
 const CAT_COLOR: Record<string, string> = {
   comida: "#9cff7b", salud: "#ff8c8c", saber: "#9bb8ff", enseñanza: "#7bd0ff", construcción: "#c9a06a",
   oficio: "#d9b25a", arte: "#ff9bdd", liderazgo: "#ffd166", comercio: "#7be0c0", exploración: "#8fd6ff",
@@ -101,14 +85,16 @@ export function drawWorld(
   ctx.fillRect(0, 0, WORLD_W, WORLD_H)
   // scattered trees + bushes give the land texture (deterministic positions, seasonal colour)
   const sea = seasonOf(world.clockDays)
-  const leaf = sea === 3 ? "#3a4a3a" : sea === 2 ? "#5a4a24" : "#2f5a2c"
-  for (let i = 0; i < 70; i++) {
+  const leaf = sea === 3 ? "#9fb39a" : sea === 2 ? "#c79a3e" : "#4e9442", leafHi = sea === 3 ? "#b6c6b0" : sea === 2 ? "#dcb45a" : "#69ab52"
+  for (let i = 0; i < 80; i++) {
     const px = seedR(i * 1.3) * WORLD_W, py = seedR(i * 2.7 + 5) * WORLD_H
     const onRoad = Math.abs((px % BLOCK) - BLOCK / 2) > BLOCK / 2 - ROAD_HALF - 4 || Math.abs((py % BLOCK) - BLOCK / 2) > BLOCK / 2 - ROAD_HALF - 4
     if (onRoad) continue
-    const r = 5 + seedR(i * 3.1) * 7
-    ctx.fillStyle = "rgba(0,0,0,0.12)"; ctx.beginPath(); ctx.ellipse(px + 2, py + r * 0.7, r, r * 0.4, 0, 0, Math.PI * 2); ctx.fill()
-    ctx.fillStyle = leaf; ctx.beginPath(); ctx.arc(px, py, r, 0, Math.PI * 2); ctx.fill()
+    const r = 6 + seedR(i * 3.1) * 8
+    ctx.fillStyle = "rgba(40,60,30,0.16)"; ctx.beginPath(); ctx.ellipse(px + 3, py + r * 0.75, r * 1.05, r * 0.42, 0, 0, Math.PI * 2); ctx.fill() // shadow
+    ctx.fillStyle = "#6b4a2e"; ctx.fillRect(px - 1.5, py - 2, 3, r * 0.8) // little trunk
+    ctx.fillStyle = leaf; ctx.beginPath(); ctx.arc(px, py - r * 0.5, r, 0, Math.PI * 2); ctx.fill()
+    ctx.fillStyle = leafHi; ctx.beginPath(); ctx.arc(px - r * 0.3, py - r * 0.8, r * 0.5, 0, Math.PI * 2); ctx.fill() // sun-lit top
   }
 
   // gardens (where food grows) — a tilled patch with rows of crops that green up in summer, fade in winter
@@ -121,15 +107,14 @@ export function drawWorld(
     for (let i = 0; i < 22; i++) { const a = i * 2.39996, r = 18 + (i % 6) * 13; const px = g.x + Math.cos(a) * r, py = g.y + Math.sin(a) * r * 0.8; ctx.fillRect(px - 1, py - 4, 2, 5) }
   }
 
-  // streets (grid)
-  ctx.fillStyle = "#172230"
+  // streets — warm dirt paths (cobbled in modern eras), with a worn centre line
+  const path = world.era >= 9 ? "#b3ada3" : PATH_COL[sea]
+  ctx.fillStyle = path
   for (let x = BLOCK; x < WORLD_W; x += BLOCK) ctx.fillRect(x - ROAD_HALF, 0, ROAD_HALF * 2, WORLD_H)
   for (let y = BLOCK; y < WORLD_H; y += BLOCK) ctx.fillRect(0, y - ROAD_HALF, WORLD_W, ROAD_HALF * 2)
-  ctx.strokeStyle = "rgba(255,255,255,0.05)"; ctx.lineWidth = 1
-  ctx.setLineDash([8, 10])
-  for (let x = BLOCK; x < WORLD_W; x += BLOCK) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, WORLD_H); ctx.stroke() }
-  for (let y = BLOCK; y < WORLD_H; y += BLOCK) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(WORLD_W, y); ctx.stroke() }
-  ctx.setLineDash([])
+  ctx.fillStyle = "rgba(90,70,40,0.13)"
+  for (let x = BLOCK; x < WORLD_W; x += BLOCK) ctx.fillRect(x - 1, 0, 2, WORLD_H)
+  for (let y = BLOCK; y < WORLD_H; y += BLOCK) ctx.fillRect(0, y - 1, WORLD_W, 2)
 
   // occupancy: who's currently home (near their own house) → drives the lit windows + the head-count
   const present = new Map<House, number>()
@@ -139,44 +124,48 @@ export function drawWorld(
     if ((c.x - hx) ** 2 + (c.y - hy) ** 2 < 80 * 80) present.set(c.home, (present.get(c.home) || 0) + 1)
   }
 
-  // houses — the sprite reflects the home's TIER (choza→casa→casona→mansión→edificio) in an era style
-  const et = world.era, hstyle = et >= 12 ? "modern" : et >= 9 ? "industrial" : "medieval"
-  const tierName = ["choza", "casa", "casona", "mansion", "edificio"]
+  // houses — drawn procedurally in ONE cohesive style: walls + pitched roof (or a flat-roofed block for
+  // apartment buildings), tier drives the height + grandeur, lights warm up at night when someone's home.
   const nightNow = (() => { const h = (world.clockMinutes % 1440) / 60; return h < 6 || h >= 19 })()
   for (const h of world.houses) {
-    const n = present.get(h) || 0
-    let hImg = pix(`/house_tiers/${hstyle}_${tierName[h.tier || 0]}.png`)
-    if (hImg.complete && hImg.naturalWidth === 0) hImg = pix(`/pix_houses/${eraTier2D(world.era)}.png`) // fallback if that combo wasn't generated
-    if (hImg.naturalWidth > 0) { // pixel-art house sprite, sized to the lot (roof rises above)
-      const hw = h.w * 1.7, hh = hw * (hImg.naturalHeight / hImg.naturalWidth)
-      ctx.save(); ctx.globalAlpha = 0.18; ctx.fillStyle = "#000" // soft shadow grounds the building
-      ctx.beginPath(); ctx.ellipse(h.x + h.w / 2 + 6, h.y + h.h - 2, hw * 0.42, h.h * 0.3, 0, 0, Math.PI * 2); ctx.fill(); ctx.restore()
-      ctx.imageSmoothingEnabled = false; ctx.globalAlpha = n > 0 ? 1 : 0.82
-      ctx.drawImage(hImg, h.x + h.w / 2 - hw / 2, h.y + h.h - hh, hw, hh); ctx.globalAlpha = 1
-      if (n > 0 && world.era < 12) { // smoke curls from the chimney of a lived-in home (a hearth burning)
-        ctx.save(); ctx.fillStyle = "rgba(210,210,215,0.35)"
-        const cxh = h.x + h.w * 0.66, ry = h.y + h.h - hh * 0.72
-        for (let s = 0; s < 3; s++) { const t = (wT * 0.4 + s * 9 + h.x) % 27; ctx.globalAlpha = 0.3 * (1 - t / 27); ctx.beginPath(); ctx.arc(cxh + Math.sin(t * 0.3 + s) * 5, ry - t, 3 + t * 0.12, 0, Math.PI * 2); ctx.fill() }
-        ctx.restore()
-      }
-      if (nightNow && n > 0) { // warm light spills from an occupied home at night
-        ctx.save(); ctx.globalCompositeOperation = "lighter"; ctx.globalAlpha = 0.5
-        const gg = ctx.createRadialGradient(h.x + h.w / 2, h.y + h.h - hh * 0.45, 2, h.x + h.w / 2, h.y + h.h - hh * 0.45, hw * 0.5)
-        gg.addColorStop(0, "rgba(255,205,120,0.9)"); gg.addColorStop(1, "rgba(255,205,120,0)")
-        ctx.fillStyle = gg; ctx.fillRect(h.x - hw, h.y - hh, hw * 3, hh * 2); ctx.restore()
-      }
-    } else { // fallback rectangle until the sprite loads
-      ctx.fillStyle = `hsl(${h.hue}, 30%, ${n > 0 ? 43 : 35}%)`; ctx.fillRect(h.x, h.y, h.w, h.h)
+    const n = present.get(h) || 0, tier = h.tier || 0, cx = h.x + h.w / 2, lit = n > 0
+    const wallH = tier === 4 ? 34 + tier * 5 + h.h * 0.3 : 8 + tier * 5
+    const roofH = tier === 4 ? 0 : 16 + tier * 5
+    const topY = h.y + h.h - wallH
+    ctx.save(); ctx.globalAlpha = 0.17; ctx.fillStyle = "#243012" // soft grounded shadow
+    ctx.beginPath(); ctx.ellipse(cx + 5, h.y + h.h + 1, h.w * 0.62, h.h * 0.34, 0, 0, Math.PI * 2); ctx.fill(); ctx.restore()
+    const wall = `hsl(${h.hue}, 24%, ${lit ? 74 : 68}%)`, wallSh = `hsl(${h.hue}, 24%, ${lit ? 60 : 55}%)`
+    ctx.fillStyle = wall; ctx.fillRect(h.x, topY, h.w, wallH)
+    ctx.fillStyle = wallSh; ctx.fillRect(h.x + h.w * 0.74, topY, h.w * 0.26, wallH) // right-side shading for volume
+    const winC = nightNow && lit ? "#ffd98a" : "rgba(176,206,236,0.9)"
+    if (tier === 4) { // APARTMENT BLOCK — flat roof + grid of windows
+      ctx.fillStyle = `hsl(${h.hue}, 28%, 44%)`; ctx.fillRect(h.x - 2, topY - 5, h.w + 4, 6)
+      const rows = Math.max(2, Math.floor(wallH / 16))
+      for (let r = 0; r < rows; r++) for (let cI = 0; cI < 3; cI++) { ctx.fillStyle = winC; ctx.fillRect(h.x + 6 + cI * (h.w - 12) / 3, topY + 7 + r * 15, (h.w - 12) / 3 - 5, 8) }
+    } else { // pitched roof
+      ctx.fillStyle = `hsl(${(h.hue + 14) % 360}, 40%, 44%)`; ctx.beginPath(); ctx.moveTo(h.x - 6, topY + 2); ctx.lineTo(h.x + h.w + 6, topY + 2); ctx.lineTo(cx, topY - roofH); ctx.closePath(); ctx.fill()
+      ctx.fillStyle = "rgba(0,0,0,0.13)"; ctx.beginPath(); ctx.moveTo(cx, topY - roofH); ctx.lineTo(h.x + h.w + 6, topY + 2); ctx.lineTo(cx, topY + 2); ctx.closePath(); ctx.fill()
+      ctx.fillStyle = "#5d4733"; ctx.fillRect(cx - 6, h.y + h.h - 15, 12, 15) // door
+      ctx.fillStyle = winC; if (h.w > 30) { ctx.fillRect(h.x + 7, topY + 7, 9, 9); ctx.fillRect(h.x + h.w - 16, topY + 7, 9, 9) } else ctx.fillRect(cx - 5, topY + 7, 10, 9)
     }
-    // head-count badge
+    if (lit && world.era < 12) { // hearth smoke from a lived-in home
+      ctx.save(); ctx.fillStyle = "rgba(225,225,230,0.4)"
+      for (let s = 0; s < 3; s++) { const t = (wT * 0.4 + s * 9 + h.x) % 27; ctx.globalAlpha = 0.32 * (1 - t / 27); ctx.beginPath(); ctx.arc(h.x + h.w * 0.7 + Math.sin(t * 0.3 + s) * 5, topY - roofH - t, 3 + t * 0.12, 0, Math.PI * 2); ctx.fill() }
+      ctx.restore()
+    }
+    if (nightNow && lit) { // warm light pooling around an occupied home
+      ctx.save(); ctx.globalCompositeOperation = "lighter"; ctx.globalAlpha = 0.45
+      const gg = ctx.createRadialGradient(cx, topY + wallH * 0.5, 2, cx, topY + wallH * 0.5, h.w * 0.9)
+      gg.addColorStop(0, "rgba(255,205,120,0.85)"); gg.addColorStop(1, "rgba(255,205,120,0)")
+      ctx.fillStyle = gg; ctx.fillRect(h.x - h.w, topY - wallH, h.w * 3, wallH * 3); ctx.restore()
+    }
     if (n > 0) {
-      const txt = `👥 ${n}`
-      ctx.font = "bold 12px ui-monospace, monospace"; ctx.textAlign = "center"
+      const txt = `👥 ${n}`; ctx.font = "bold 12px ui-monospace, monospace"; ctx.textAlign = "center"
       const bw = ctx.measureText(txt).width + 12
-      ctx.fillStyle = "rgba(8,14,20,0.85)"; ctx.beginPath(); ctx.roundRect(h.x + h.w / 2 - bw / 2, h.y - 41, bw, 18, 6); ctx.fill()
-      ctx.fillStyle = "#ffe6a3"; ctx.fillText(txt, h.x + h.w / 2, h.y - 28); ctx.textAlign = "left"
+      ctx.fillStyle = "rgba(20,28,16,0.8)"; ctx.beginPath(); ctx.roundRect(cx - bw / 2, topY - (tier === 4 ? 16 : 16 + tier * 5) - 22, bw, 18, 6); ctx.fill()
+      ctx.fillStyle = "#ffe6a3"; ctx.fillText(txt, cx, topY - (tier === 4 ? 16 : 16 + tier * 5) - 9); ctx.textAlign = "left"
     }
-    if (cam.zoom > 1.1) label(ctx, h.surname, h.x + h.w / 2, h.y + h.h + 13, "rgba(200,215,230,0.6)")
+    if (cam.zoom > 1.1) label(ctx, h.surname, cx, h.y + h.h + 13, "rgba(70,90,60,0.85)")
   }
 
   // schools — distinct civic buildings; the cultural ratchet flows through here
@@ -310,16 +299,16 @@ export function drawWorld(
   // DAY/NIGHT: a colour wash over the whole scene follows the in-world hour (dawn glow → bright day → dusk → night)
   const hr = (world.clockMinutes % 1440) / 60
   let tint = ""
-  if (hr < 5 || hr >= 21) tint = "rgba(20,28,66,0.46)"            // deep night, cool blue
-  else if (hr < 7) tint = "rgba(255,150,90,0.20)"                 // dawn, warm
-  else if (hr < 17) tint = ""                                     // bright day
-  else if (hr < 19) tint = "rgba(255,150,70,0.18)"                // late afternoon, golden
-  else tint = "rgba(90,70,130,0.34)"                              // dusk, violet
+  if (hr < 5 || hr >= 21) tint = "rgba(28,38,80,0.32)"           // night, cool blue (lighter so it stays readable)
+  else if (hr < 7) tint = "rgba(255,170,110,0.14)"              // dawn, warm
+  else if (hr < 17) tint = ""                                    // bright day
+  else if (hr < 19) tint = "rgba(255,175,90,0.12)"             // late afternoon, golden
+  else tint = "rgba(110,90,150,0.20)"                            // dusk, violet
   if (tint) { ctx.fillStyle = tint; ctx.fillRect(0, 0, cw, ch) }
 
-  // a soft vignette darkens the screen edges → focus + depth (screen space, after the world transform)
-  const vg = ctx.createRadialGradient(cw / 2, ch / 2, Math.min(cw, ch) * 0.4, cw / 2, ch / 2, Math.max(cw, ch) * 0.72)
-  vg.addColorStop(0, "rgba(0,0,0,0)"); vg.addColorStop(1, "rgba(0,0,0,0.34)")
+  // a gentle vignette for depth (kept light so the town stays bright + cheerful)
+  const vg = ctx.createRadialGradient(cw / 2, ch / 2, Math.min(cw, ch) * 0.45, cw / 2, ch / 2, Math.max(cw, ch) * 0.78)
+  vg.addColorStop(0, "rgba(0,0,0,0)"); vg.addColorStop(1, "rgba(0,0,0,0.18)")
   ctx.fillStyle = vg; ctx.fillRect(0, 0, cw, ch)
 
   drawMinimap(ctx, world, avatar, cam, cw, ch)
@@ -346,8 +335,7 @@ function drawMinimap(ctx: CanvasRenderingContext2D, world: World, avatar: Creatu
   ctx.strokeRect(ox + (cam.x - halfW) * sx, oy + (cam.y - halfH) * sy, 2 * halfW * sx, 2 * halfH * sy)
 }
 
-function drawCreature(ctx: CanvasRenderingContext2D, c: Creature, era: number) {
-  const img = personImg(c, era)
+function drawCreature(ctx: CanvasRenderingContext2D, c: Creature, _era: number) {
   const ageScale = c.isAvatar || isMature(c) ? 1 : 0.5 + 0.5 * Math.min(1, ageYears(c) / 16)
   const w = (24 + c.genome.size * 16) * ageScale
   // inside their own house → drawn faint (they "went in"; the lit windows represent them)
@@ -369,12 +357,29 @@ function drawCreature(ctx: CanvasRenderingContext2D, c: Creature, era: number) {
   ctx.restore()
 
   ctx.save()
-  ctx.globalAlpha = (c.isAvatar ? 1 : Math.max(0.5, Math.min(1, c.energy / 70))) * dim
+  ctx.globalAlpha = (c.isAvatar ? 1 : Math.max(0.9, Math.min(1, c.energy / 55))) * dim // solid, so the grass doesn't tint them
   ctx.translate(c.x, c.y - bob)
   ctx.rotate(sway)
   if (c.facing < 0) ctx.scale(-1, 1)
-  if (img && img.naturalWidth > 0) { ctx.imageSmoothingEnabled = true; const ph = w * 1.7; ctx.drawImage(img, -w / 2, -ph, w, ph) } // full-body, feet on the ground
-  else { ctx.fillStyle = `hsl(${c.genome.hue}, 60%, 60%)`; ctx.beginPath(); ctx.arc(0, -w / 2, w / 2, 0, Math.PI * 2); ctx.fill() }
+  // a cohesive little villager (feet at y=0, built upward): legs, cloth torso + arms, skin head, hair cap
+  const H = w * 1.5, swing = moving ? Math.sin(phase) * w * 0.13 : 0
+  const skin = c.isAvatar ? "#ffe0b0" : SKIN[Math.floor(Math.abs(c.genome.hue + c.id)) % SKIN.length]
+  const cloth = c.isAvatar ? "#ffd34d" : `hsl(${c.genome.hue}, 42%, 54%)`, clothSh = c.isAvatar ? "#e0b020" : `hsl(${c.genome.hue}, 42%, 43%)`
+  const hair = HAIR[Math.floor(Math.abs(c.id)) % HAIR.length]
+  const legH = H * 0.3, hipY = -legH, shoY = -H * 0.82, hr = w * 0.36, hcy = shoY - hr * 0.72
+  ctx.fillStyle = "#4a3b2a" // legs (step in opposition)
+  ctx.fillRect(-w * 0.21, hipY - swing * 0.4, w * 0.16, legH + swing * 0.4)
+  ctx.fillRect(w * 0.05, hipY + swing * 0.4, w * 0.16, legH - swing * 0.4)
+  ctx.fillStyle = cloth // arms swing opposite the legs
+  ctx.fillRect(-w * 0.38, shoY + w * 0.06 + swing * 0.4, w * 0.12, H * 0.42)
+  ctx.fillRect(w * 0.26, shoY + w * 0.06 - swing * 0.4, w * 0.12, H * 0.42)
+  ctx.fillStyle = cloth // torso
+  ctx.beginPath(); ctx.roundRect(-w * 0.3, shoY, w * 0.6, hipY - shoY + 3, w * 0.16); ctx.fill()
+  ctx.fillStyle = clothSh; ctx.beginPath(); ctx.roundRect(w * 0.06, shoY, w * 0.24, hipY - shoY + 3, w * 0.12); ctx.fill()
+  ctx.fillStyle = skin; ctx.beginPath(); ctx.arc(0, hcy, hr, 0, Math.PI * 2); ctx.fill() // head
+  ctx.fillStyle = "rgba(0,0,0,0.10)"; ctx.beginPath(); ctx.arc(hr * 0.35, hcy, hr, -Math.PI * 0.5, Math.PI * 0.5); ctx.fill() // head shading
+  ctx.fillStyle = hair; ctx.beginPath(); ctx.arc(0, hcy - hr * 0.12, hr * 1.02, Math.PI * 1.02, Math.PI * 2.02); ctx.fill() // hair cap
+  if (c.facing >= 0) { ctx.fillStyle = "rgba(30,20,15,0.7)"; ctx.beginPath(); ctx.arc(hr * 0.36, hcy + hr * 0.05, hr * 0.13, 0, Math.PI * 2); ctx.fill() } // an eye, face-forward
   ctx.restore()
 
   // profession-category arc at the feet (see the social fabric at a glance)
