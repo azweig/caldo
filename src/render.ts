@@ -98,11 +98,26 @@ export function drawWorld(
   // ground — tinted by the country's biome + the season
   ctx.fillStyle = REGION_GROUND[world.region % REGION_GROUND.length][seasonOf(world.clockDays)]
   ctx.fillRect(0, 0, WORLD_W, WORLD_H)
+  // scattered trees + bushes give the land texture (deterministic positions, seasonal colour)
+  const sea = seasonOf(world.clockDays)
+  const leaf = sea === 3 ? "#3a4a3a" : sea === 2 ? "#5a4a24" : "#2f5a2c"
+  for (let i = 0; i < 70; i++) {
+    const px = seedR(i * 1.3) * WORLD_W, py = seedR(i * 2.7 + 5) * WORLD_H
+    const onRoad = Math.abs((px % BLOCK) - BLOCK / 2) > BLOCK / 2 - ROAD_HALF - 4 || Math.abs((py % BLOCK) - BLOCK / 2) > BLOCK / 2 - ROAD_HALF - 4
+    if (onRoad) continue
+    const r = 5 + seedR(i * 3.1) * 7
+    ctx.fillStyle = "rgba(0,0,0,0.12)"; ctx.beginPath(); ctx.ellipse(px + 2, py + r * 0.7, r, r * 0.4, 0, 0, Math.PI * 2); ctx.fill()
+    ctx.fillStyle = leaf; ctx.beginPath(); ctx.arc(px, py, r, 0, Math.PI * 2); ctx.fill()
+  }
 
-  // gardens (where food grows)
+  // gardens (where food grows) — a tilled patch with rows of crops that green up in summer, fade in winter
+  const season = seasonOf(world.clockDays)
+  const cropCol = season === 3 ? "rgba(150,160,120,0.5)" : season === 2 ? "rgba(170,150,70,0.55)" : "rgba(90,170,80,0.6)" // winter pale, autumn gold, else green
   for (const g of world.gardens) {
-    ctx.fillStyle = "rgba(60,150,90,0.10)"
+    ctx.fillStyle = season === 3 ? "rgba(120,135,120,0.12)" : "rgba(70,150,90,0.12)"
     ctx.beginPath(); ctx.arc(g.x, g.y, 95, 0, Math.PI * 2); ctx.fill()
+    ctx.fillStyle = cropCol // little crop tufts in rows (deterministic so they don't shimmer)
+    for (let i = 0; i < 22; i++) { const a = i * 2.39996, r = 18 + (i % 6) * 13; const px = g.x + Math.cos(a) * r, py = g.y + Math.sin(a) * r * 0.8; ctx.fillRect(px - 1, py - 4, 2, 5) }
   }
 
   // streets (grid)
