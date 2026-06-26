@@ -358,8 +358,11 @@ function appear(c: Creature, era = 5) {
   // HEADWEAR + a tool in hand, by trade (only grown folk; not every soul wears one)
   const adult = ay >= 14
   const hat = !adult ? "none" : garb === "armour" && r(8) < 0.7 ? "helmet" : cat === "comida" && r(8) < 0.6 ? "straw" : cat === "liderazgo" ? "circlet" : garb === "fine" && wealth >= 1 && r(8) < 0.7 ? "tophat" : garb === "robe" && r(8) < 0.5 ? "hood" : "none"
-  const prop = !adult ? "none" : cat === "defensa" ? "spear" : cat === "saber" || cat === "enseñanza" ? "book" : cat === "espíritu" ? "staff" : cat === "comida" && r(9) < 0.6 ? "basket" : "none"
-  return { ay, female, skin, hair, hairStyle, beard, cloth, garb, wealth, hat, prop, r }
+  const prop = !adult || c.life?.condition === "locura" ? "none" : cat === "defensa" ? "spear" : cat === "saber" || cat === "enseñanza" ? "book" : cat === "espíritu" ? "staff" : cat === "comida" && r(9) < 0.6 ? "basket" : "none"
+  // individual build: some stocky, some slim; some tall, some short — so no two share a silhouette
+  const bw = 0.8 + r(10) * 0.4, bh = 0.9 + r(11) * 0.2
+  const preg = ((c as any).pregnant || 0) > 0 // an expecting mother carries a belly
+  return { ay, female, skin, hair, hairStyle, beard, cloth, garb, wealth, hat, prop, bw, bh, preg, r }
 }
 
 // draw a person built up from the feet (y=0). proportions shift across life: babies are tiny + big-headed,
@@ -368,7 +371,8 @@ function drawVillager(ctx: CanvasRenderingContext2D, c: Creature, w: number, mov
   const ap = appear(c, era), ay = ap.ay
   const stage = ay < 2 ? 0 : ay < 13 ? 1 : ay < 19 ? 2 : ay < 55 ? 3 : 4 // baby child teen adult elder
   const hr = w * [0.5, 0.43, 0.37, 0.36, 0.35][stage]
-  const H = w * [0.85, 1.12, 1.4, 1.5, 1.44][stage]
+  const H = w * [0.85, 1.12, 1.4, 1.5, 1.44][stage] * ap.bh
+  const bw = ap.bw // individual girth
   const swing = moving ? Math.sin(phase) * w * 0.13 : 0
   const legH = H * (stage <= 1 ? 0.24 : 0.3), hipY = -legH, shoY = -H * (stage === 0 ? 0.7 : 0.82), hcy = shoY - hr * 0.72
   const cloth = ap.cloth, clothSh = c.isAvatar ? "#e0b020" : `hsl(${c.genome.hue}, 40%, 40%)`
@@ -378,11 +382,12 @@ function drawVillager(ctx: CanvasRenderingContext2D, c: Creature, w: number, mov
   ctx.fillRect(w * 0.05, hipY + swing * 0.4, w * 0.16, legH - swing * 0.4)
   // arms swing opposite the legs
   ctx.fillStyle = cloth
-  ctx.fillRect(-w * 0.38, shoY + w * 0.06 + swing * 0.4, w * 0.12, H * 0.42)
-  ctx.fillRect(w * 0.26, shoY + w * 0.06 - swing * 0.4, w * 0.12, H * 0.42)
-  // torso
-  ctx.fillStyle = cloth; ctx.beginPath(); ctx.roundRect(-w * 0.3, shoY, w * 0.6, hipY - shoY + 3, w * 0.16); ctx.fill()
-  ctx.fillStyle = clothSh; ctx.beginPath(); ctx.roundRect(w * 0.06, shoY, w * 0.24, hipY - shoY + 3, w * 0.12); ctx.fill()
+  ctx.fillRect(-w * 0.38 * bw, shoY + w * 0.06 + swing * 0.4, w * 0.12, H * 0.42)
+  ctx.fillRect((w * 0.26 * bw + w * 0.02), shoY + w * 0.06 - swing * 0.4, w * 0.12, H * 0.42)
+  // torso (individual girth)
+  ctx.fillStyle = cloth; ctx.beginPath(); ctx.roundRect(-w * 0.3 * bw, shoY, w * 0.6 * bw, hipY - shoY + 3, w * 0.16); ctx.fill()
+  ctx.fillStyle = clothSh; ctx.beginPath(); ctx.roundRect(w * 0.06 * bw, shoY, w * 0.24 * bw, hipY - shoY + 3, w * 0.12); ctx.fill()
+  if (ap.preg) { ctx.fillStyle = cloth; ctx.beginPath(); ctx.arc(0, (shoY + hipY) / 2 + w * 0.1, w * 0.34 * bw, 0, Math.PI * 2); ctx.fill() } // an expecting belly
   // GARB — the cut of their clothes tells their trade + station (drawn over the legs where it's a robe/skirt)
   if (stage >= 2) {
     if (ap.garb === "robe") { ctx.fillStyle = cloth; ctx.beginPath(); ctx.moveTo(-w * 0.3, hipY - 2); ctx.lineTo(w * 0.3, hipY - 2); ctx.lineTo(w * 0.42, -1); ctx.lineTo(-w * 0.42, -1); ctx.closePath(); ctx.fill(); ctx.fillStyle = clothSh; ctx.fillRect(w * 0.04, hipY - 2, w * 0.3, legH) }
