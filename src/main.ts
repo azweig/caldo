@@ -823,12 +823,18 @@ function loop() {
     for (const c of world.creatures) { if (c.isAvatar) continue; const k = key(c.x, c.y); const b = grid.get(k); if (b) b.push(c); else grid.set(k, [c]) }
     for (const c of world.creatures) {
       if (c.isAvatar || c.controlled) continue
-      let sx = 0, sy = 0, gx0 = Math.floor(c.x / CELL), gy0 = Math.floor(c.y / CELL)
+      let sx = 0, sy = 0, gx0 = Math.floor(c.x / CELL), gy0 = Math.floor(c.y / CELL), nearX = 0, nearD = 1e9
       for (let gx = -1; gx <= 1; gx++) for (let gy = -1; gy <= 1; gy++) {
         const cell = grid.get(((gx0 + gx) & 4095) | (((gy0 + gy) & 4095) << 12)); if (!cell) continue
-        for (const o of cell) { const ddx = c.x - o.x, ddy = c.y - o.y, d2 = ddx * ddx + ddy * ddy; if (d2 > 0.01 && d2 < 26 * 26) { const d = Math.sqrt(d2), f = (26 - d) / 26 * 0.55; sx += (ddx / d) * f; sy += (ddy / d) * f } }
+        for (const o of cell) {
+          const ddx = c.x - o.x, ddy = c.y - o.y, d2 = ddx * ddx + ddy * ddy
+          if (d2 > 0.01 && d2 < 26 * 26) { const d = Math.sqrt(d2), f = (26 - d) / 26 * 0.55; sx += (ddx / d) * f; sy += (ddy / d) * f }
+          if (d2 > 0.01 && d2 < nearD && d2 < 40 * 40) { nearD = d2; nearX = o.x } // remember the closest companion
+        }
       }
       c.x += sx; c.y += sy
+      // a small gathering: when someone stands close to another, they TURN to face them (a little conversation)
+      if (nearD < 34 * 34 && Math.abs(c.vx) + Math.abs(c.vy) < 0.5) c.facing = nearX >= c.x ? 1 : -1
     }
   }
   if (avatar && !possessed) avatar.energy = Math.max(60, Math.min(150, avatar.energy)) // immortal observer
