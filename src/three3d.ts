@@ -249,6 +249,25 @@ function buildTown(world: World) {
     const leaf = new THREE.Mesh(leafGeo, leafMat); leaf.position.y = 3.6
     tree.add(trunk, leaf); tree.position.set(x, 0, z); tree.scale.setScalar(1 + hashf(i) * 0.8); town.add(tree)
   }
+  // ── plaza props: a fountain at the heart of town, market stalls + lamp posts (it feels inhabited) ──
+  const cX = WORLD_W * S / 2, cZ = WORLD_H * S / 2
+  const stone = new THREE.MeshLambertMaterial({ color: 0x9a958c })
+  const basin = new THREE.Mesh(new THREE.CylinderGeometry(2.6, 2.9, 0.6, 16), stone); basin.position.set(cX, 0.3, cZ); town.add(basin)
+  const water = new THREE.Mesh(new THREE.CylinderGeometry(2.2, 2.2, 0.2, 16), new THREE.MeshBasicMaterial({ color: 0x4a86c0 })); water.position.set(cX, 0.55, cZ); town.add(water)
+  const spout = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.25, 1.4, 8), stone); spout.position.set(cX, 1.1, cZ); town.add(spout)
+  const clothMat = [0xb04848, 0x4878b0, 0x4aa060, 0xc0a040].map((c) => new THREE.MeshLambertMaterial({ color: c }))
+  const woodMat = new THREE.MeshLambertMaterial({ color: 0x6b4a2c })
+  for (let i = 0; i < 6; i++) { // a ring of market stalls around the plaza
+    const a = (i / 6) * Math.PI * 2, sx = cX + Math.cos(a) * 9, sz = cZ + Math.sin(a) * 9
+    const post = new THREE.Mesh(new THREE.BoxGeometry(3, 2.2, 2.4), woodMat); post.position.set(sx, 1.1, sz); town.add(post)
+    const awn = new THREE.Mesh(new THREE.BoxGeometry(3.4, 0.2, 2.8), clothMat[i % 4]); awn.position.set(sx, 2.3, sz); town.add(awn)
+  }
+  const lampMat = new THREE.MeshBasicMaterial({ color: 0xffd27a })
+  for (let i = 0; i < 8; i++) { // lamp posts down the main streets
+    const a = (i / 8) * Math.PI * 2, lx = cX + Math.cos(a) * 18, lz = cZ + Math.sin(a) * 18
+    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.16, 3.2, 6), woodMat); pole.position.set(lx, 1.6, lz); town.add(pole)
+    const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.32, 8, 8), lampMat); bulb.position.set(lx, 3.3, lz); town.add(bulb)
+  }
   scene.add(town); builtFor = world; builtEra = world.era
 }
 
