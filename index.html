@@ -2,6 +2,8 @@
 <html lang="es">
   <head>
     <meta charset="UTF-8" />
+    <!-- defense-in-depth against XSS: no inline/eval scripts; LLM calls only over https or localhost -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' https: http://localhost:* http://127.0.0.1:*; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; frame-ancestors 'none'" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
     <title>caldo · simulador de vida evolutivo</title>
   </head>

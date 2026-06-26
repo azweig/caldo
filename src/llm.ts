@@ -7,12 +7,28 @@
 const LS_URL = "caldo_llm_url"
 const LS_MODEL = "caldo_llm_model"
 
-export function llmUrl(): string { return (localStorage.getItem(LS_URL) || "").replace(/\/+$/, "") }
+// SECURITY: only allow https endpoints (or same-origin relative, or explicit localhost) — a plaintext http://
+// endpoint over an https page leaks every prompt + completion and lets a MITM inject markup (→ XSS). Reject it.
+export function isSafeLlmUrl(url: string): boolean {
+  const u = url.trim()
+  if (!u) return false
+  if (u.startsWith("/")) return true // same-origin relative (the pod's /ollama proxy)
+  try {
+    const p = new URL(u)
+    if (p.protocol === "https:") return true
+    if (p.protocol === "http:" && (p.hostname === "localhost" || p.hostname === "127.0.0.1" || p.hostname === "[::1]")) return true
+    return false
+  } catch { return false }
+}
+export function llmUrl(): string { const u = (localStorage.getItem(LS_URL) || "").replace(/\/+$/, ""); return isSafeLlmUrl(u) ? u : "" }
 export function llmModel(): string { return localStorage.getItem(LS_MODEL) || "qwen2.5:7b" }
 export function llmConfigured(): boolean { return !!llmUrl() }
-export function setLlm(url: string, model: string) {
-  localStorage.setItem(LS_URL, url.trim())
+export function setLlm(url: string, model: string): boolean {
+  const u = url.trim()
+  if (u && !isSafeLlmUrl(u)) return false // refuse insecure endpoints
+  localStorage.setItem(LS_URL, u)
   localStorage.setItem(LS_MODEL, (model.trim() || "qwen2.5:7b"))
+  return true
 }
 
 export interface Msg { role: "system" | "user" | "assistant"; content: string }

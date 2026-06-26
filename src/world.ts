@@ -401,13 +401,20 @@ export class World {
     w.raiders = s.raiders || []
     w.graves = s.graves || []
     w.universities = s.universities; w.airport = s.airport; w.foodTarget = 230; w.deeds = s.deeds || []
+    // SECURITY + INTEGRITY: a save is untrusted input (it could be a crafted localStorage blob). Strip markup
+    // from any string that reaches the DOM/LLM, cap lengths + array sizes, and finite-clamp the numbers.
+    const san = (v: unknown, max = 80): string => String(v ?? "").replace(/[<>]/g, "").slice(0, max)
+    const sanArr = (v: unknown, n = 6, max = 200): string[] => (Array.isArray(v) ? v.slice(-n).map((x) => san(x, max)) : [])
+    const num = (v: unknown, def: number): number => (typeof v === "number" && Number.isFinite(v) ? v : def)
     const byId = new Map<number, Creature>(); let maxId = 0
     w.creatures = (s.creatures || []).map((c: any) => {
-      maxId = Math.max(maxId, c.id)
-      const cr: Creature = { id: c.id, x: c.x, y: c.y, vx: 0, vy: 0, energy: c.e, ageDays: c.ad, lifespanDays: c.ls, genome: c.g, generation: c.gen, name: c.nm, surname: c.sn, home: w.houses[c.h] || w.houses[0], goingHome: !!c.gh, parents: c.par, children: c.ch, sick: c.sick, sickDays: 0, lastRepro: -99999, partner: c.pt || 0, pregnant: c.pg || 0, isAvatar: false, facing: 1, psyche: c.ps, memory: c.mem || [], social: c.soc || [], knowledge: c.k, profession: c.pf, profBase: c.pb, profCat: c.pc, heritProf: c.hp || "", religion: c.rel || "", powerHungry: !!c.pw, money: c.mny || 0, controlled: false, dark: c.dk || { mach: 0.2, narc: 0.2, psycho: 0.1 }, archetype: c.arc || "promedio", crimes: c.crm || 0, business: !!c.biz, health: c.hl ?? 88, mental: c.mt ?? 78, irritability: c.ir ?? 0.3, life: c.lf }
+      maxId = Math.max(maxId, num(c.id, 0))
+      const cr: Creature = { id: num(c.id, 0), x: num(c.x, 0), y: num(c.y, 0), vx: 0, vy: 0, energy: num(c.e, 80), ageDays: num(c.ad, 0), lifespanDays: num(c.ls, 60 * DAYS_PER_YEAR), genome: c.g, generation: num(c.gen, 1), name: san(c.nm, 40), surname: san(c.sn, 40), home: w.houses[c.h] || w.houses[0], goingHome: !!c.gh, parents: c.par, children: num(c.ch, 0), sick: !!c.sick, sickDays: 0, lastRepro: -99999, partner: num(c.pt, 0), pregnant: num(c.pg, 0), isAvatar: false, facing: 1, psyche: c.ps, memory: sanArr(c.mem, 8, 400), social: sanArr(c.soc, 6, 200), knowledge: num(c.k, 16), profession: san(c.pf, 40), profBase: san(c.pb, 40), profCat: c.pc, heritProf: san(c.hp, 40), religion: san(c.rel, 40), powerHungry: !!c.pw, money: num(c.mny, 0), controlled: false, dark: c.dk || { mach: 0.2, narc: 0.2, psycho: 0.1 }, archetype: c.arc || "promedio", crimes: num(c.crm, 0), business: !!c.biz, health: num(c.hl, 88), mental: num(c.mt, 78), irritability: num(c.ir, 0.3), life: c.lf }
+      if (cr.psyche?.beliefs) cr.psyche.beliefs = cr.psyche.beliefs.slice(0, 12).map((b: string) => san(b, 120))
       if (!cr.life) cr.life = newLife(cr)
       byId.set(cr.id, cr); return cr
     })
+    for (const cr of w.creatures) if (cr.parents && !cr.parents.every((p) => p === 0 || byId.has(p))) cr.parents = null // drop dangling parent refs
     w.monarch = s.monarch != null ? byId.get(s.monarch) || null : null
     if (maxId + 1 > NEXT_ID) NEXT_ID = maxId + 1
     return w

@@ -20,6 +20,9 @@ import { wealthStats, influentialByGen } from "./society"
 import { composeWork, cachedWork } from "./works"
 
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v))
+// SECURITY: escape any dynamic string before putting it in innerHTML (creature names/professions/chronicle can
+// come from a crafted save; LLM output is fully untrusted). Defined early so every template can use it.
+const esc = (s: string) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;")
 
 const canvas = document.getElementById("world") as HTMLCanvasElement
 const ctx = canvas.getContext("2d")!
@@ -36,7 +39,7 @@ function updateChatter() { // a live murmur of what people NEAR you are gossipin
     const line = `${c.name}: ${c.heard}`
     if (chatterLines[chatterLines.length - 1] !== line) { chatterLines.push(line); if (chatterLines.length > 5) chatterLines.shift() }
   }
-  if (chatterLines.length) { chatterfeed.innerHTML = "📻 <b>se murmura cerca</b><br>" + chatterLines.map((l) => "· " + l).join("<br>"); chatterfeed.classList.remove("hidden") }
+  if (chatterLines.length) { chatterfeed.innerHTML = "📻 <b>se murmura cerca</b><br>" + chatterLines.map((l) => "· " + esc(l)).join("<br>"); chatterfeed.classList.remove("hidden") }
 }
 const npccard = document.getElementById("npccard") as HTMLDivElement
 // click a person in 3D → show their card (info + actions) on the left, like you asked
@@ -51,21 +54,21 @@ function showNpcCard(c: Creature | null) {
   if (L && Object.keys(L.rels).length) {
     const es = Object.entries(L.rels).map(([id, v]) => ({ o: world.creatures.find((x) => x.id === +id), v })).filter((e) => e.o)
     const fr = es.filter((e) => e.v > 0.3).sort((a, b) => b.v - a.v)[0], rv = es.filter((e) => e.v < -0.3).sort((a, b) => a.v - b.v)[0]
-    const parts = [fr ? `💚 ${fr.o!.name}` : "", rv ? `💔 ${rv.o!.name}` : ""].filter(Boolean).join(" · ")
+    const parts = [fr ? `💚 ${esc(fr.o!.name)}` : "", rv ? `💔 ${esc(rv.o!.name)}` : ""].filter(Boolean).join(" · ")
     if (parts) relsRow = `<div class="nc-row">${parts}</div>`
   }
   const dyn = world.dynasty(c.surname)
   const par = c.parents ? c.parents.map((pid) => world.creatures.find((x) => x.id === pid)).filter(Boolean) : []
-  const parLine = par.length ? `<div class="nc-row">👪 hijo/a de ${par.map((p) => p!.name).join(" y ")}${c.children > 0 ? ` · ${c.children} hijos` : ""}</div>` : c.children > 0 ? `<div class="nc-row">👪 ${c.children} hijos</div>` : ""
+  const parLine = par.length ? `<div class="nc-row">👪 hijo/a de ${par.map((p) => esc(p!.name)).join(" y ")}${c.children > 0 ? ` · ${c.children} hijos` : ""}</div>` : c.children > 0 ? `<div class="nc-row">👪 ${c.children} hijos</div>` : ""
   npccard.innerHTML = `
-    <div class="nc-name">${c.name} ${c.surname}</div>
-    <div class="nc-row">${c.profession || "sin oficio"}${L && L.mastery > 0.6 ? " 🛠️ maestro/a" : L && L.mastery > 0.3 ? " · oficial" : ""} · ${Math.round(ageYears(c))} años · ${rel} ${repTag}</div>
-    <div class="nc-row">🏛 casa ${c.surname} · ${dyn.size} ${dyn.size === 1 ? "miembro" : "miembros"}${dyn.rep > 0.3 ? " · linaje admirado" : dyn.rep < -0.3 ? " · linaje en desgracia" : ""}</div>
+    <div class="nc-name">${esc(c.name)} ${esc(c.surname)}</div>
+    <div class="nc-row">${esc(c.profession || "sin oficio")}${L && L.mastery > 0.6 ? " 🛠️ maestro/a" : L && L.mastery > 0.3 ? " · oficial" : ""} · ${Math.round(ageYears(c))} años · ${rel} ${repTag}</div>
+    <div class="nc-row">🏛 casa ${esc(c.surname)} · ${dyn.size} ${dyn.size === 1 ? "miembro" : "miembros"}${dyn.rep > 0.3 ? " · linaje admirado" : dyn.rep < -0.3 ? " · linaje en desgracia" : ""}</div>
     ${parLine}
     ${L ? `<div class="nc-inner">${emo ? emo + " · " : ""}${innerLine(c)}</div>` : ""}
-    ${c.heard ? `<div class="nc-row">💬 escuchó: «${c.heard}»</div>` : ""}
-    ${c.social?.length ? `<div class="nc-feed">${c.social.slice(-3).map((s) => "· " + s).join("<br>")}</div>` : ""}
-    ${c.sigs?.length ? `<div class="nc-code">📡 hablando en código: ${c.sigs.slice(-4).join(" ")}</div>` : ""}
+    ${c.heard ? `<div class="nc-row">💬 escuchó: «${esc(c.heard)}»</div>` : ""}
+    ${c.social?.length ? `<div class="nc-feed">${c.social.slice(-3).map((s) => "· " + esc(s)).join("<br>")}</div>` : ""}
+    ${c.sigs?.length ? `<div class="nc-code">📡 hablando en código: ${esc(c.sigs.slice(-4).join(" "))}</div>` : ""}
     ${L ? `<div class="nc-row">🎯 ${L.goal} <span class="rbar"><i style="width:${Math.round(L.goalProg * 100)}%"></i></span></div><div class="nc-row">🎨 ${L.hobby} · «${L.quirk}»</div>` : ""}
     ${relsRow}
     <div class="nc-row">💰 ${Math.round(c.money)} · ${c.money > 800 ? "🎩 rico/a" : c.money > 200 ? "acomodado/a" : c.money > 15 ? "clase media" : "pobre"}${c.home.landlord && c.home.landlord !== c.id && c.home.surname !== c.surname ? " · 🔑 inquilino/a" : ""}${world.houses.some((h) => h.landlord === c.id) ? " · 🏘 propietario/a" : ""}</div>
@@ -195,9 +198,12 @@ document.getElementById("cfg")!.addEventListener("click", () => {
   settings.classList.remove("hidden")
 })
 document.getElementById("cfg-close")!.addEventListener("click", () => settings.classList.add("hidden"))
-document.getElementById("cfg-save")!.addEventListener("click", () => { setLlm(cfgUrl.value, cfgModel.value); settings.classList.add("hidden") })
+document.getElementById("cfg-save")!.addEventListener("click", () => {
+  if (!setLlm(cfgUrl.value, cfgModel.value)) { cfgStatus.textContent = "✗ usá una URL https:// (o localhost) — http inseguro rechazado"; cfgStatus.style.color = "#ff8c6a"; return }
+  settings.classList.add("hidden")
+})
 document.getElementById("cfg-test")!.addEventListener("click", async () => {
-  setLlm(cfgUrl.value, cfgModel.value)
+  if (!setLlm(cfgUrl.value, cfgModel.value)) { cfgStatus.textContent = "✗ usá una URL https:// (o localhost)"; cfgStatus.style.color = "#ff8c6a"; return }
   cfgStatus.textContent = "probando…"; cfgStatus.style.color = "#9fb2c2"
   const r = await pingLLM()
   cfgStatus.textContent = r.ok ? `✓ conectado — dijo: "${r.detail}"` : `✗ falló: ${r.detail}`
@@ -229,13 +235,13 @@ function showInspect(c: Creature) {
   const p = c.psyche, t = ENNEAGRAM[p.type]
   const five: [string, number][] = [["apertura", p.five.o], ["responsab.", p.five.c], ["extrav.", p.five.e], ["amabilidad", p.five.a], ["neurot.", p.five.n]]
   inspectBody.innerHTML = `
-    <h2>${c.name} ${c.surname}</h2>
-    <div class="row dim">${c.profession || "sin oficio"} · ${Math.round(ageYears(c))} años · gen ${c.generation}</div>
-    <div class="row dim">cree en ${c.religion || "nada"}${c.powerHungry ? " · <b style='color:#ff8c6a'>sed de poder</b>" : ""}</div>
+    <h2>${esc(c.name)} ${esc(c.surname)}</h2>
+    <div class="row dim">${esc(c.profession || "sin oficio")} · ${Math.round(ageYears(c))} años · gen ${c.generation}</div>
+    <div class="row dim">cree en ${esc(c.religion || "nada")}${c.powerHungry ? " · <b style='color:#ff8c6a'>sed de poder</b>" : ""}</div>
     <div class="row">${c.children} ${c.children === 1 ? "hijo" : "hijos"} · saber ${Math.round(c.knowledge)} · ${c.sick ? '<b style="color:#8fe39a">enfermo ✚</b>' : "sano"}</div>
     <h3>núcleo · ${t.name}</h3><div class="row dim">anhela ${t.desire}; teme ${t.fear}</div>
     <h3>personalidad</h3>${five.map(([l, v]) => `<div class="prow"><span>${l}</span>${pbar(v, "#9bb8ff")}</div>`).join("")}
-    <h3>creencias</h3><div class="row dim">${[t.belief, ...p.beliefs].map((b) => `“${b}”`).join("<br>")}</div>
+    <h3>creencias</h3><div class="row dim">${[t.belief, ...p.beliefs].map((b) => `“${esc(b)}”`).join("<br>")}</div>
     <h3>genoma</h3><div class="row dim">vel ${c.genome.speed.toFixed(1)} · visión ${Math.round(c.genome.vision)} · longevidad ${Math.round(c.genome.longevity)}a · intelecto ${c.genome.intellect.toFixed(2)} · resistencia ${c.genome.resistance.toFixed(2)}</div>`
   inspect.classList.remove("hidden")
 }
@@ -247,7 +253,7 @@ const chronicleBody = document.getElementById("chronicle-body")!
 function toggleHelp() { help.classList.toggle("hidden") }
 function toggleChronicle() {
   if (chronicleEl.classList.contains("hidden"))
-    chronicleBody.innerHTML = world.chronicle.length ? world.chronicle.slice().reverse().map((e) => `<div class="row"><b>${formatClock(e.day)}</b> — ${e.text}</div>`).join("") : "<div class='row dim'>aún no pasó nada digno de registro…</div>"
+    chronicleBody.innerHTML = world.chronicle.length ? world.chronicle.slice().reverse().map((e) => `<div class="row"><b>${formatClock(e.day)}</b> — ${esc(e.text)}</div>`).join("") : "<div class='row dim'>aún no pasó nada digno de registro…</div>"
   chronicleEl.classList.toggle("hidden")
 }
 document.getElementById("help-close")!.addEventListener("click", () => help.classList.add("hidden"))
@@ -334,15 +340,14 @@ function legendsHTML(): string {
       p.works.slice(-3).map((w) => {
         const key = `${w.who}:${w.title}`, r = cachedWork(key)
         const body = r && !r.loading
-          ? `<div class="excerpt">${r.text}${r.prompt ? `<div class="prompt">🎨 prompt: ${r.prompt}</div>` : ""}</div>`
+          ? `<div class="excerpt">${esc(r.text)}${r.prompt ? `<div class="prompt">🎨 prompt: ${esc(r.prompt)}</div>` : ""}</div>`
           : r && r.loading ? `<div class="excerpt">generando… ✨</div>`
-          : `<div class="excerpt">${w.content} <span class="gen">— click para ${w.kind === "libro" ? "leerlo" : "verlo"} 🤖</span></div>`
-        return `<div class="work" data-wk="${key}" data-kind="${w.kind}" data-author="${esc(p.name)}" data-title="${esc(w.title)}">${w.kind === "libro" ? "📖" : "🖼️"} <i>${w.text}</i>${body}</div>`
+          : `<div class="excerpt">${esc(w.content)} <span class="gen">— click para ${w.kind === "libro" ? "leerlo" : "verlo"} 🤖</span></div>`
+        return `<div class="work" data-wk="${esc(key)}" data-kind="${esc(w.kind)}" data-author="${esc(p.name)}" data-title="${esc(w.title)}">${w.kind === "libro" ? "📖" : "🖼️"} <i>${esc(w.text)}</i>${body}</div>`
       }).join("")
     ).join("")
   ).join("")
 }
-const esc = (s: string) => s.replace(/"/g, "&quot;").replace(/</g, "&lt;")
 function toggleLegends() { if (legendsEl.classList.contains("hidden")) legendsBody.innerHTML = legendsHTML(); legendsEl.classList.toggle("hidden") }
 document.getElementById("legends-close")!.addEventListener("click", () => legendsEl.classList.add("hidden"))
 document.getElementById("legendsbtn")!.addEventListener("click", () => { toggleLegends(); (document.getElementById("legendsbtn") as HTMLElement).blur() })
@@ -494,12 +499,12 @@ function renderPossess() {
   const partner = c.partner ? world.creatures.find((o) => o.id === c.partner) : null
   const toast = possessBusy ? `<div class="ptoast">⏳ ${possessBusy.label}… 🌙</div>` : (frame < flashUntil ? `<div class="ptoast">${flashMsg}</div>` : "")
   possessBody.innerHTML = `
-    <div class="pname">🎭 ${c.name} ${c.surname}</div>
-    <div class="prow2">${c.profession || "sin oficio"} · ${Math.round(ageYears(c))} años · 🕐 ${Math.floor(hourOf())}h</div>
+    <div class="pname">🎭 ${esc(c.name)} ${esc(c.surname)}</div>
+    <div class="prow2">${esc(c.profession || "sin oficio")} · ${Math.round(ageYears(c))} años · 🕐 ${Math.floor(hourOf())}h</div>
     <div class="prow2">💰 <b>${Math.round(c.money)}</b> · 🍔 ${bar} ${e}${c.pregnant > 0 ? " · 🤰" : ""}</div>
     <div class="prow2">❤️ salud ${Math.round(c.health)} · 🧠 ánimo ${Math.round(c.mental)} · 😤 irrit. ${Math.round(c.irritability * 100)}%</div>
-    <div class="prow2">${partner ? "❤️ " + partner.name : "💔 sin pareja"} · 👶 ${c.children} · 🧠 ${Math.round(c.knowledge)}</div>
-    <div class="prow2">${c.religion || "sin credo"}${c.sick ? " · <b style='color:#8fe39a'>enfermo ✚</b>" : ""}</div>
+    <div class="prow2">${partner ? "❤️ " + esc(partner.name) : "💔 sin pareja"} · 👶 ${c.children} · 🧠 ${Math.round(c.knowledge)}</div>
+    <div class="prow2">${esc(c.religion || "sin credo")}${c.sick ? " · <b style='color:#8fe39a'>enfermo ✚</b>" : ""}</div>
     <div class="plegend">⚪ vos · 💗 pareja · 💚 familia · 💛 conocido · ❤️ rival</div>
     ${toast}`
   possessEl.querySelectorAll("button[data-act]").forEach((b) => {
@@ -556,12 +561,24 @@ function closeChat() {
   if (pausedByChat) { paused = false; pausedByChat = false; pauseBtn.textContent = "⏸" }
   chatBox.classList.add("hidden")
 }
-function addLine(who: string, text: string, cls: "me" | "them"): HTMLDivElement {
+// SECURITY: chat text is LLM/user output — build it from inert DOM nodes, never innerHTML, so a model that
+// returns markup (e.g. an onerror payload) can't execute in our origin.
+function addLine(who: string, text: string, cls: "me" | "them", tag?: string): HTMLDivElement {
   const el = document.createElement("div")
   el.className = "line " + cls
-  el.innerHTML = `<b>${who}:</b> ${text}`
+  const b = document.createElement("b"); b.textContent = who + ": "
+  el.appendChild(b)
+  if (tag) { const t = document.createElement("span"); t.className = "tag"; t.textContent = tag; el.append(t, document.createTextNode(" ")) }
+  el.appendChild(document.createTextNode(text))
   chatLog.appendChild(el); chatLog.scrollTop = chatLog.scrollHeight
   return el
+}
+function setLine(el: HTMLDivElement, who: string, text: string, tag?: string) {
+  el.textContent = ""
+  const b = document.createElement("b"); b.textContent = who + ": "
+  el.appendChild(b)
+  if (tag) { const t = document.createElement("span"); t.className = "tag"; t.textContent = tag; el.append(t, document.createTextNode(" ")) }
+  el.appendChild(document.createTextNode(text))
 }
 chatInput.addEventListener("keydown", async (e) => {
   e.stopPropagation()
@@ -571,12 +588,12 @@ chatInput.addEventListener("keydown", async (e) => {
     const msg = chatInput.value.trim()
     addLine("Tú", msg, "me"); chatInput.value = ""
     session.push({ role: "user", content: msg })
-    const typing = addLine(who.name, "<i>…</i>", "them")
+    const typing = addLine(who.name, "…", "them")
     const ctx = `Tu pueblo come de ${foodSystem(world.era)}; es una ${world.gov}${world.monarch ? `, gobernada por ${world.monarch.name} ${world.monarch.surname}` : ""}.`
     const info = { era: eraName(world.era), country: countries[active].name, food: foodSystem(world.era), lang: countries[active].lang }
     const reply = await respond(who, msg, session, eraName(world.era), WRITE_LANG, ctx, info)
     const h = heard(reply, countries[active].lang)
-    typing.innerHTML = `<b>${who.name}:</b> <span class="tag">${h.tag}</span> ${h.text}`
+    setLine(typing, who.name, h.text, h.tag)
     chatLog.scrollTop = chatLog.scrollHeight
     session.push({ role: "assistant", content: reply })
   }
