@@ -9,14 +9,17 @@
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
-    "serve": "node serve.mjs"
+    "serve": "node serve.mjs",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "devDependencies": {
     "@gltf-transform/cli": "^4.4.0",
     "@types/three": "^0.184.1",
     "canvas": "^3.2.3",
     "typescript": "^5.6.3",
-    "vite": "^6.0.7"
+    "vite": "^6.0.7",
+    "vitest": "^4.1.9"
   },
   "dependencies": {
     "three": "^0.184.0"
