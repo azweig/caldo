@@ -28,7 +28,7 @@ const INNOV_RATE = 0.55
 // REALISTIC PACING: humanity spent ~99% of its history in the stone age, then tech ACCELERATED. So early eras
 // must be epochs (the deep past is the slowest) and progress speeds up later. This per-era multiplier on tech
 // cost makes the Palaeolithic take generations; without it, cheap early techs flew by in a year or two.
-const ERA_COST_MULT = [26, 23, 20, 17.5, 15, 13, 11.5, 10, 8.5, 7.5, 6.5, 5.8, 5.2, 4.6, 4.2, 3.8, 3.4, 3.1, 2.8]
+const ERA_COST_MULT = [7.5, 7, 6.5, 6, 5.5, 5, 4.5, 4, 3.6, 3.2, 2.9, 2.6, 2.3, 2.1, 1.9, 1.7, 1.6, 1.5, 1.4]
 const eraCostMult = (era: number) => ERA_COST_MULT[Math.max(0, Math.min(ERA_COST_MULT.length - 1, era))]
 const RELATED: Record<string, Cat[]> = {
   saber: ["enseñanza", "espíritu", "arte"], ingeniería: ["construcción", "oficio"], construcción: ["ingeniería", "oficio"],
@@ -44,7 +44,7 @@ function driveMatch(cat: Cat | "" | undefined, drive: Cat): number {
 
 const MATURITY_YEARS = 16
 const REPRO_COOLDOWN = 150  // recovery between pregnancies (gestation is on top) — ~5 months
-const REPRO_MIN_ENERGY = 55
+const REPRO_MIN_ENERGY = 46
 const REPRO_COST = 26
 const CHILD_ENERGY = 42
 const FERTILE_MAX = 48                    // years — fertility window 16..48
@@ -52,7 +52,12 @@ const GESTATION_MIN = 210                 // ~7 months; +0..60 → up to ~9 mont
 const MAX_ENERGY = 150
 const POP_CAP = 280 // per country (several countries simulate at once now)
 // realistic multiple-birth odds: ~3% twins, ~0.2% triplets, else a single
-function litterSize(): number { const r = Math.random(); return r < 0.002 ? 3 : r < 0.032 ? 2 : 1 }
+// a struggling tribe rebounds with big broods (boom>1 when the population is small) — a baby-boom rebound
+function litterSize(boom = 1): number {
+  const r = Math.random()
+  if (boom > 2 && r < 0.1) return 3 + Math.floor(Math.random() * 2) // 3-4 children at once when near-wiped
+  return r < 0.004 * boom ? 3 : r < 0.04 * boom ? 2 : 1
+}
 
 const FOOD_ENERGY = 40
 const START_ENERGY = 80
@@ -936,20 +941,22 @@ export class World {
       const ay = ageYears(c)
       const ageRisk = 1 + Math.max(0, ay - 45) / 40
       const frail = 1 + (1 - c.health / 100) * 1.6 // poor physical health → far more prone to illness
+      const cling = this.creatures.length < 30 ? 0.32 : 1 // a near-wiped tribe clings to life (lower mortality) so it can recover
       // climate: the tropics breed fevers (summer worst), the cold lands sicken in deep winter
       const climS = this.region % 4 === 3 ? (seasonOf(this.clockDays) === 1 ? 1.7 : 1.3) : this.region % 4 === 1 && seasonOf(this.clockDays) === 3 ? 1.6 : 1
       if (!c.sick) { if (Math.random() < 0.00009 * (1.25 - g.resistance) * ageRisk * plague / healthM * frail * climS) { c.sick = true; c.sickDays = 0 } }
       else {
         c.sickDays++
         if (Math.random() < 0.022 * (0.5 + g.resistance) * healthM) { c.sick = false; c.sickDays = 0 }
-        else if (Math.random() < 0.006 * (1.3 - g.resistance) * ageRisk / healthM) { if (!c.isAvatar && !c.controlled) { this.deaths++; this.deathCauses.enfermedad++; continue } }
+        else if (Math.random() < 0.006 * (1.3 - g.resistance) * ageRisk / healthM * cling) { if (!c.isAvatar && !c.controlled) { this.deaths++; this.deathCauses.enfermedad++; continue } }
       }
 
       if (!c.isAvatar && !c.controlled) {
-        if (this.era < 2) { if (c.energy <= 0) { this.deaths++; this.deathCauses.hambre++; continue } } // hunter-gatherer: forage or starve
-        else if (c.energy < 25) c.energy = 25 // farming/market eras: food is BOUGHT — survival rides on health/money, not foraging
+        if (!isMature(c)) c.energy = Math.max(c.energy, 40) // CHILDREN are fed by their family — they don't forage
+        else if (this.era < 2) c.energy = Math.max(c.energy, 48) // a hunter-gatherer BAND shares its catch — a stable tribe doesn't mass-starve (foraging tops them up well above this; this is the floor that keeps the long stone age alive + fertile)
+        else if (c.energy < 25) c.energy = 25 // farming/market eras: food is BOUGHT — survival rides on health/money
         if (c.health <= 0) { this.deaths++; this.deathCauses.pobreza++; continue } // died of poverty (couldn't afford food/care)
-        if (c.ageDays > c.lifespanDays && Math.random() < (c.ageDays - c.lifespanDays) / (0.18 * c.lifespanDays)) { if (c.life && c.life.rep > 0.35) { this.graves.push({ x: c.x, y: c.y, name: `${c.name} ${c.surname}` }); if (this.graves.length > 40) this.graves.shift() } this.deaths++; this.deathCauses.vejez++; continue } // a respected elder gets a remembered grave
+        if (c.ageDays > c.lifespanDays && Math.random() < (c.ageDays - c.lifespanDays) / (0.18 * c.lifespanDays) * cling) { if (c.life && c.life.rep > 0.35) { this.graves.push({ x: c.x, y: c.y, name: `${c.name} ${c.surname}` }); if (this.graves.length > 40) this.graves.shift() } this.deaths++; this.deathCauses.vejez++; continue } // a respected elder gets a remembered grave
         if (isMature(c) && Math.random() < 0.0000052 * violenceRate) { this.deaths++; this.deathCauses.violencia++; this.logEvent(`${c.name} ${c.surname} murió en un acto de violencia`); continue }
       }
 
@@ -960,7 +967,8 @@ export class World {
         if (c.pregnant <= 0 && this.creatures.length + newborns.length < POP_CAP) {
           const mate = byId.get(c.partner)
           const mateG = mate ? mate.genome : randomGenome(this.spriteCount), mateP = mate ? mate.psyche : randomPsyche() // unknown father if out of wedlock
-          const litter = litterSize()
+          const boom = this.creatures.length < 40 ? 3.5 : this.creatures.length < 85 ? 1.9 : 1 // small tribe → big families
+          const litter = litterSize(boom)
           for (let b = 0; b < litter; b++) {
             const child = this.spawn(recombine(g, mateG, this.spriteCount), c.generation + 1, c.home, c.home.x + (Math.random() * 24 - 12), c.home.y + (Math.random() * 18 - 9), inheritPsyche(c.psyche, mateP))
             child.energy = CHILD_ENERGY
@@ -1087,7 +1095,7 @@ export class World {
         if (taken.has(a.id)) continue
         let best: Creature | null = null, bs = -2
         for (const b of singles) {
-          if (b.id === a.id || taken.has(b.id) || b.surname === a.surname) continue // not close kin (surname taboo)
+          if (b.id === a.id || taken.has(b.id) || (b.surname === a.surname && wild.length > 26)) continue // kin taboo (relaxed when the tribe is tiny + must repopulate)
           const compat = 1 - Math.abs(a.psyche.five.a - b.psyche.five.a) * 0.6 - (a.religion && a.religion !== b.religion ? 0.3 : 0)
           const warmth = (a.life?.rels[b.id] || 0) * 1.5, ageGap = Math.abs(ageYears(a) - ageYears(b)) / 22
           const score = compat + warmth - ageGap + Math.random() * 0.5 // values + warmth + a spark of chemistry
@@ -1110,8 +1118,11 @@ export class World {
         if (best.life?.goalKey === "amor") best.life.goalProg = Math.min(1, best.life.goalProg + 0.5)
         this.logDeed({ day: this.clockDays, gen: a.generation, who: a.id, name: `${a.name} ${a.surname}`, kind: "boda", text: `se unió a ${best.name} ${best.surname}`, impact: 3 })
       }
-      const K = Math.min(POP_CAP, 80 + this.era * 7) // carrying capacity grows with the era (technology)
-      const growth = Math.max(0.05, Math.min(1, 1.35 * (1 - wild.length / K))) // strong birth drive when few, ~0 near K
+      const K = Math.min(POP_CAP, 120 + this.era * 8) // carrying capacity (above the ~100 founders so the long early eras SUSTAIN a stable tribe instead of decaying) — grows with technology
+      // SMALL-TRIBE RESILIENCE: a struggling band breeds hard (high pre-modern fertility) so the long early eras
+      // sustain themselves + a near-wiped tribe can claw back, instead of dwindling to extinction before tech helps.
+      const lowPop = wild.length < 60
+      const growth = Math.max(0.05, Math.min(lowPop ? 2.6 : 1, 1.35 * (1 - wild.length / K) + (lowPop ? (60 - wild.length) * 0.035 : 0)))
       for (const c of wild) {
         const ay = ageYears(c)
         if (!c.partner || c.pregnant > 0 || ay < MATURITY_YEARS || ay > FERTILE_MAX || c.energy <= REPRO_MIN_ENERGY ||
