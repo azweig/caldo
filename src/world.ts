@@ -475,6 +475,14 @@ export class World {
     if (a.profCat && a.profCat === b.profCat && a.life && b.life) { const jr = a.life.mastery < b.life.mastery ? a : b, sr = jr === a ? b : a; if ((sr.life!.mastery - jr.life!.mastery) > 0.2) jr.life!.mastery = Math.min(1, jr.life!.mastery + 0.012) }
     // EMOTE — feelings rub off (mood contagion)
     if (a.life && a.life.emoInt > 0.35 && b.life) { const good = a.life.emotion === "alegre" || a.life.emotion === "enamorado" || a.life.emotion === "orgulloso"; feel(b, good ? "alegre" : "triste", 0.25); sigs.push({ k: KIND.EMOTE, s: a.id, v: good ? 4 : -4 }) }
+    // OPINION / BELIEF spreads — the more charismatic + respected talker can pass on a conviction (or a faith)
+    const persuader = (a.psyche.five.e + (a.life?.rep || 0)) > (b.psyche.five.e + (b.life?.rep || 0)) ? a : b, listener = persuader === a ? b : a
+    const charisma = persuader.psyche.five.e * (0.55 + (persuader.life?.rep || 0) * 0.45)
+    if (persuader.psyche.beliefs.length && listener.psyche.beliefs.length && Math.random() < 0.06 * charisma) {
+      const blf = persuader.psyche.beliefs[Math.floor(Math.random() * persuader.psyche.beliefs.length)]
+      if (!listener.psyche.beliefs.includes(blf)) { listener.psyche.beliefs[Math.floor(Math.random() * listener.psyche.beliefs.length)] = blf; sigs.push({ k: KIND.OPINION, s: persuader.id, v: 3 }) }
+    }
+    if (persuader.religion && listener.religion && persuader.religion !== listener.religion && Math.random() < 0.015 * charisma) { listener.religion = persuader.religion; if (listener.life) feel(listener, "esperanzado", 0.3) } // a conversion of faith
     // NEWS spreads: they pass along a recent event, which travels the network + stirs a reaction
     if (this.news.length && Math.random() < 0.3) {
       const n = this.news[this.news.length - 1 - Math.floor(Math.random() * Math.min(4, this.news.length))]
