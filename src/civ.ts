@@ -261,6 +261,17 @@ export const PROFS: Prof[] = [
   // 18 Galáctica
   { n: "navegante interestelar", e: 18, c: "exploración" }, { n: "ingeniero de Dyson", e: 18, c: "ingeniería", u: 1 }, { n: "terraformador", e: 18, c: "comida", u: 1 },
   { n: "diplomático galáctico", e: 18, c: "liderazgo", u: 1 }, { n: "cartógrafo estelar", e: 18, c: "saber", u: 1 }, { n: "tejedor de la mente colmena", e: 18, c: "espíritu", u: 1 },
+  // ── trades, services + guilds: a much richer working life across the eras ──
+  { n: "agricultor", e: 2, c: "comida" }, { n: "pastor", e: 2, c: "comida" }, { n: "panadero", e: 2, c: "comida" }, { n: "partera", e: 2, c: "salud" }, { n: "alfarero", e: 2, c: "oficio" }, { n: "tejedor", e: 2, c: "oficio" },
+  { n: "carpintero", e: 3, c: "construcción" }, { n: "cantero", e: 3, c: "construcción" }, { n: "sastre", e: 3, c: "oficio" }, { n: "vidriero", e: 3, c: "oficio" }, { n: "carnicero", e: 3, c: "comida" }, { n: "cervecero", e: 3, c: "comida" },
+  { n: "herrero", e: 4, c: "oficio" }, { n: "zapatero", e: 4, c: "oficio" }, { n: "minero", e: 4, c: "construcción" }, { n: "tabernero", e: 4, c: "comercio" }, { n: "posadero", e: 4, c: "comercio" }, { n: "mercader", e: 4, c: "comercio" }, { n: "joyero", e: 4, c: "arte" },
+  { n: "cocinero", e: 5, c: "comida" }, { n: "músico", e: 5, c: "arte" }, { n: "barbero", e: 5, c: "cuidado" }, { n: "prestamista", e: 5, c: "comercio" }, { n: "casero", e: 5, c: "comercio" },
+  { n: "boticario", e: 6, c: "salud" }, { n: "notario", e: 6, c: "saber" }, { n: "banquero", e: 6, c: "comercio" }, { n: "relojero", e: 6, c: "ingeniería" },
+  { n: "abogado", e: 7, c: "saber", u: 1 }, { n: "contador", e: 7, c: "saber" }, { n: "cartógrafo", e: 7, c: "exploración" },
+  { n: "cartero", e: 8, c: "comercio" }, { n: "químico", e: 8, c: "ingeniería", u: 1 },
+  { n: "obrero de fábrica", e: 9, c: "construcción" }, { n: "maquinista", e: 9, c: "ingeniería" }, { n: "enfermera", e: 9, c: "salud" }, { n: "periodista", e: 9, c: "arte" }, { n: "fotógrafo", e: 9, c: "arte" }, { n: "ingeniero civil", e: 9, c: "ingeniería", u: 1 }, { n: "policía", e: 9, c: "defensa" },
+  { n: "electricista", e: 10, c: "ingeniería" }, { n: "mecánico", e: 10, c: "ingeniería" }, { n: "piloto", e: 10, c: "exploración" }, { n: "bombero", e: 10, c: "cuidado" }, { n: "actor", e: 10, c: "arte" }, { n: "contratista", e: 10, c: "construcción" },
+  { n: "programador", e: 12, c: "ingeniería" }, { n: "diseñador gráfico", e: 12, c: "arte" }, { n: "agente inmobiliario", e: 11, c: "comercio" }, { n: "psicólogo", e: 11, c: "salud", u: 1 },
 ]
 
 // specialisation domains — appended to scholar/engineer/artist/healer titles from the Classical era on,
