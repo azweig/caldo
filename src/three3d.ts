@@ -95,6 +95,13 @@ const hashf = (n: number) => { const x = Math.sin(n * 12.9898) * 43758.5453; ret
 
 // each house picks from a SET of era-appropriate wall/roof materials → the street stops looking uniform
 const matCache = new Map<string, THREE.MeshLambertMaterial>()
+// free a mesh's material(s) on town rebuild — but NEVER a cached/shared one (matFor) or its texture (texCache),
+// which are reused across rebuilds; disposing those would break the next build.
+function disposeMat(mat: THREE.Material | THREE.Material[] | undefined): void {
+  const shared = new Set<THREE.Material>(matCache.values())
+  const arr = Array.isArray(mat) ? mat : mat ? [mat] : []
+  for (const m of arr) if (m && !shared.has(m)) m.dispose()
+}
 function matFor(name: string): THREE.MeshLambertMaterial {
   let m = matCache.get(name); if (!m) { m = new THREE.MeshLambertMaterial({ map: tex(name, 2) }); matCache.set(name, m) }
   return m
@@ -186,7 +193,7 @@ function boxBuilding(x: number, y: number, w: number, h: number, height: number,
 }
 
 function buildTown(world: World) {
-  if (town) { scene.remove(town); town.traverse((o) => { (o as THREE.Mesh).geometry?.dispose() }) }
+  if (town) { scene.remove(town); town.traverse((o) => { const m = o as THREE.Mesh; m.geometry?.dispose(); disposeMat(m.material) }) } // free geometry AND materials on rebuild (materials leaked before)
   town = new THREE.Group()
   const E = eraTex(world.era)
   // textured ground (tiled)
@@ -279,7 +286,7 @@ let intGroup: THREE.Group | null = null
 let intFor: House | null = null
 const RW = 15, RD = 11, RH = 4 // room dimensions (units)
 function buildInterior(world: World, h: House) {
-  if (intGroup) { scene.remove(intGroup); intGroup.traverse((o) => (o as THREE.Mesh).geometry?.dispose()) }
+  if (intGroup) { scene.remove(intGroup); intGroup.traverse((o) => { const m = o as THREE.Mesh; m.geometry?.dispose(); disposeMat(m.material) }) }
   intGroup = new THREE.Group()
   const E = eraTex(world.era)
   const floor = new THREE.Mesh(new THREE.PlaneGeometry(RW, RD), new THREE.MeshLambertMaterial({ map: tex(E.ground === "ground_grass" ? "ground_dirt" : E.ground, 3) }))

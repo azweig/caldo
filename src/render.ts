@@ -356,7 +356,21 @@ function drawMinimap(ctx: CanvasRenderingContext2D, world: World, avatar: Creatu
 }
 
 // each person's deterministic look, STABLE across their whole life, but it CHANGES as they age + by their lot.
-function appear(c: Creature, era = 5) {
+// PERF: a person's look is stable except across age-stage / wealth / condition changes — so cache it and only
+// recompute when one of those buckets flips (was recomputed 280×/frame).
+const _lookCache = new WeakMap<Creature, { sig: string; look: ReturnType<typeof computeAppear> }>()
+function appear(c: Creature, era = 5): ReturnType<typeof computeAppear> {
+  const ay = ageYears(c)
+  const stage = ay < 2 ? 0 : ay < 13 ? 1 : ay < 19 ? 2 : ay < 55 ? 3 : 4
+  const grey = ay < 28 ? 0 : ay < 46 ? 1 : ay < 62 ? 2 : 3
+  const sig = `${stage}|${grey}|${era}|${c.profCat}|${c.money > 700 ? 2 : c.money > 120 ? 1 : 0}|${c.life?.condition || ""}|${(c.pregnant || 0) > 0 ? 1 : 0}`
+  const hit = _lookCache.get(c)
+  if (hit && hit.sig === sig) return hit.look
+  const look = computeAppear(c, era)
+  _lookCache.set(c, { sig, look })
+  return look
+}
+function computeAppear(c: Creature, era = 5) {
   // seed the look from HERITABLE genome (hue + sprite), not the id — so children resemble their parents,
   // and family lines share a look. recombine() mixes these at birth, so siblings are alike but not identical.
   const g = c.genome as { hue: number; sprite?: number }
@@ -374,7 +388,7 @@ function appear(c: Creature, era = 5) {
   // wear brighter, trimmed cloth, the poor drab + patched; deep past = earthy furs, late eras = brighter dyes.
   const cat = c.profCat
   const garb = c.life?.condition === "sin techo" ? "rags" : cat === "defensa" ? "armour" : cat === "saber" || cat === "enseñanza" || cat === "espíritu" || cat === "salud" ? "robe" : cat === "comercio" || cat === "liderazgo" ? "fine" : cat === "comida" || cat === "construcción" || cat === "oficio" ? "work" : "tunic"
-  const money = (c as any).money || 0
+  const money = c.money || 0
   const wealth = garb === "rags" ? 0 : money > 700 ? 2 : money > 120 ? 1 : 0
   const sat = (garb === "rags" ? 8 : era <= 1 ? 22 : 30) + wealth * 10 + Math.floor(r(6) * 12)
   const lum = (garb === "rags" ? 36 : 46) + wealth * 6 + Math.floor(r(7) * 12)
@@ -385,7 +399,7 @@ function appear(c: Creature, era = 5) {
   const prop = !adult || c.life?.condition === "locura" ? "none" : cat === "defensa" ? "spear" : cat === "saber" || cat === "enseñanza" ? "book" : cat === "espíritu" ? "staff" : cat === "comida" && r(9) < 0.6 ? "basket" : "none"
   // individual build: some stocky, some slim; some tall, some short — so no two share a silhouette
   const bw = 0.8 + r(10) * 0.4, bh = 0.9 + r(11) * 0.2
-  const preg = ((c as any).pregnant || 0) > 0 // an expecting mother carries a belly
+  const preg = (c.pregnant || 0) > 0 // an expecting mother carries a belly
   const freckles = r(12) < 0.24, rosy = ay < 12 || r(13) < 0.3 // freckles + rosy cheeks add little human touches
   return { ay, female, skin, hair, hairStyle, beard, cloth, garb, wealth, hat, prop, bw, bh, preg, freckles, rosy, r }
 }
@@ -558,12 +572,12 @@ export function drawChart(ctx: CanvasRenderingContext2D, world: World, x: number
     ctx.fillStyle = "rgba(255,255,255,0.4)"; ctx.font = "11px ui-monospace, monospace"
     ctx.fillText("recolectando datos…", x + 10, y + h / 2); return
   }
-  const norm = (key: string, v: number) => { const b = (TRAIT_BOUNDS as any)[key] as readonly [number, number]; return (v - b[0]) / (b[1] - b[0]) }
+  const norm = (key: string, v: number) => { const b = (TRAIT_BOUNDS as Record<string, readonly [number, number]>)[key]; return (v - b[0]) / (b[1] - b[0]) }
   for (const t of TRAITS) {
     ctx.strokeStyle = t.color; ctx.lineWidth = 1.5; ctx.beginPath()
     hist.forEach((s, i) => {
       const px = x + (i / (hist.length - 1)) * w
-      const py = y + h - norm(t.key, (s as any)[t.key]) * (h - 4) - 2
+      const py = y + h - norm(t.key, (s as unknown as Record<string, number>)[t.key]) * (h - 4) - 2
       i === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py)
     })
     ctx.stroke()

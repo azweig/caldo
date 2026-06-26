@@ -913,7 +913,7 @@ function loop() {
 
   if (++saveAt >= 900) { saveAt = 0; saveGame() } // autosave ~every 15s
   if (frame % 45 === 0) updateChatter() // refresh the nearby-gossip feed
-  updateHud()
+  if (frame % 6 === 0) updateHud() // the HUD barely changes per frame — throttle it (was every frame: 280-elem filters + sorts)
   requestAnimationFrame(loop)
 }
 

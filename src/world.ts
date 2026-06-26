@@ -359,12 +359,16 @@ export class World {
   talkOfTown(): { txt: string; reach: number; sent: number }[] { return [...this.news].sort((a, b) => b.reach - a.reach).slice(0, 5) }
   graves: { x: number; y: number; name: string }[] = [] // where the town's notable dead are remembered
   // the single greatest figure in the whole history of this people (most cumulative renown across their deeds)
+  private _greatestCache: { n: number; v: { name: string; impact: number } | null } | null = null
   greatestEver(): { name: string; impact: number } | null {
+    if (this._greatestCache && this._greatestCache.n === this.deeds.length) return this._greatestCache.v // memo: only changes when a deed is added
     const by = new Map<number, { name: string; impact: number }>()
     for (const d of this.deeds) { const e = by.get(d.who) || { name: d.name, impact: 0 }; e.impact += d.impact; by.set(d.who, e) }
     let best: { name: string; impact: number } | null = null
     for (const e of by.values()) if (!best || e.impact > best.impact) best = e
-    return best && best.impact > 8 ? best : null
+    const v = best && best.impact > 8 ? best : null
+    this._greatestCache = { n: this.deeds.length, v }
+    return v
   }
   researchProgress(): { name: string; frac: number } {
     const avail = availableTechs(this.discovered, this.era)
@@ -390,7 +394,7 @@ export class World {
   toState() {
     const hi = new Map<House, number>(); this.houses.forEach((h, i) => hi.set(h, i))
     const C = (c: Creature) => ({ id: c.id, x: c.x, y: c.y, e: c.energy, ad: c.ageDays, ls: c.lifespanDays, gen: c.generation, nm: c.name, sn: c.surname, h: hi.get(c.home) ?? 0, k: c.knowledge, pf: c.profession, pb: c.profBase, pc: c.profCat, hp: c.heritProf, sick: c.sick, ch: c.children, par: c.parents, rel: c.religion, pw: c.powerHungry, g: c.genome, ps: c.psyche, mem: c.memory, soc: c.social, gh: c.goingHome, pt: c.partner, pg: c.pregnant, mny: c.money, dk: c.dark, arc: c.archetype, crm: c.crimes, biz: c.business, hl: c.health, mt: c.mental, ir: c.irritability, lf: c.life })
-    return { region: this.region, gov: this.gov, system: this.system, era: this.era, cultureName: this.cultureName, cultureEthos: this.cultureEthos, cultureBias: this.cultureBias, clockDays: this.clockDays, clockMinutes: this.clockMinutes, tick: this.tick, research: this.research, discovered: [...this.discovered], techBoost: this.techBoost, wisdom: this.wisdom, births: this.births, deaths: this.deaths, peakGen: this.peakGen, plagueUntil: this.plagueUntil, violence: this.violence, psychopathy: this.psychopathy, religionsCfg: this.religionsCfg, chronicle: this.chronicle.slice(-60), houses: this.houses, gardens: this.gardens, schools: this.schools, universities: this.universities, airport: this.airport, monarch: this.monarch?.id ?? null, animals: this.animals, raiders: this.raiders, graves: this.graves, deeds: this.deeds.slice(-300), creatures: this.creatures.filter((c) => !c.isAvatar).map(C) }
+    return { region: this.region, gov: this.gov, system: this.system, era: this.era, cultureName: this.cultureName, cultureEthos: this.cultureEthos, cultureBias: this.cultureBias, clockDays: this.clockDays, clockMinutes: this.clockMinutes, tick: this.tick, research: this.research, discovered: [...this.discovered], techBoost: this.techBoost, wisdom: this.wisdom, births: this.births, deaths: this.deaths, peakGen: this.peakGen, plagueUntil: this.plagueUntil, violence: this.violence, psychopathy: this.psychopathy, religionsCfg: this.religionsCfg, chronicle: this.chronicle.slice(-60), houses: this.houses, gardens: this.gardens, schools: this.schools, universities: this.universities, airport: this.airport, monarch: this.monarch?.id ?? null, animals: this.animals, raiders: this.raiders, graves: this.graves, techProgress: [...this.techProgress], news: this.news, deeds: this.deeds.slice(-300), creatures: this.creatures.filter((c) => !c.isAvatar).map(C) }
   }
   static fromState(s: any, spriteCount: number): World {
     const w = new World(spriteCount, s.region, undefined, true)
@@ -404,6 +408,8 @@ export class World {
     w.buildPois() // rebuild the market square (claims reset on load)
     w.animals = s.animals || []
     w.raiders = s.raiders || []
+    if (Array.isArray(s.techProgress)) w.techProgress = new Map(s.techProgress) // don't lose in-flight research on reload
+    if (Array.isArray(s.news)) w.news = s.news
     w.graves = s.graves || []
     w.universities = s.universities; w.airport = s.airport; w.foodTarget = 230; w.deeds = s.deeds || []
     // SECURITY + INTEGRITY: a save is untrusted input (it could be a crafted localStorage blob). Strip markup
