@@ -584,10 +584,10 @@ export class World {
       const v = this.nearestCreature({ x: a.x, y: a.y } as Creature, 110, (o) => !o.isAvatar && isMature(o))
       if (!v) continue
       if (sp.hostile) { // a PREDATOR is close to a villager
-        if (fighters > 0 && Math.random() < 0.45) { a.hp--; if (a.hp <= 0) { this.dropMeat(a.x, a.y, sp.food); this.animals.splice(i, 1); if (v.life) feel(v, "orgulloso", 0.4); this.logEvent(`cazaron un ${a.kind} que merodeaba`) } } // fought off → meat
-        else if (Math.random() < sp.danger * 0.05) { v.health = Math.max(0, v.health - 26); if (v.life) feel(v, "asustado", 0.85); this.logEvent(v.health <= 0 ? `un ${a.kind} mató a ${v.name} ${v.surname}` : `un ${a.kind} atacó a ${v.name} ${v.surname}`) } // it mauls a villager
-      } else if (sp.tameable && tamers > 0 && Math.random() < 0.02) { a.tame = true; a.owner = v.id; if (v.life) feel(v, "alegre", 0.4); this.logEvent(`${v.name} domesticó un ${a.kind}`) } // tamed → livestock/pet
-      else if (sp.food > 0 && fighters > 0 && Math.random() < 0.025) { this.dropMeat(a.x, a.y, sp.food); this.animals.splice(i, 1) } // hunted for meat
+        if (fighters > 0 && Math.random() < 0.5) { a.hp--; if (a.hp <= 0) { this.dropMeat(a.x, a.y, sp.food); this.animals.splice(i, 1); if (v.life) feel(v, "orgulloso", 0.4); this.logEvent(`cazaron un ${a.kind} que merodeaba`) } } // fought off → meat
+        else if (Math.random() < sp.danger * 0.3) { v.health = Math.max(0, v.health - 24); if (v.life) feel(v, "asustado", 0.85); this.logEvent(v.health <= 0 ? `un ${a.kind} mató a ${v.name} ${v.surname}` : `un ${a.kind} atacó a ${v.name} ${v.surname}`) } // it mauls a villager
+      } else if (sp.tameable && tamers > 0 && Math.random() < 0.12) { a.tame = true; a.owner = v.id; if (v.life) feel(v, "alegre", 0.4); this.logEvent(`${v.name} ${v.surname} domesticó un ${a.kind}`) } // tamed → livestock/pet
+      else if (sp.food > 0 && fighters > 0 && Math.random() < 0.1) { this.dropMeat(a.x, a.y, sp.food); this.animals.splice(i, 1) } // hunted for meat
     }
   }
   private dropMeat(x: number, y: number, n: number) { for (let k = 0; k < n; k++) this.food.push({ x: clampn(x + (Math.random() * 2 - 1) * 40, MARGIN, WORLD_W - MARGIN), y: clampn(y + (Math.random() * 2 - 1) * 40, MARGIN, WORLD_H - MARGIN) }) }

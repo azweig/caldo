@@ -866,6 +866,7 @@ function loop() {
       // a small gathering: when someone stands close to another, they TURN to face them (a little conversation)
       if (nearD < 34 * 34 && Math.abs(c.vx) + Math.abs(c.vy) < 0.5) c.facing = nearX >= c.x ? 1 : -1
     }
+    for (const a of world.animals) { a.x += a.vx * 0.35; a.y += a.vy * 0.35 } // beasts roam smoothly between updates
   }
   if (avatar && !possessed) avatar.energy = Math.max(60, Math.min(150, avatar.energy)) // immortal observer
   if (possessed) possessed.energy = Math.max(0, possessed.energy) // possessed: real hunger you manage (won't die)
