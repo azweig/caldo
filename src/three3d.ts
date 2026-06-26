@@ -48,6 +48,7 @@ export function init3D(canvas: HTMLCanvasElement, _creatureImgs: HTMLImageElemen
     const sh = new THREE.Mesh(shadowGeo, new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.32 }))
     sh.rotation.x = -Math.PI / 2; sh.visible = false; scene.add(sh); shadows.push(sh) // grounding shadow
     const mg = new THREE.Group(); mg.visible = false; scene.add(mg); modelPool.push(mg) // holds a 3D character model
+    const lb = new THREE.Sprite(new THREE.SpriteMaterial({ transparent: true, depthWrite: false, depthTest: false })); lb.visible = false; lb.scale.set(2.6, 0.65, 1); scene.add(lb); labelPool.push(lb) // floating name
   }
   ready = true
 }
@@ -151,6 +152,18 @@ function ensureProps() {
     const berry = new THREE.Mesh(berryGeo, berryMat); berry.position.y = 0.46
     g.add(stem, berry); g.visible = false; scene.add(g); foodPool.push(g)
   }
+}
+
+// floating NAME labels above villagers (so you know who's who, like the 2D view)
+const labelPool: THREE.Sprite[] = []
+function makeLabel(text: string): THREE.CanvasTexture {
+  const cv = document.createElement("canvas"); cv.width = 256; cv.height = 64
+  const c = cv.getContext("2d")!
+  c.font = "bold 28px ui-monospace, monospace"; c.textAlign = "center"; c.textBaseline = "middle"
+  const w = Math.min(244, c.measureText(text).width + 26)
+  c.fillStyle = "rgba(10,15,22,0.72)"; c.fillRect(128 - w / 2, 14, w, 36)
+  c.fillStyle = "#ffe6a3"; c.fillText(text, 128, 33)
+  const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace; return t
 }
 
 // procedural low-poly villagers that MATCH the 2D look (same skin/hair palettes + hue-based cloth + age scale),
@@ -363,6 +376,7 @@ export function renderInterior(world: World, me: Creature, h: House, rx: number,
   if (builtFor !== world || builtEra !== world.era) buildTown(world)
   if (intFor !== h || !intGroup) buildInterior(world, h)
   if (town) town.visible = false; intGroup!.visible = true
+  for (const lb of labelPool) lb.visible = false // no floating names indoors
   let i = 0
   const put = (c: Creature, x: number, z: number, scale: number, ringCol: number) => {
     const slot = modelPool[i] // interior uses the SAME procedural villagers as outside (no more billboards)
@@ -381,7 +395,7 @@ export function renderInterior(world: World, me: Creature, h: House, rx: number,
   put(me, rx, rz, 2.0, 0x46c8ff)
   const occ = world.creatures.filter((c) => c.home === h && c !== me && !c.isAvatar).slice(0, 6)
   occ.forEach((c, k) => put(c, -RW / 2 + 2 + (k % 3) * 2.5, -RD / 2 + 2 + Math.floor(k / 3) * 2.5, 1.5, relColor(me, c)))
-  for (; i < pool.length; i++) { pool[i].visible = false; rings[i].visible = false; shadows[i].visible = false; modelPool[i].visible = false }
+  for (; i < pool.length; i++) { pool[i].visible = false; rings[i].visible = false; shadows[i].visible = false; modelPool[i].visible = false; labelPool[i].visible = false }
   const cp = Math.cos(pitch)
   const cx = rx - Math.cos(yaw) * 3.0, cy = 2.0, cz = rz - Math.sin(yaw) * 3.0
   camera.position.set(cx, cy, cz); camera.lookAt(cx + Math.cos(yaw) * 9 * cp, cy + Math.sin(pitch) * 9, cz + Math.sin(yaw) * 9 * cp)
@@ -449,11 +463,17 @@ export function render3D(world: World, me: Creature, yaw: number, pitch = 0) {
     if (moving) slot.rotation.y = -Math.atan2(c.vy, c.vx) - Math.PI / 2
     const swing = moving ? Math.sin(ph) * 0.35 : 0 // legs + arms swing in opposition, a real walk
     rig.ll.rotation.x = swing; rig.rl.rotation.x = -swing; rig.la.rotation.x = -swing * 0.7; rig.ra.rotation.x = swing * 0.7
+    const lb = labelPool[i] // floating name (nearest dozen only — labels regenerate only when the name changes)
+    if (i < 14) {
+      const nm = c.isAvatar ? "vos" : c.name
+      if (lb.userData.name !== nm) { lb.material.map?.dispose(); lb.material.map = makeLabel(nm); lb.material.needsUpdate = true; lb.userData.name = nm }
+      lb.visible = true; lb.position.set(c.x * S, scale * ageScale * 1.6 + 0.5, c.y * S)
+    } else lb.visible = false
     i++
   }
   place(me, 2.0, 0x46c8ff) // you — cyan ring
   for (const { c } of near) { if (i >= pool.length) break; place(c, 1.3 + c.genome.size * 0.45, relColor(me, c)) }
-  for (; i < pool.length; i++) { pool[i].visible = false; rings[i].visible = false; shadows[i].visible = false; modelPool[i].visible = false }
+  for (; i < pool.length; i++) { pool[i].visible = false; rings[i].visible = false; shadows[i].visible = false; modelPool[i].visible = false; labelPool[i].visible = false }
 
   // DYNAMIC PROPS — the same wild animals + harvestable crops you see in 2D, now in 3D (nearby only, no per-frame sort)
   ensureProps()
