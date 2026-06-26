@@ -502,6 +502,11 @@ export class World {
       const vacant = this.houses.find((h) => !occupants.has(h) && h.landlord === 0 && h.surname !== c.surname)
       if (vacant) { vacant.landlord = c.id; vacant.rent = Math.max(2, Math.round(vacant.value * 0.05)); c.money -= vacant.value * 0.5; if (c.life) feel(c, "orgulloso", 0.4); this.logEvent(`${c.name} ${c.surname} compró una casa para alquilar`) }
     }
+    // APARTMENT BUILDINGS: from the industrial era, a tycoon erects a tall block that houses many families
+    if (this.era >= 9 && this.houses.filter((h) => h.tier === 4).length < Math.floor(wild.length / 45) && this.houses.length < 170) {
+      const tycoon = wild.filter((c) => c.money > 1600 && ageYears(c) > 24).sort((a, b) => b.money - a.money)[0]
+      if (tycoon && Math.random() < 0.2) { const nh = this.addHouse(tycoon.surname); if (nh) { nh.tier = 4; nh.w = 74; nh.h = 66; nh.value = 2200; nh.rent = 18; nh.landlord = tycoon.id; tycoon.money -= 1100; this.logEvent(`${tycoon.name} ${tycoon.surname} construyó un edificio de apartamentos`) } }
+    }
     // tenants pay their landlord; the destitute fall behind (→ pressure toward homelessness)
     for (const c of wild) {
       const h = c.home
@@ -837,13 +842,14 @@ export class World {
       }
       // INDEPENDENCE: a restless young adult leaves home — they RENT a landlord's spare house if there is one
       // (becoming a tenant), otherwise they build their own. Either way the family tree branches outward.
-      const occHomes = new Set(wild.map((c) => c.home))
+      const homeCt = new Map<House, number>(); for (const c of wild) homeCt.set(c.home, (homeCt.get(c.home) || 0) + 1)
       for (const c of wild) {
         if (c.partner || !c.life || c.psyche.five.o < 0.62 || c.money < 18) continue
         const ay = ageYears(c); if (ay < 18 || ay > 30 || Math.random() > 0.012) continue
-        const rental = this.houses.find((h) => h.landlord && h.landlord !== c.id && h.surname !== c.surname && !occHomes.has(h))
-        if (rental) { c.home = rental; occHomes.add(rental); feel(c, "esperanzado", 0.5); this.logEvent(`${c.name} ${c.surname} alquiló su primera casa`) }
-        else if (this.houses.length < 130) { const nh = this.addHouse(c.surname); if (nh) { c.home = nh; occHomes.add(nh); c.money -= 12; feel(c, "esperanzado", 0.6); c.mental = Math.min(100, c.mental + 6); this.logEvent(`${c.name} ${c.surname} dejó la casa familiar para hacer su propia vida`) } }
+        // a vacant rental, OR an apartment building with room (they hold many families)
+        const rental = this.houses.find((h) => h.landlord && h.landlord !== c.id && h.surname !== c.surname && ((homeCt.get(h) || 0) === 0 || (h.tier === 4 && (homeCt.get(h) || 0) < 9)))
+        if (rental) { c.home = rental; homeCt.set(rental, (homeCt.get(rental) || 0) + 1); feel(c, "esperanzado", 0.5); this.logEvent(`${c.name} ${c.surname} alquiló su primera casa`) }
+        else if (this.houses.length < 130) { const nh = this.addHouse(c.surname); if (nh) { c.home = nh; homeCt.set(nh, 1); c.money -= 12; feel(c, "esperanzado", 0.6); c.mental = Math.min(100, c.mental + 6); this.logEvent(`${c.name} ${c.surname} dejó la casa familiar para hacer su propia vida`) } }
       }
       // FRIENDS HELP each other: someone with means quietly lends a hand to a poor close friend
       for (const c of wild) {
