@@ -689,7 +689,8 @@ export class World {
         const m = driveMatch(v.profCat, pick.drive)
         if (m < 0.5 && Math.random() > 0.25) continue // outside your field you only dabble
         const curiosity = 0.7 + (v.archetype === "emprendedor" || v.archetype === "líder" ? 0.5 : 0)
-        const contrib = v.genome.intellect * (v.knowledge / 100) * m * curiosity * boost * INNOV_RATE * (this.cultureBias[pick.drive] ?? 1)
+        const connect = 1 + Math.min(0.55, Object.keys(v.life?.rels || {}).length * 0.07) // a well-connected mind has more idea inputs → COLLECTIVE intelligence
+        const contrib = v.genome.intellect * (v.knowledge / 100) * m * curiosity * boost * INNOV_RATE * (this.cultureBias[pick.drive] ?? 1) * connect
         this.techProgress.set(pick.n, (this.techProgress.get(pick.n) || 0) + contrib)
         const top = this.techTop.get(pick.n) // remember the most capable mind that worked on it = the inventor
         if (!top || contrib > top.amt) this.techTop.set(pick.n, { id: v.id, name: v.name, surname: v.surname, prof: v.profession || "aldeano", amt: contrib })
