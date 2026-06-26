@@ -464,6 +464,9 @@ export class World {
     if (a.irritability > 0.6 && b.irritability > 0.6 && Math.random() < 0.4) { bond(a, b.id, -0.18); bond(b, a.id, -0.18); feel(a, "enojado", 0.5); feel(b, "enojado", 0.5); sigs.push({ k: KIND.EMOTE, s: a.id, v: -5 }) }
     else { bond(a, b.id, click * 0.07 + kin + neigh); bond(b, a.id, click * 0.07 + kin + neigh); sigs.push({ k: KIND.GREET, s: b.id, v: click > 0 ? 2 : -2 }) }
     if (a.dark.mach > 0.6 && Math.random() < 0.25) bond(b, a.id, -0.12)
+    // KINDRED SPIRITS: people who share a trade, a hobby or a life dream click — they bond + trade more ideas
+    const shared = (a.profCat && a.profCat === b.profCat) || (a.life?.hobby && a.life.hobby === b.life?.hobby) || (a.life?.goalKey && a.life.goalKey === b.life?.goalKey)
+    if (shared) { bond(a, b.id, 0.05); bond(b, a.id, 0.05); if (a.knowledge !== b.knowledge) { const hi = a.knowledge > b.knowledge ? a : b, lo = hi === a ? b : a; lo.knowledge = Math.min(hi.knowledge, lo.knowledge + 0.4) } }
     // GOSSIP / WARN about a third party — reputation travels the network
     const third = wild[Math.floor(Math.random() * wild.length)]
     if (third !== a && third !== b && third.life && Math.abs(third.life.rep) > 0.12) {
