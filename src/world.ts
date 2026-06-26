@@ -483,11 +483,16 @@ export class World {
       if (!listener.psyche.beliefs.includes(blf)) { listener.psyche.beliefs[Math.floor(Math.random() * listener.psyche.beliefs.length)] = blf; sigs.push({ k: KIND.OPINION, s: persuader.id, v: 3 }) }
     }
     if (persuader.religion && listener.religion && persuader.religion !== listener.religion && Math.random() < 0.015 * charisma) { listener.religion = persuader.religion; if (listener.life) feel(listener, "esperanzado", 0.3) } // a conversion of faith
-    // NEWS spreads: they pass along a recent event, which travels the network + stirs a reaction
-    if (this.news.length && Math.random() < 0.3) {
-      const n = this.news[this.news.length - 1 - Math.floor(Math.random() * Math.min(4, this.news.length))]
-      n.reach++; b.heard = n.txt; sigs.push({ k: KIND.NEWS, s: 0, v: n.sent * 4 })
-      if (n.sent < 0 && b.life) feel(b, "asustado", 0.2); else if (n.sent > 0 && b.life) feel(b, "alegre", 0.15)
+    // NEWS spreads with NETWORK EFFECTS: juicy + already-popular news goes viral, and a chatty extravert is an
+    // influencer who pushes it further. as it travels it can MUTATE — sentiment distorts into misinformation.
+    if (this.news.length) {
+      const n = this.news[this.news.length - 1 - Math.floor(Math.random() * Math.min(5, this.news.length))]
+      const influence = 0.22 * (0.6 + a.psyche.five.e * 0.8) * (1 + Math.min(2, n.reach * 0.012)) // viral + influencer
+      if (Math.random() < influence) {
+        n.reach++; b.heard = n.txt; sigs.push({ k: KIND.NEWS, s: 0, v: n.sent * 4 })
+        if (Math.random() < 0.06 && !n.txt.startsWith("(se dice)")) { n.sent = Math.max(-1, Math.min(1, n.sent + (Math.random() < 0.5 ? -0.7 : 0.7))); n.txt = "(se dice) " + n.txt } // the rumour distorts
+        if (n.sent < 0 && b.life) feel(b, "asustado", 0.2); else if (n.sent > 0 && b.life) feel(b, "alegre", 0.15)
+      }
     }
     if (sigs.length) { const codes = sigs.map(codeOf); a.sigs = [...(a.sigs || []), ...codes].slice(-6); b.sigs = [...(b.sigs || []), ...codes].slice(-6) }
   }
@@ -1006,6 +1011,8 @@ export class World {
       this.housingMarket(wild, byId) // landlords buy + rent out property; tenants pay rent
       this.poverty(wild) // the destitute fall into homelessness; the recovered find shelter
       this.runMarket(wild) // goods trade at a floating price; merchants profit; the rich buy luxuries
+      for (const n of this.news) n.reach = Math.max(1, n.reach - 0.6) // yesterday's news fades from the talk
+      if (Math.random() < 0.04 && wild.length > 20) { const v = wild[Math.floor(Math.random() * wild.length)]; this.news.push({ txt: `(rumor) dicen que ${v.name} ${v.surname} esconde algo`, sent: -0.6, reach: 1, day: this.clockDays }); if (this.news.length > 14) this.news.shift() } // a juicy false rumour is born
     }
 
     if (this.creatures.filter((c) => !c.isAvatar).length < 8) { // keep a struggling village from going extinct
