@@ -212,22 +212,25 @@ function buildTown(world: World) {
   }
   // textured houses with per-house VARIETY in height + roof style (deterministic by position → stable)
   const walls = eraWalls(world.era), roofs = eraRoofs(world.era)
+  const winMat = new THREE.MeshBasicMaterial({ color: 0x9fc0e0 })
   for (const h of world.houses) {
-    const r = hashf(h.x + h.y * 0.7)
+    const r = hashf(h.x + h.y * 0.7), tier = h.tier || 0
     const wallMat = matFor(walls[Math.floor(hashf(h.x * 1.7 + 3) * 997) % walls.length])
     const roofMat = matFor(roofs[Math.floor(hashf(h.y * 2.3 + 7) * 997) % roofs.length])
-    const bh = 3.0 + r * 3.6 // some squat, some tall
-    const w = h.w * S * (1.0 + hashf(h.x) * 0.45), d = h.h * S * (1.0 + hashf(h.y) * 0.45)
+    // the HOUSE TYPE shows in its scale: choza low, casa/casona/mansión bigger + taller, edificio towers
+    const bh = tier === 4 ? 9 + r * 4 : 2.0 + tier * 1.1 + r * 1.2
+    const w = h.w * S * (1.0 + hashf(h.x) * 0.3), d = h.h * S * (1.0 + hashf(h.y) * 0.3)
     const cx = (h.x + h.w / 2) * S, cz = (h.y + h.h / 2) * S
     const body = new THREE.Mesh(new THREE.BoxGeometry(w, bh, d), wallMat)
     body.position.set(cx, bh / 2, cz); town.add(body)
-    if (world.era < 12 || r < 0.5) { // pitched roof (old eras + some moderns)
-      const roof = new THREE.Mesh(new THREE.ConeGeometry(Math.max(w, d) * 0.78, 1.6 + r, 4), roofMat)
-      roof.position.set(cx, bh + (0.8 + r * 0.5), cz); roof.rotation.y = Math.PI / 4; town.add(roof)
-    } else { // flat slab roof for tall modern buildings
-      const slab = new THREE.Mesh(new THREE.BoxGeometry(w * 1.02, 0.3, d * 1.02), roofMat)
-      slab.position.set(cx, bh + 0.15, cz); town.add(slab)
-    }
+    if (tier === 4) { // APARTMENT BUILDING — flat roof + rows of lit windows up the facade
+      const slab = new THREE.Mesh(new THREE.BoxGeometry(w * 1.04, 0.3, d * 1.04), roofMat); slab.position.set(cx, bh + 0.15, cz); town.add(slab)
+      const floors = Math.floor(bh / 2.3)
+      for (let fl = 0; fl < floors; fl++) for (const wx of [-0.3, 0, 0.3]) { const win = new THREE.Mesh(new THREE.PlaneGeometry(w * 0.18, 1.0), winMat); win.position.set(cx + wx * w, 1.6 + fl * 2.3, cz + d / 2 + 0.02); town.add(win) }
+    } else if (world.era < 12 || r < 0.5) { // pitched roof (old eras + some moderns)
+      const roof = new THREE.Mesh(new THREE.ConeGeometry(Math.max(w, d) * 0.78, 1.4 + tier * 0.4 + r, 4), roofMat)
+      roof.position.set(cx, bh + (0.7 + r * 0.5), cz); roof.rotation.y = Math.PI / 4; town.add(roof)
+    } else { const slab = new THREE.Mesh(new THREE.BoxGeometry(w * 1.02, 0.3, d * 1.02), roofMat); slab.position.set(cx, bh + 0.15, cz); town.add(slab) }
   }
   // civic buildings (distinct material, taller)
   const civicMat = new THREE.MeshLambertMaterial({ map: tex(world.era >= 12 ? "wall_glass" : "wall_stone", 2) })
