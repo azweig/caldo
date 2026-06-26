@@ -25,6 +25,11 @@ export const ROAD_HALF = 20    // half street width
 const MARGIN = 60
 // how strongly a mind/trade fits what a tech needs (drives the emergent discovery rate)
 const INNOV_RATE = 0.55
+// REALISTIC PACING: humanity spent ~99% of its history in the stone age, then tech ACCELERATED. So early eras
+// must be epochs (the deep past is the slowest) and progress speeds up later. This per-era multiplier on tech
+// cost makes the Palaeolithic take generations; without it, cheap early techs flew by in a year or two.
+const ERA_COST_MULT = [26, 23, 20, 17.5, 15, 13, 11.5, 10, 8.5, 7.5, 6.5, 5.8, 5.2, 4.6, 4.2, 3.8, 3.4, 3.1, 2.8]
+const eraCostMult = (era: number) => ERA_COST_MULT[Math.max(0, Math.min(ERA_COST_MULT.length - 1, era))]
 const RELATED: Record<string, Cat[]> = {
   saber: ["enseñanza", "espíritu", "arte"], ingeniería: ["construcción", "oficio"], construcción: ["ingeniería", "oficio"],
   salud: ["cuidado", "saber"], comida: ["exploración", "cuidado"], exploración: ["comida", "defensa"], comercio: ["liderazgo"],
@@ -808,7 +813,8 @@ export class World {
         const top = this.techTop.get(pick.n) // remember the most capable mind that worked on it = the inventor
         if (!top || contrib > top.amt) this.techTop.set(pick.n, { id: v.id, name: v.name, surname: v.surname, prof: v.profession || "aldeano", amt: contrib })
       }
-      for (const t of avail) if ((this.techProgress.get(t.n) || 0) >= t.cost) this.discoverTech(t)
+      const costMul = eraCostMult(this.era)
+      for (const t of avail) if ((this.techProgress.get(t.n) || 0) >= t.cost * costMul) this.discoverTech(t)
     }
     // a milestone-gated era advance: all keystones + enough of the era's discoveries (a civ-style tech tree)
     if (this.era < 18 && canAdvanceEra(this.discovered, this.era)) {
