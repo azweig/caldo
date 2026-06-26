@@ -11,6 +11,8 @@ const S = 0.045 // world px → 3D units
 let renderer: THREE.WebGLRenderer
 let scene: THREE.Scene
 let camera: THREE.PerspectiveCamera
+let ambient: THREE.AmbientLight
+let sun: THREE.DirectionalLight
 let pool: THREE.Sprite[] = []
 let rings: THREE.Mesh[] = []
 let shadows: THREE.Mesh[] = []
@@ -27,9 +29,9 @@ export function init3D(canvas: HTMLCanvasElement, _creatureImgs: HTMLImageElemen
   scene = new THREE.Scene()
   scene.fog = new THREE.Fog(0xaebdd2, 110, 360) // pale-horizon haze
   camera = new THREE.PerspectiveCamera(60, 1, 0.1, 900)
-  scene.add(new THREE.AmbientLight(0xffffff, 2.0)) // very bright ambient so characters never go dark
+  ambient = new THREE.AmbientLight(0xffffff, 2.0); scene.add(ambient) // very bright ambient so characters never go dark
   scene.add(new THREE.HemisphereLight(0xdfeaff, 0x8a7c5a, 1.2))
-  const sun = new THREE.DirectionalLight(0xfff4e0, 1.1); sun.position.set(40, 80, 30); scene.add(sun)
+  sun = new THREE.DirectionalLight(0xfff4e0, 1.1); sun.position.set(40, 80, 30); scene.add(sun)
   // sky dome — a pleasant daytime gradient
   const sc = document.createElement("canvas"); sc.width = 4; sc.height = 256
   const sg = sc.getContext("2d")!; const grad = sg.createLinearGradient(0, 0, 0, 256)
@@ -361,6 +363,12 @@ export function pick3D(world: World, me: Creature, sx: number, sy: number, w: nu
 export function render3D(world: World, me: Creature, yaw: number, pitch = 0) {
   if (!ready) return
   walkT += 0.016
+  // DAY/NIGHT: light + haze follow the in-world hour so dusk darkens + night cools the whole 3D scene
+  const hr = (world.clockMinutes % 1440) / 60
+  const bright = hr < 5 || hr >= 21 ? 0.32 : hr < 7 ? 0.6 : hr < 18 ? 1 : hr < 20 ? 0.6 : 0.42
+  if (ambient) ambient.intensity = 0.9 + bright * 1.3
+  if (sun) sun.intensity = 0.15 + bright * 1.0
+  if (scene.fog) (scene.fog as THREE.Fog).color.setHex(hr < 5 || hr >= 21 ? 0x141d3a : hr < 7 ? 0xc99060 : hr < 18 ? 0xaebdd2 : hr < 20 ? 0xb88a5a : 0x5a4d72)
   if (builtFor !== world || builtEra !== world.era) buildTown(world)
   if (town) town.visible = true; if (intGroup) intGroup.visible = false
 
@@ -380,10 +388,11 @@ export function render3D(world: World, me: Creature, yaw: number, pitch = 0) {
       pool[i].visible = false; slot.visible = true
       if (slot.userData.name !== mn) { slot.clear(); slot.add(base.clone()); slot.userData.name = mn }
       const moving = Math.abs(c.vx) + Math.abs(c.vy) > 0.12
-      const bob = moving ? Math.abs(Math.sin(walkT * 9 + c.id)) * 0.13 : 0 // fake walk bounce (no rig)
+      const ph = walkT * 9 + c.id
+      const bob = moving ? Math.abs(Math.sin(ph)) * 0.14 : 0 // fake walk bounce (no rig)
       slot.position.set(c.x * S, bob, c.y * S); slot.scale.setScalar(scale)
-      if (moving) { slot.rotation.y = -Math.atan2(c.vy, c.vx) - Math.PI / 2; slot.rotation.z = Math.sin(walkT * 9 + c.id) * 0.07 }
-      else slot.rotation.z = 0
+      if (moving) { slot.rotation.y = -Math.atan2(c.vy, c.vx) - Math.PI / 2; slot.rotation.z = Math.sin(ph) * 0.08; slot.rotation.x = 0.06 } // a step-sway + a slight forward lean
+      else { slot.rotation.z = 0; slot.rotation.x = 0 }
     } else { // billboard fallback while the model loads
       slot.visible = false
       const sp = pool[i]; sp.visible = true; const pn = personName(c, world.era)
