@@ -20,3 +20,15 @@ export const SPECIES: Record<string, Species> = {
 }
 export const SPECIES_KEYS = Object.keys(SPECIES)
 export const emojiOf = (kind: string) => SPECIES[kind]?.emoji || "🐾"
+
+// RAIDERS from beyond the map — peoples that don't exist as towns. Era-appropriate: stone-age savages, then
+// nomad + barbarian war-bands, sea pirates, and in the modern world, terrorists. They strike, loot, and flee.
+export interface Enemy { x: number; y: number; vx: number; vy: number; kind: string; hp: number }
+export const ENEMIES: Record<string, { emoji: string; label: string; min: number; max: number; power: number }> = {
+  salvajes: { emoji: "🪓", label: "una horda salvaje", min: 0, max: 3, power: 0.8 },
+  nomadas: { emoji: "🏹", label: "nómadas saqueadores", min: 1, max: 8, power: 1.0 },
+  barbaros: { emoji: "⚔️", label: "bárbaros", min: 3, max: 9, power: 1.2 },
+  piratas: { emoji: "🏴‍☠️", label: "piratas", min: 5, max: 10, power: 1.1 },
+  terroristas: { emoji: "💣", label: "terroristas", min: 9, max: 18, power: 1.4 },
+}
+export const enemyEmoji = (kind: string) => ENEMIES[kind]?.emoji || "💀"

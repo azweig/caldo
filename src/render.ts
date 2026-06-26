@@ -6,7 +6,7 @@ import { World, Creature, House, ageYears, isMature, seasonOf, WORLD_W, WORLD_H,
 import { Assets } from "./sprites"
 import { TRAIT_BOUNDS } from "./genome"
 import { EMO } from "./life"
-import { emojiOf, SPECIES } from "./animals"
+import { emojiOf, SPECIES, enemyEmoji } from "./animals"
 
 export interface Cam { x: number; y: number; zoom: number }
 
@@ -243,6 +243,12 @@ export function drawWorld(
     else if (a.tame) { ctx.strokeStyle = "rgba(110,227,154,0.55)"; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(a.x, a.y, 14, 0, Math.PI * 2); ctx.stroke() }
     ctx.font = "20px serif"; ctx.textAlign = "center"; ctx.fillText(emojiOf(a.kind), a.x, a.y + 7); ctx.textAlign = "left"
   }
+  // RAIDERS — invaders from beyond the map (pulsing red menace)
+  for (const r of world.raiders) {
+    ctx.save(); ctx.globalAlpha = 0.22; ctx.fillStyle = "#000"; ctx.beginPath(); ctx.ellipse(r.x, r.y + 6, 11, 5, 0, 0, Math.PI * 2); ctx.fill(); ctx.restore()
+    ctx.strokeStyle = "rgba(255,40,40,0.85)"; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(r.x, r.y, 16 + Math.sin(wT * 0.3 + r.x) * 2, 0, Math.PI * 2); ctx.stroke()
+    ctx.font = "21px serif"; ctx.textAlign = "center"; ctx.fillText(enemyEmoji(r.kind), r.x, r.y + 7); ctx.textAlign = "left"
+  }
 
   // food
   const foodOk = assets.food.naturalWidth > 0
@@ -328,6 +334,7 @@ function drawMinimap(ctx: CanvasRenderingContext2D, world: World, avatar: Creatu
   ctx.fillStyle = "rgba(80,160,100,0.45)"
   for (const g of world.gardens) ctx.fillRect(ox + g.x * sx - 1, oy + g.y * sy - 1, 3, 3)
   for (const a of world.animals) { ctx.fillStyle = a.tame ? "rgba(110,227,154,0.9)" : SPECIES[a.kind]?.hostile ? "rgba(255,70,70,0.95)" : "rgba(220,200,120,0.8)"; ctx.fillRect(ox + a.x * sx - 1, oy + a.y * sy - 1, 2.5, 2.5) } // beasts: red=predator, green=tame
+  ctx.fillStyle = "rgba(255,30,30,1)"; for (const r of world.raiders) ctx.fillRect(ox + r.x * sx - 2, oy + r.y * sy - 2, 4, 4) // invaders flash big + red
   for (const c of world.creatures) {
     if (c.isAvatar) continue
     ctx.fillStyle = `hsl(${c.genome.hue},65%,62%)`

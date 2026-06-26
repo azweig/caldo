@@ -634,6 +634,7 @@ function updateHud() {
     <div class="stat"><span>pueblo</span> <b style="color:#fff">${countries[active]?.flag || ""} ${countries[active]?.name || ""}</b>${world.cultureEthos ? ` · <i style="color:#cdbf9a">${world.cultureEthos}</i>` : ""} · ${world.gov === "monarquía" ? "👑 monarquía" : "🏛 república"} · ${world.system === "capitalista" ? "💵 capitalista" : world.system === "socialista" ? "🤝 socialista" : "⛓ dictadura"}</div>
     ${world.monarch ? `<div class="stat"><span>monarca</span> ${world.monarch.name} ${world.monarch.surname}${world.monarch.powerHungry ? " (déspota)" : ""}</div>` : ""}
     <div class="stat"><span>población</span> ${wild.length} · <span>familias</span> ${families} · ⚔️ ${wild.filter((c) => isMature(c) && c.profCat === "defensa").length}${world.animals.some((a) => !a.tame) ? ` · 🐾 ${world.animals.filter((a) => !a.tame).length}` : ""}</div>
+    ${world.raiders.length ? `<div class="stat" style="background:rgba(200,30,30,0.25);border-radius:6px;padding:2px 6px"><b style="color:#ff6b6b">🚨 ¡EL PUEBLO ESTÁ BAJO ATAQUE! ${world.raiders.length} invasores</b></div>` : ""}
     <div class="stat"><span>edad media</span> ${avgAge}a · <span>enfermos ✚</span> ${sick}</div>
     <div class="stat"><span>generación</span> ${world.peakGen} · <span>nac</span> ${world.births} · <span>muertes</span> ${world.deaths}</div>
     <div class="stat"><span>era</span> <b style="color:#bcd9ff">${eraName(world.era)}</b> · ${SEASONS[seasonOf(world.clockDays)]}</div>
@@ -729,9 +730,15 @@ function worldAffairs(steps: number) {
   if (Math.min(transportLevel(A.world.era), transportLevel(B.world.era)) < 1) return // isolated until carts/boats (~era 3)
   const label = relationLabel(relationScore(A, B))
   if (label.startsWith("guerra")) {
-    warDeaths(A.world, 1 + Math.floor(Math.random() * 2)); warDeaths(B.world, 1 + Math.floor(Math.random() * 2))
-    A.world.chronicle.push({ day: A.world.clockDays, text: `⚔ guerra con ${B.name}` })
-    B.world.chronicle.push({ day: B.world.clockDays, text: `⚔ guerra con ${A.name}` })
+    // a real war: the stronger military prevails, the weaker side bleeds, and spoils flow to the victor
+    const sa = A.world.militaryStrength(), sb = B.world.militaryStrength(), total = sa + sb || 1
+    const aLoss = 1 + Math.floor(5 * sb / total), bLoss = 1 + Math.floor(5 * sa / total)
+    warDeaths(A.world, aLoss); warDeaths(B.world, bLoss)
+    const aWins = sa >= sb, winner = aWins ? A : B, loser = aWins ? B : A
+    winner.world.research += 1800 // spoils of war: plunder + captured knowledge
+    A.world.chronicle.push({ day: A.world.clockDays, text: `⚔ guerra con ${B.name} — ${aWins ? "victoria" : "derrota"}, ${aLoss} caídos` })
+    B.world.chronicle.push({ day: B.world.clockDays, text: `⚔ guerra con ${A.name} — ${aWins ? "derrota" : "victoria"}, ${bLoss} caídos` })
+    if (Math.random() < 0.6) migrateBetween(loser, winner) // refugees flee the losing side to the victor
   } else if (label === "aliados 🤝") {
     migrateBetween(A, B); migrateBetween(B, A)                       // open borders — the peoples mix
     const lag = A.world.era <= B.world.era ? A : B; lag.world.research += 5000 // shared technology
@@ -870,6 +877,7 @@ function loop() {
     }
     } // end crowd-flow throttle
     for (const a of world.animals) { a.x += a.vx * 0.35; a.y += a.vy * 0.35 } // beasts roam smoothly between updates
+    for (const r of world.raiders) { const dx = WORLD_W / 2 - r.x, dy = WORLD_H / 2 - r.y, d = Math.hypot(dx, dy) || 1; r.x += (dx / d) * 0.4; r.y += (dy / d) * 0.4 } // invaders close in
   }
   if (avatar && !possessed) avatar.energy = Math.max(60, Math.min(150, avatar.energy)) // immortal observer
   if (possessed) possessed.energy = Math.max(0, possessed.energy) // possessed: real hunger you manage (won't die)
