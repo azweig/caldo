@@ -847,7 +847,8 @@ function loop() {
       c.x += mvx; c.y += mvy; c.vx = mvx; c.vy = mvy
       if (mvx > 0.05) c.facing = 1; else if (mvx < -0.05) c.facing = -1 // face where they walk, in real time
     }
-    // CROWD FLOW: gently push people apart so they don't stack into one blob — a coarse grid keeps it O(n)
+    // CROWD FLOW: push people apart so they don't stack — a coarse grid keeps it O(n); every other frame is plenty
+    if (frame % 2 === 0) {
     const CELL = 42, grid = new Map<number, Creature[]>()
     const key = (x: number, y: number) => (Math.floor(x / CELL) & 4095) | ((Math.floor(y / CELL) & 4095) << 12)
     for (const c of world.creatures) { if (c.isAvatar) continue; const k = key(c.x, c.y); const b = grid.get(k); if (b) b.push(c); else grid.set(k, [c]) }
@@ -866,6 +867,7 @@ function loop() {
       // a small gathering: when someone stands close to another, they TURN to face them (a little conversation)
       if (nearD < 34 * 34 && Math.abs(c.vx) + Math.abs(c.vy) < 0.5) c.facing = nearX >= c.x ? 1 : -1
     }
+    } // end crowd-flow throttle
     for (const a of world.animals) { a.x += a.vx * 0.35; a.y += a.vy * 0.35 } // beasts roam smoothly between updates
   }
   if (avatar && !possessed) avatar.energy = Math.max(60, Math.min(150, avatar.energy)) // immortal observer
