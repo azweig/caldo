@@ -10,12 +10,16 @@ import { join, extname, resolve, sep } from "node:path"
 
 const DIST = resolve(process.cwd(), "dist")
 const PORT = Number(process.env.PORT || 4321)
-const HOST = process.env.HOST || "127.0.0.1" // default to loopback; opt in to 0.0.0.0 explicitly
+// platform proxies (RunPod etc.) connect from OUTSIDE, so the server must bind 0.0.0.0 to be reachable — binding
+// loopback would leave the page stuck "initializing". The /ollama proxy is protected by the allow-list + token.
+const HOST = process.env.HOST || "0.0.0.0"
 const OLLAMA = new URL(process.env.OLLAMA_URL || "http://localhost:11434")
 const PROXY_TOKEN = process.env.PROXY_TOKEN || "" // if set, /ollama/* requires header x-proxy-token to match
 const OLLAMA_ALLOW = new Set(["/api/chat", "/api/generate", "/api/tags", "/api/version"]) // allow-list of proxied paths
 const TYPES = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css", ".png": "image/png", ".svg": "image/svg+xml", ".json": "application/json", ".ico": "image/x-icon", ".webmanifest": "application/manifest+json", ".glb": "model/gltf-binary", ".webp": "image/webp" }
-const SECURITY_HEADERS = { "X-Content-Type-Options": "nosniff", "X-Frame-Options": "DENY", "Referrer-Policy": "no-referrer" }
+// CSP delivered as a response header (stronger than the <meta>, and keeps the dev server — vite needs inline/eval — working)
+const CSP = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' https: http://localhost:* http://127.0.0.1:*; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; frame-ancestors 'none'"
+const SECURITY_HEADERS = { "X-Content-Type-Options": "nosniff", "X-Frame-Options": "DENY", "Referrer-Policy": "no-referrer", "Content-Security-Policy": CSP }
 
 createServer(async (req, res) => {
   const url = req.url || "/"
