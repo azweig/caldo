@@ -12,7 +12,7 @@ import { Msg, setLlm, pingLLM, autoDetect, llmConfigured, llmUrl, llmModel } fro
 import { eraName, professionSpace, ERAS, eraProgress } from "./civ"
 import { ENNEAGRAM } from "./psyche"
 import { LangCode, WRITE_LANG, langName, heard } from "./i18n"
-import { CivConfig, RELIGIONS, buildCountries, foodSystem, transportOf, transportLevel } from "./civconfig"
+import { CivConfig, RELIGIONS, buildCountries, foodSystem, transportOf, transportLevel, climateOf } from "./civconfig"
 import { ethosOf, cultureReligions } from "./cultures"
 import { innerLine, EMO } from "./life"
 import { init3D, resize3D, render3D, renderInterior, ROOM, pick3D, project3D } from "./three3d"
@@ -620,7 +620,8 @@ function updateHud() {
     <div class="stat"><span>edad media</span> ${avgAge}a · <span>enfermos ✚</span> ${sick}</div>
     <div class="stat"><span>generación</span> ${world.peakGen} · <span>nac</span> ${world.births} · <span>muertes</span> ${world.deaths}</div>
     <div class="stat"><span>era</span> <b style="color:#bcd9ff">${eraName(world.era)}</b> · ${SEASONS[seasonOf(world.clockDays)]}</div>
-    <div class="stat"><span>alimento</span> ${foodSystem(world.era)} · <span>transporte</span> ${transportOf(world.era)}</div>
+    <div class="stat"><span>alimento</span> ${foodSystem(world.era)} · <span>clima</span> ${climateOf(world.region)}</div>
+    <div class="stat"><span>transporte</span> ${transportOf(world.era)} · <span>mercado</span> ${world.marketPrice.toFixed(2)}×</div>
     <div class="stat"><span>religión</span> ${topRel ? `${topRel[0]} ${Math.round(100 * topRel[1] / (wild.length || 1))}%` : "—"} · <span>ambiciosos</span> ${psychos}</div>
     <div class="stat"><span>saber 📚</span> ${Math.round(world.wisdom)} · <span>oficios</span> ${professionSpace().toLocaleString()} · <span>univ.</span> ${world.universities.length}</div>
     <div class="stat"><span>investigando</span> ${rp.name} <span class="rbar"><i style="width:${Math.round(rp.frac * 100)}%"></i></span></div>

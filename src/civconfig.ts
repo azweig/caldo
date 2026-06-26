@@ -31,6 +31,10 @@ export const FOOD_SYSTEMS = [
 ]
 export function foodSystem(era: number): string { return FOOD_SYSTEMS[Math.max(0, Math.min(FOOD_SYSTEMS.length - 1, era))] }
 
+// each land has a CLIMATE (by region) that shapes its food + health: cold freezes, deserts starve, tropics teem + fever
+export const CLIMATES = ["templado", "frío", "desértico", "tropical"]
+export function climateOf(region: number): string { return CLIMATES[region % 4] }
+
 // transport per era — also gates how much countries can reach each other (level 0 = isolated)
 export const TRANSPORT = [
   "a pie", "a pie y canoas", "animales de carga", "carros con ruedas", "carros y caballos",

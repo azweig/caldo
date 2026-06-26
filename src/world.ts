@@ -619,7 +619,11 @@ export class World {
 
   step() {
     this.tick++; this.clockDays++
-    { let n = Math.min(this.foodTarget - this.food.length, 2 + Math.ceil(this.creatures.length * 0.5)); while (n-- > 0) this.scatterFood() } // regrow food fast enough to feed a growing town
+    // CLIMATE shapes the land: cold lands grow little + freeze in winter, deserts are lean, the tropics teem.
+    // (region 0 templado · 1 frío · 2 desierto · 3 selvático)
+    const seas = seasonOf(this.clockDays)
+    const climF = [1.0, seas === 3 ? 0.5 : 0.9, 0.7, 1.25][this.region % 4] // food yield by climate + season
+    { let n = Math.min(this.foodTarget - this.food.length, Math.ceil((2 + this.creatures.length * 0.5) * climF)); while (n-- > 0) this.scatterFood() }
 
     // ── civilisation: EMERGENT discoveries — real aldeanos get IDEAS and try to BUILD them ──
     // no global counter: progress on a tech only comes from actual mature, educated, curious individuals
@@ -768,7 +772,9 @@ export class World {
       const ay = ageYears(c)
       const ageRisk = 1 + Math.max(0, ay - 45) / 40
       const frail = 1 + (1 - c.health / 100) * 1.6 // poor physical health → far more prone to illness
-      if (!c.sick) { if (Math.random() < 0.00009 * (1.25 - g.resistance) * ageRisk * plague / healthM * frail) { c.sick = true; c.sickDays = 0 } }
+      // climate: the tropics breed fevers (summer worst), the cold lands sicken in deep winter
+      const climS = this.region % 4 === 3 ? (seasonOf(this.clockDays) === 1 ? 1.7 : 1.3) : this.region % 4 === 1 && seasonOf(this.clockDays) === 3 ? 1.6 : 1
+      if (!c.sick) { if (Math.random() < 0.00009 * (1.25 - g.resistance) * ageRisk * plague / healthM * frail * climS) { c.sick = true; c.sickDays = 0 } }
       else {
         c.sickDays++
         if (Math.random() < 0.022 * (0.5 + g.resistance) * healthM) { c.sick = false; c.sickDays = 0 }
