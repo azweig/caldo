@@ -431,6 +431,9 @@ function drawVillager(ctx: CanvasRenderingContext2D, c: Creature, w: number, mov
     if (ap.freckles && ap.beard === "none") { ctx.fillStyle = "rgba(120,75,45,0.5)"; for (let f = 0; f < 4; f++) ctx.fillRect(hr * (0.32 + (f % 2) * 0.22), hcy + hr * (0.2 + Math.floor(f / 2) * 0.16), hr * 0.07, hr * 0.07) } // freckles
   }
   if (c.sick) { ctx.fillStyle = "rgba(150,200,160,0.28)"; ctx.beginPath(); ctx.arc(0, hcy, hr, 0, Math.PI * 2); ctx.fill() } // a sickly pallor
+  const cond = c.life?.condition
+  if (cond === "sin techo") { ctx.fillStyle = "rgba(80,60,40,0.4)"; ctx.beginPath(); ctx.arc(-hr * 0.3, hcy + hr * 0.3, hr * 0.18, 0, Math.PI * 2); ctx.fill(); ctx.beginPath(); ctx.arc(hr * 0.5, hcy + hr * 0.5, hr * 0.12, 0, Math.PI * 2); ctx.fill() } // grime of the street
+  if (cond === "locura" || cond === "sin techo") { ctx.fillStyle = ap.hair; for (let t = 0; t < 5; t++) { const a = (t / 5) * Math.PI - Math.PI * 0.9; ctx.fillRect(Math.cos(a) * hr - hr * 0.04, hcy + Math.sin(a) * hr - hr * 0.3, hr * 0.09, hr * 0.4) } } // wild, unkempt tufts
   // HEADWEAR
   if (ap.hat === "helmet") { ctx.fillStyle = "#9098a4"; ctx.beginPath(); ctx.arc(0, hcy, hr * 1.05, Math.PI, 2 * Math.PI); ctx.fill(); ctx.fillRect(-hr * 1.05, hcy - 1, hr * 2.1, hr * 0.18); ctx.fillStyle = "#c2c8d2"; ctx.fillRect(-hr * 0.1, hcy - hr * 1.45, hr * 0.2, hr * 0.5) }
   else if (ap.hat === "straw") { ctx.fillStyle = "#c9a850"; ctx.beginPath(); ctx.arc(0, hcy - hr * 0.55, hr * 0.72, Math.PI, 2 * Math.PI); ctx.fill(); ctx.fillStyle = "#d8b86a"; ctx.beginPath(); ctx.ellipse(0, hcy - hr * 0.5, hr * 1.5, hr * 0.4, 0, 0, Math.PI * 2); ctx.fill() }
