@@ -328,8 +328,9 @@ export class World {
   news: { txt: string; sent: number; reach: number; day: number }[] = [] // recent events that spread as gossip
   private logEvent(text: string) {
     this.chronicle.push({ day: this.clockDays, text }); if (this.chronicle.length > 80) this.chronicle.shift()
-    const neg = /murió|quiebra|crimen|asesin|robó|sin techo|cordura|calle|divorció|guerra|represión|peste/.test(text)
-    const pos = /prosper|inventó|ideó|graduó|boda|se unió|amanece|fiesta|fortuna|alquiló|construyó/.test(text)
+    if (text.startsWith("✦")) return // ceremonial announcements (eras, festivals) aren't personal gossip
+    const neg = /murió|quiebra|crimen|asesin|robó|sin techo|cordura|calle|divorció|guerra|represión|peste|rumor|esconde/.test(text)
+    const pos = /prosper|inventó|ideó|graduó|boda|se unió|fortuna|alquiló|construyó|graduó/.test(text)
     this.news.push({ txt: text, sent: pos ? 1 : neg ? -1 : 0, reach: 1, day: this.clockDays }); if (this.news.length > 14) this.news.shift()
   }
   // what the town is buzzing about — the events that spread widest through the gossip network
