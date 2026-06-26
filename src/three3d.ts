@@ -389,7 +389,7 @@ export function render3D(world: World, me: Creature, yaw: number, pitch = 0) {
       if (slot.userData.name !== mn) { slot.clear(); slot.add(base.clone()); slot.userData.name = mn }
       const moving = Math.abs(c.vx) + Math.abs(c.vy) > 0.12
       const ph = walkT * 9 + c.id
-      const bob = moving ? Math.abs(Math.sin(ph)) * 0.14 : 0 // fake walk bounce (no rig)
+      const bob = moving ? Math.abs(Math.sin(ph)) * 0.14 : Math.sin(walkT * 1.6 + c.id) * 0.02 // walk bounce, or a faint breathing when still
       slot.position.set(c.x * S, bob, c.y * S); slot.scale.setScalar(scale)
       if (moving) { slot.rotation.y = -Math.atan2(c.vy, c.vx) - Math.PI / 2; slot.rotation.z = Math.sin(ph) * 0.08; slot.rotation.x = 0.06 } // a step-sway + a slight forward lean
       else { slot.rotation.z = 0; slot.rotation.x = 0 }

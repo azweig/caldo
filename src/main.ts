@@ -810,8 +810,9 @@ function loop() {
       const dest = routineDest(c, hour)
       const dx = dest.x - c.x, dy = dest.y - c.y, d = Math.hypot(dx, dy) || 1
       let mvx = 0, mvy = 0
+      const spd = 1.0 + c.genome.speed * 0.7 // each person walks at their OWN pace — some hurry, some amble
       if (dest.sleep && d < 26) { /* asleep at home → still */ }
-      else if (d > 46) { mvx = (dx / d) * 1.4; mvy = (dy / d) * 1.4 } // commute toward where they should be
+      else if (d > 46) { mvx = (dx / d) * spd; mvy = (dy / d) * spd } // commute toward where they should be
       else { const a = routinePhase * 2 + c.id; mvx = Math.cos(a) * 0.7; mvy = Math.sin(a * 1.4) * 0.7 } // mill about
       if (possessed) { const px = c.x - possessed.x, py = c.y - possessed.y; if (px * px + py * py < 95 * 95) { mvx *= 0.1; mvy *= 0.1 } } // pause near you so you can talk
       c.x += mvx; c.y += mvy; c.vx = mvx; c.vy = mvy

@@ -332,7 +332,7 @@ function drawCreature(ctx: CanvasRenderingContext2D, c: Creature, era: number) {
   // a natural walk: bob up + sway gently while moving (a still person stands quiet)
   const moving = !indoors && Math.abs(c.vx) + Math.abs(c.vy) > 0.15
   const phase = wT * 0.45 + c.id
-  const bob = moving ? Math.abs(Math.sin(phase)) * w * 0.07 : 0
+  const bob = moving ? Math.abs(Math.sin(phase)) * w * 0.07 : Math.sin(wT * 0.08 + c.id) * w * 0.013 // walk bounce, or a gentle breathing when still
   const sway = moving ? Math.sin(phase) * 0.05 : 0
 
   // soft ground shadow — grounds the figure + gives the scene depth
