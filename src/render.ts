@@ -129,6 +129,8 @@ export function drawWorld(
     const n = present.get(h) || 0
     if (hImg.naturalWidth > 0) { // pixel-art house sprite, sized to the lot (roof rises above)
       const hw = h.w * 1.7, hh = hw * (hImg.naturalHeight / hImg.naturalWidth)
+      ctx.save(); ctx.globalAlpha = 0.18; ctx.fillStyle = "#000" // soft shadow grounds the building
+      ctx.beginPath(); ctx.ellipse(h.x + h.w / 2 + 6, h.y + h.h - 2, hw * 0.42, h.h * 0.3, 0, 0, Math.PI * 2); ctx.fill(); ctx.restore()
       ctx.imageSmoothingEnabled = false; ctx.globalAlpha = n > 0 ? 1 : 0.82
       ctx.drawImage(hImg, h.x + h.w / 2 - hw / 2, h.y + h.h - hh, hw, hh); ctx.globalAlpha = 1
     } else { // fallback rectangle until the sprite loads
@@ -191,7 +193,9 @@ export function drawWorld(
   }
 
   // creatures
-  for (const c of world.creatures) { if (!c.isAvatar) drawCreature(ctx, c, world.era) }
+  // DEPTH: draw people sorted front-to-back by their feet (y), so those in front overlap those behind
+  const folk = world.creatures.filter((c) => !c.isAvatar).sort((a, b) => a.y - b.y)
+  for (const c of folk) drawCreature(ctx, c, world.era)
 
   if (chatTarget) {
     ctx.strokeStyle = "rgba(120,200,255,0.18)"; ctx.lineWidth = 1
@@ -237,6 +241,11 @@ export function drawWorld(
   }
 
   ctx.restore()
+
+  // a soft vignette darkens the screen edges → focus + depth (screen space, after the world transform)
+  const vg = ctx.createRadialGradient(cw / 2, ch / 2, Math.min(cw, ch) * 0.4, cw / 2, ch / 2, Math.max(cw, ch) * 0.72)
+  vg.addColorStop(0, "rgba(0,0,0,0)"); vg.addColorStop(1, "rgba(0,0,0,0.34)")
+  ctx.fillStyle = vg; ctx.fillRect(0, 0, cw, ch)
 
   drawMinimap(ctx, world, avatar, cam, cw, ch)
 }
