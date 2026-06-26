@@ -8,5 +8,7 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: 20, cache: npm }
       - run: npm ci
-      - run: npx tsc --noEmit
-      - run: npm test
+      - run: npx tsc --noEmit          # type check (hard gate)
+      - run: npm test                  # vitest suite (hard gate)
+      - run: npm run format:check       # formatting drift (informational)
+        continue-on-error: true
