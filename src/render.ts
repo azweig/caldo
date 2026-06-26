@@ -416,7 +416,10 @@ function drawVillager(ctx: CanvasRenderingContext2D, c: Creature, w: number, mov
   // an eye, when facing the camera — plus a mouth + brow that read their current MOOD
   if (c.facing >= 0) {
     const mad = c.life?.condition === "locura"
-    ctx.fillStyle = "rgba(30,20,15,0.78)"; ctx.beginPath(); ctx.arc(hr * 0.34, hcy + hr * 0.04, hr * (mad ? 0.18 : 0.13), 0, Math.PI * 2); ctx.fill()
+    const blink = !mad && Math.sin(wT * 0.05 + Math.abs(c.id) * 2.1) > 0.975 // an occasional blink brings them to life
+    ctx.fillStyle = "rgba(30,20,15,0.78)"
+    if (blink) ctx.fillRect(hr * 0.18, hcy + hr * 0.02, hr * 0.32, hr * 0.06)
+    else { ctx.beginPath(); ctx.arc(hr * 0.34, hcy + hr * 0.04, hr * (mad ? 0.18 : 0.13), 0, Math.PI * 2); ctx.fill() }
     if (mad) { ctx.fillStyle = "#fff"; ctx.beginPath(); ctx.arc(hr * 0.34, hcy + hr * 0.04, hr * 0.26, 0, Math.PI * 2); ctx.fill(); ctx.fillStyle = "rgba(20,10,5,0.85)"; ctx.beginPath(); ctx.arc(hr * 0.34, hcy + hr * 0.04, hr * 0.1, 0, Math.PI * 2); ctx.fill() } // wild eye
     const emo = c.life?.emotion, ei = c.life?.emoInt || 0, mx = hr * 0.22, my = hcy + hr * 0.46
     const happy = emo === "alegre" || emo === "enamorado" || emo === "orgulloso" || emo === "esperanzado"
@@ -460,7 +463,7 @@ function drawCreature(ctx: CanvasRenderingContext2D, c: Creature, era: number) {
   const moving = !indoors && Math.abs(c.vx) + Math.abs(c.vy) > 0.15
   const phase = wT * 0.45 + c.id
   const bob = moving ? Math.abs(Math.sin(phase)) * w * 0.07 : Math.sin(wT * 0.08 + c.id) * w * 0.013 // walk bounce, or a gentle breathing when still
-  const sway = moving ? Math.sin(phase) * 0.05 : 0
+  const sway = moving ? Math.sin(phase) * 0.05 : Math.sin(wT * 0.025 + c.id) * 0.016 // walk sway, or a subtle idle weight-shift
 
   // RENOWN: a soul who has earned great regard over their life carries a soft golden aura — earned, not given
   const rep = c.life?.rep || 0
