@@ -312,13 +312,13 @@ function statsHTML(): string {
     <h3>Oficios (por categoría)</h3>
     <div class="sline">${top(cat, (k, v) => `${k} ${v}`)}</div>
     <h3>De qué hablan</h3>
-    <div class="sline">${Object.keys(topics).length ? Object.entries(topics).sort((a, b) => b[1] - a[1]).slice(0, 6).map(([k]) => k).join(" · ") : "todavía nada"}</div>
+    <div class="sline">${Object.keys(topics).length ? Object.entries(topics).sort((a, b) => b[1] - a[1]).slice(0, 6).map(([k]) => esc(k)).join(" · ") : "todavía nada"}</div>
     <h3>Transporte</h3>
     <div class="sline">${transportOf(world.era)}</div>
     <h3>Relaciones exteriores</h3>
     <div class="sline">${countries.filter((c) => c !== countries[active]).map((c) => `${esc(c.flag)} ${esc(c.name)}: ${relationLabel(relationScore(countries[active], c))}`).join("<br>") || "—"}</div>
     <h3>Riqueza</h3>
-    ${(() => { const ws = wealthStats(world); return `${row("desigualdad (Gini)", ws.gini.toFixed(2))}${row("pobre · medio · rico", `${ws.p10} · ${ws.p50} · ${ws.p90}`)}${row("emprendedores · en deuda", `${ws.entrepreneurs} · ${ws.poor}`)}<div class="sline">más ricos: ${ws.richest.slice(0, 3).map((r) => `${r.name} (${r.money})`).join(" · ") || "—"}</div>` })()}
+    ${(() => { const ws = wealthStats(world); return `${row("desigualdad (Gini)", ws.gini.toFixed(2))}${row("pobre · medio · rico", `${ws.p10} · ${ws.p50} · ${ws.p90}`)}${row("emprendedores · en deuda", `${ws.entrepreneurs} · ${ws.poor}`)}<div class="sline">más ricos: ${ws.richest.slice(0, 3).map((r) => `${esc(r.name)} (${r.money})`).join(" · ") || "—"}</div>` })()}
     <h3>Sociedad (histórico)</h3>
     ${(() => { const k = (kind: string) => world.deeds.filter((d) => d.kind === kind).length; return `${row("crímenes · juicios", `${k("crimen")} · ${k("justicia")}`)}${row("negocios · quiebras", `${k("negocio")} · ${k("quiebra")}`)}${row("libros · obras de arte", `${k("libro")} · ${k("obra")}`)}` })()}
     <h3>Política y movimientos</h3>
@@ -340,7 +340,7 @@ function legendsHTML(): string {
   if (!gens.length) return "<p class='dim'>Todavía no hay hechos memorables en esta civilización.</p>"
   return gens.slice().reverse().map((g) =>
     `<h3>Generación ${g.gen}</h3>` + g.people.map((p) =>
-      `<div class="srow"><span>${p.name}</span><b style="color:${p.impact >= 0 ? "#8fe3a0" : "#e0788a"}">${p.impact >= 0 ? "+" : ""}${p.impact}</b></div>` +
+      `<div class="srow"><span>${esc(p.name)}</span><b style="color:${p.impact >= 0 ? "#8fe3a0" : "#e0788a"}">${p.impact >= 0 ? "+" : ""}${p.impact}</b></div>` +
       `<div class="sline">${esc(p.deeds.slice(-3).join(" · ")) || "figura de su tiempo"}</div>` +
       p.works.slice(-3).map((w) => {
         const key = `${w.who}:${w.title}`, r = cachedWork(key)
@@ -483,7 +483,7 @@ function renderPossess() {
   const e = Math.round(Math.max(0, c.energy))
   const bar = "█".repeat(Math.max(0, Math.round(e / 12))).padEnd(12, "·")
   const partner = c.partner ? world.creatures.find((o) => o.id === c.partner) : null
-  const toast = possessBusy ? `<div class="ptoast">⏳ ${possessBusy.label}… 🌙</div>` : (frame < flashUntil ? `<div class="ptoast">${flashMsg}</div>` : "")
+  const toast = possessBusy ? `<div class="ptoast">⏳ ${esc(possessBusy.label)}… 🌙</div>` : (frame < flashUntil ? `<div class="ptoast">${esc(flashMsg)}</div>` : "")
   possessBody.innerHTML = `
     <div class="pname">🎭 ${esc(c.name)} ${esc(c.surname)}</div>
     <div class="prow2">${esc(c.profession || "sin oficio")} · ${Math.round(ageYears(c))} años · 🕐 ${Math.floor(hourOf())}h</div>
@@ -933,7 +933,9 @@ function newGame(cfg: CivConfig) {
   active = 0; world = countries[0].world; avatar = world.addAvatar(); countries.forEach((cn) => (cn.world.viewControlled = cn.world === world))
   startRunning(); saveGame()
 }
-function continueGame(save: { active: number; savedAt: number; rng?: number; seed?: number; countries: { name: string; flag: string; lang: LangCode; state: unknown }[] }) {
+const SAVE_VERSION = 2
+function continueGame(save: { active: number; savedAt: number; version?: number; rng?: number; seed?: number; countries: { name: string; flag: string; lang: LangCode; state: unknown }[] }) {
+  if ((save.version || 1) > SAVE_VERSION) saveWarn("⚠ guardado de una versión más nueva — puede verse raro") // fromState is tolerant, but warn on a future schema
   gameSeed = save.seed || gameSeed
   setRngState(save.rng || gameSeed || 1) // restore the exact RNG stream so the load is deterministic
   countries = save.countries.map((cc) => ({ name: cc.name, flag: cc.flag, lang: cc.lang, world: World.fromState(cc.state, spriteCount) }))
@@ -945,7 +947,7 @@ function continueGame(save: { active: number; savedAt: number; rng?: number; see
 }
 function saveGame() {
   if (!countries.length) return
-  const payload = { version: 2, seed: gameSeed, rng: rngState(), savedAt: Date.now(), active, countries: countries.map((c) => ({ name: c.name, flag: c.flag, lang: c.lang, state: c.world.toState() })) }
+  const payload = { version: SAVE_VERSION, seed: gameSeed, rng: rngState(), savedAt: Date.now(), active, countries: countries.map((c) => ({ name: c.name, flag: c.flag, lang: c.lang, state: c.world.toState() })) }
   try {
     localStorage.setItem(SAVE_KEY, JSON.stringify(payload))
   } catch (e) {

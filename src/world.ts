@@ -428,7 +428,7 @@ export class World {
     const byId = new Map<number, Creature>(); let maxId = 0
     w.creatures = (s.creatures || []).map((c: any) => {
       maxId = Math.max(maxId, num(c.id, 0))
-      const cr: Creature = { id: num(c.id, 0), x: num(c.x, 0), y: num(c.y, 0), vx: 0, vy: 0, energy: num(c.e, 80), ageDays: num(c.ad, 0), lifespanDays: num(c.ls, 60 * DAYS_PER_YEAR), genome: c.g, generation: num(c.gen, 1), name: san(c.nm, 40), surname: san(c.sn, 40), home: w.houses[c.h] || w.houses[0], goingHome: !!c.gh, parents: c.par, children: num(c.ch, 0), sick: !!c.sick, sickDays: 0, lastRepro: -99999, partner: num(c.pt, 0), pregnant: num(c.pg, 0), isAvatar: false, facing: 1, psyche: c.ps, memory: sanArr(c.mem, 8, 400), social: sanArr(c.soc, 6, 200), knowledge: num(c.k, 16), profession: san(c.pf, 40), profBase: san(c.pb, 40), profCat: c.pc, heritProf: san(c.hp, 40), religion: san(c.rel, 40), powerHungry: !!c.pw, money: num(c.mny, 0), controlled: false, dark: c.dk || { mach: 0.2, narc: 0.2, psycho: 0.1 }, archetype: c.arc || "promedio", crimes: num(c.crm, 0), business: !!c.biz, health: num(c.hl, 88), mental: num(c.mt, 78), irritability: num(c.ir, 0.3), life: c.lf }
+      const cr: Creature = { id: num(c.id, 0), x: num(c.x, 0), y: num(c.y, 0), vx: 0, vy: 0, energy: num(c.e, 80), ageDays: num(c.ad, 0), lifespanDays: num(c.ls, 60 * DAYS_PER_YEAR), genome: c.g, generation: num(c.gen, 1), name: san(c.nm, 40), surname: san(c.sn, 40), home: w.houses[c.h] || w.houses[0], goingHome: !!c.gh, parents: Array.isArray(c.par) ? c.par : null, children: num(c.ch, 0), sick: !!c.sick, sickDays: 0, lastRepro: -99999, partner: num(c.pt, 0), pregnant: num(c.pg, 0), isAvatar: false, facing: 1, psyche: c.ps, memory: sanArr(c.mem, 8, 400), social: sanArr(c.soc, 6, 200), knowledge: num(c.k, 16), profession: san(c.pf, 40), profBase: san(c.pb, 40), profCat: c.pc, heritProf: san(c.hp, 40), religion: san(c.rel, 40), powerHungry: !!c.pw, money: num(c.mny, 0), controlled: false, dark: c.dk || { mach: 0.2, narc: 0.2, psycho: 0.1 }, archetype: c.arc || "promedio", crimes: num(c.crm, 0), business: !!c.biz, health: num(c.hl, 88), mental: num(c.mt, 78), irritability: num(c.ir, 0.3), life: c.lf }
       if (cr.psyche?.beliefs) cr.psyche.beliefs = cr.psyche.beliefs.slice(0, 12).map((b: string) => san(b, 120))
       cr.away = num(c.aw, 0); cr.awayTo = san(c.at, 40); cr.langs = sanArr(c.lg, 6, 40)
       if (!cr.life) cr.life = newLife(cr)
@@ -915,8 +915,7 @@ export class World {
       if (!c.isAvatar && !c.controlled) {
         let tx: number, ty: number
         const hour = (this.clockMinutes % 1440) / 60
-        if ((c.away || 0) > 0) { tx = this.airport.x + this.airport.w / 2; ty = this.airport.y + this.airport.h + 10 } // off travelling — wait near the gate (drawn faint)
-        else if (!isMature(c)) {
+        if (!isMature(c)) {
           // CHILDREN live with their family — they never roam the world alone. Toddlers stay home;
           // school-age kids go to the school by day, home by night.
           if (ageYears(c) < 6 || hour >= 21 || hour < 7) { tx = c.home.x + c.home.w / 2; ty = c.home.y + c.home.h + 14 }

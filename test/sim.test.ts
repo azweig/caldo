@@ -30,9 +30,14 @@ describe("simulation determinism", () => {
 })
 
 describe("serialization round-trip", () => {
-  it("toState → fromState preserves the world signature", { timeout: 60000 }, () => {
+  it("toState → fromState preserves the world signature (deep — catches dropped fields)", { timeout: 60000 }, () => {
     const w = run(55, 1500)
-    const sig = (x: World) => x.creatures.filter((c) => !c.isAvatar).length + "|" + x.era + "|" + x.discovered.size + "|" + x.houses.length
+    // hash per-creature persisted fields too, so dropping any one (money/knowledge/away/langs/mental…) fails
+    const sig = (x: World) => {
+      const c = x.creatures.filter((cc) => !cc.isAvatar)
+      const sum = c.reduce((s, cc) => s + Math.round(cc.money) + Math.round(cc.knowledge) + Math.round(cc.mental) + Math.round(cc.health) + cc.children + (cc.away || 0) + (cc.langs?.length || 0) + cc.crimes + cc.generation, 0)
+      return `${c.length}|${x.era}|${x.discovered.size}|${x.houses.length}|${x.deeds.length}|${sum}`
+    }
     const restored = World.fromState(w.toState(), 2)
     expect(sig(restored)).toBe(sig(w))
   })
