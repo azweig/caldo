@@ -7,6 +7,7 @@ import { Genome, randomGenome, recombine } from "./genome"
 import { Psyche, randomPsyche, inheritPsyche } from "./psyche"
 import { Cat, Boosts, Prof, Tech, PROFS, TECHS, availableProfs, availableTechs, canAdvanceEra, economyOf, professionTitle, eraName } from "./civ"
 import { Life, newLife, lifeTick, feel, bond, decideIntent } from "./life"
+import { Sig, KIND, codeOf } from "./comms"
 import { pickReligion, EconSystem } from "./civconfig"
 import { genPerson, inheritDark, classify, DarkTriad, Archetype } from "./population"
 import { runSociety } from "./society"
@@ -108,6 +109,7 @@ export interface Creature {
   mental: number     // 0..100 mental health — falls under poverty, loss, repression → drives bad behaviour
   irritability: number // 0..1 — rises with stress + low mental health; tips them toward conflict/crime
   life?: Life        // the inner life: needs, emotion, goal, vocation, hobby, quirk, relationships, reputation
+  sigs?: string[]    // recent compact chatter codes (transient — the binary they "speak" when unobserved)
 }
 
 // a notable act, logged so we can later rank the most INFLUENTIAL people per generation
@@ -433,33 +435,37 @@ export class World {
     return [`crucé palabras con ${b.name} sobre ${topic}`, `crucé palabras con ${a.name} sobre ${topic}`]
   }
   private socialTick(wild: Creature[]) {
-    for (let k = 0; k < Math.min(6, wild.length); k++) {
+    // unobserved, they chatter in CODE — cheap enough to run MANY exchanges per tick; only ~1 in 5 also
+    // leaves a full-text memory (so memory stays light). gossip, ideas, feelings spread through the codes.
+    const pairs = Math.min(30, Math.ceil(wild.length / 5))
+    for (let k = 0; k < pairs; k++) {
       const a = wild[Math.floor(Math.random() * wild.length)]
       const b = this.nearestCreature(a, 70, (o) => !o.isAvatar && o !== a)
       if (!b) continue
-      const [na, nb] = this.socialNotes(a, b)
-      a.social.push(na); b.social.push(nb)
-      while (a.social.length > 6) a.social.shift()
-      while (b.social.length > 6) b.social.shift()
-      // they form a BOND — warmer when their natures click, cooler when they clash or one is manipulative
-      const click = ((a.psyche.five.a + b.psyche.five.a) / 2 - 0.4) - Math.abs(a.psyche.five.e - b.psyche.five.e) * 0.25
-      const kin = a.surname === b.surname ? 0.08 : 0 // blood ties bind warmer
-      const neigh = (a.home.x - b.home.x) ** 2 + (a.home.y - b.home.y) ** 2 < 160 * 160 ? 0.05 : 0 // neighbours grow close
-      if (a.irritability > 0.6 && b.irritability > 0.6 && Math.random() < 0.4) { // two short tempers → a quarrel
-        bond(a, b.id, -0.18); bond(b, a.id, -0.18); feel(a, "enojado", 0.5); feel(b, "enojado", 0.5)
-      } else { bond(a, b.id, click * 0.07 + kin + neigh); bond(b, a.id, click * 0.07 + kin + neigh) }
-      if (a.dark.mach > 0.6 && Math.random() < 0.25) bond(b, a.id, -0.12) // betrayed trust sours the tie
-      // GOSSIP: they trade word of a third person, so reputation travels and shapes how others see them
-      const third = wild[Math.floor(Math.random() * wild.length)]
-      if (third !== a && third !== b && third.life && Math.abs(third.life.rep) > 0.15) {
-        bond(a, third.id, third.life.rep * 0.04); bond(b, third.id, third.life.rep * 0.04)
-      }
-      // MENTORSHIP: when a master and a novice of the same trade meet, the novice learns the craft
-      if (a.profCat && a.profCat === b.profCat && a.life && b.life) {
-        const jr = a.life.mastery < b.life.mastery ? a : b, sr = jr === a ? b : a
-        if ((sr.life!.mastery - jr.life!.mastery) > 0.2) { jr.life!.mastery = Math.min(1, jr.life!.mastery + 0.012); jr.social.push(`aprendí del oficio con ${sr.name}`); while (jr.social.length > 6) jr.social.shift() }
-      }
+      this.exchangeSignals(a, b, wild)
+      if (Math.random() < 0.2) { const [na, nb] = this.socialNotes(a, b); a.social.push(na); b.social.push(nb); while (a.social.length > 6) a.social.shift(); while (b.social.length > 6) b.social.shift() }
     }
+  }
+  // two minds trade a burst of compact signals — each updates the other (bonds, reputation, knowledge, mood)
+  private exchangeSignals(a: Creature, b: Creature, wild: Creature[]) {
+    const sigs: Sig[] = []
+    const click = ((a.psyche.five.a + b.psyche.five.a) / 2 - 0.4) - Math.abs(a.psyche.five.e - b.psyche.five.e) * 0.25
+    const kin = a.surname === b.surname ? 0.08 : 0, neigh = (a.home.x - b.home.x) ** 2 + (a.home.y - b.home.y) ** 2 < 160 * 160 ? 0.05 : 0
+    if (a.irritability > 0.6 && b.irritability > 0.6 && Math.random() < 0.4) { bond(a, b.id, -0.18); bond(b, a.id, -0.18); feel(a, "enojado", 0.5); feel(b, "enojado", 0.5); sigs.push({ k: KIND.EMOTE, s: a.id, v: -5 }) }
+    else { bond(a, b.id, click * 0.07 + kin + neigh); bond(b, a.id, click * 0.07 + kin + neigh); sigs.push({ k: KIND.GREET, s: b.id, v: click > 0 ? 2 : -2 }) }
+    if (a.dark.mach > 0.6 && Math.random() < 0.25) bond(b, a.id, -0.12)
+    // GOSSIP / WARN about a third party — reputation travels the network
+    const third = wild[Math.floor(Math.random() * wild.length)]
+    if (third !== a && third !== b && third.life && Math.abs(third.life.rep) > 0.12) {
+      bond(a, third.id, third.life.rep * 0.04); bond(b, third.id, third.life.rep * 0.04)
+      sigs.push({ k: third.life.rep < -0.3 ? KIND.WARN : KIND.GOSSIP, s: third.id, v: third.life.rep * 6 })
+    }
+    // IDEA — learning DIFFUSES socially: the more learned rubs off on the less (knowledge spreads by talking)
+    if (Math.abs(a.knowledge - b.knowledge) > 6) { const hi = a.knowledge > b.knowledge ? a : b, lo = hi === a ? b : a; lo.knowledge = Math.min(hi.knowledge, lo.knowledge + 0.5); sigs.push({ k: KIND.IDEA, s: hi.id, v: 3 }) }
+    if (a.profCat && a.profCat === b.profCat && a.life && b.life) { const jr = a.life.mastery < b.life.mastery ? a : b, sr = jr === a ? b : a; if ((sr.life!.mastery - jr.life!.mastery) > 0.2) jr.life!.mastery = Math.min(1, jr.life!.mastery + 0.012) }
+    // EMOTE — feelings rub off (mood contagion)
+    if (a.life && a.life.emoInt > 0.35 && b.life) { const good = a.life.emotion === "alegre" || a.life.emotion === "enamorado" || a.life.emotion === "orgulloso"; feel(b, good ? "alegre" : "triste", 0.25); sigs.push({ k: KIND.EMOTE, s: a.id, v: good ? 4 : -4 }) }
+    if (sigs.length) { const codes = sigs.map(codeOf); a.sigs = [...(a.sigs || []), ...codes].slice(-6); b.sigs = [...(b.sigs || []), ...codes].slice(-6) }
   }
 
   addAvatar(): Creature {
