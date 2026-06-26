@@ -908,8 +908,13 @@ export class World {
         if (!best) continue
         a.partner = best.id; best.partner = a.id; taken.add(a.id); taken.add(best.id)
         feel(a, "enamorado", 0.85); feel(best, "enamorado", 0.85); bond(a, best.id, 0.7); bond(best, a.id, 0.7)
-        // they LEAVE their parents to found their own household — the family tree branches into a new line
-        if (this.houses.length < 130 && Math.random() < 0.65) {
+        // they LEAVE their parents to set up their own home: RENT a landlord's spare house/apartment if there is
+        // one (becoming tenants), else BUILD their own (a new family branch). Poorer couples tend to rent.
+        const cash = a.money + best.money
+        const ct = new Map<House, number>(); for (const o of wild) ct.set(o.home, (ct.get(o.home) || 0) + 1)
+        const rental = this.houses.find((h) => h.landlord && h.landlord !== a.id && h.landlord !== best.id && ((ct.get(h) || 0) === 0 || (h.tier === 4 && (ct.get(h) || 0) < 9)))
+        if (rental && (cash < 60 || Math.random() < 0.5)) { a.home = rental; best.home = rental } // become tenants
+        else if (this.houses.length < 130 && Math.random() < 0.7) {
           const sn = foundSurname(a.surname, best.surname); const nh = this.addHouse(sn)
           if (nh) { a.home = nh; best.home = nh; a.surname = sn; best.surname = sn }
         }
