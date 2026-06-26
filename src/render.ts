@@ -355,7 +355,11 @@ function appear(c: Creature, era = 5) {
   const sat = (garb === "rags" ? 8 : era <= 1 ? 22 : 30) + wealth * 10 + Math.floor(r(6) * 12)
   const lum = (garb === "rags" ? 36 : 46) + wealth * 6 + Math.floor(r(7) * 12)
   const cloth = c.isAvatar ? "#ffd34d" : garb === "armour" ? `hsl(${(c.genome.hue + 200) % 360}, 12%, 42%)` : `hsl(${c.genome.hue}, ${sat}%, ${lum}%)`
-  return { ay, female, skin, hair, hairStyle, beard, cloth, garb, wealth, r }
+  // HEADWEAR + a tool in hand, by trade (only grown folk; not every soul wears one)
+  const adult = ay >= 14
+  const hat = !adult ? "none" : garb === "armour" && r(8) < 0.7 ? "helmet" : cat === "comida" && r(8) < 0.6 ? "straw" : cat === "liderazgo" ? "circlet" : garb === "fine" && wealth >= 1 && r(8) < 0.7 ? "tophat" : garb === "robe" && r(8) < 0.5 ? "hood" : "none"
+  const prop = !adult ? "none" : cat === "defensa" ? "spear" : cat === "saber" || cat === "enseñanza" ? "book" : cat === "espíritu" ? "staff" : cat === "comida" && r(9) < 0.6 ? "basket" : "none"
+  return { ay, female, skin, hair, hairStyle, beard, cloth, garb, wealth, hat, prop, r }
 }
 
 // draw a person built up from the feet (y=0). proportions shift across life: babies are tiny + big-headed,
@@ -401,6 +405,18 @@ function drawVillager(ctx: CanvasRenderingContext2D, c: Creature, w: number, mov
   else if (ap.hairStyle !== "none") { ctx.beginPath(); ctx.arc(0, hcy - hr * (ap.hairStyle === "crop" ? 0.18 : 0.12), hr * 1.02, Math.PI * 1.0, Math.PI * 2.04); ctx.fill() }
   // an eye, when facing the camera
   if (c.facing >= 0) { ctx.fillStyle = "rgba(30,20,15,0.75)"; ctx.beginPath(); ctx.arc(hr * 0.34, hcy + hr * 0.04, hr * 0.13, 0, Math.PI * 2); ctx.fill() }
+  // HEADWEAR
+  if (ap.hat === "helmet") { ctx.fillStyle = "#9098a4"; ctx.beginPath(); ctx.arc(0, hcy, hr * 1.05, Math.PI, 2 * Math.PI); ctx.fill(); ctx.fillRect(-hr * 1.05, hcy - 1, hr * 2.1, hr * 0.18); ctx.fillStyle = "#c2c8d2"; ctx.fillRect(-hr * 0.1, hcy - hr * 1.45, hr * 0.2, hr * 0.5) }
+  else if (ap.hat === "straw") { ctx.fillStyle = "#c9a850"; ctx.beginPath(); ctx.arc(0, hcy - hr * 0.55, hr * 0.72, Math.PI, 2 * Math.PI); ctx.fill(); ctx.fillStyle = "#d8b86a"; ctx.beginPath(); ctx.ellipse(0, hcy - hr * 0.5, hr * 1.5, hr * 0.4, 0, 0, Math.PI * 2); ctx.fill() }
+  else if (ap.hat === "circlet") { ctx.fillStyle = "#e8c560"; ctx.fillRect(-hr * 0.95, hcy - hr * 0.86, hr * 1.9, hr * 0.22); for (let p = -1; p <= 1; p++) { ctx.beginPath(); ctx.moveTo(p * hr * 0.5 - hr * 0.13, hcy - hr * 0.86); ctx.lineTo(p * hr * 0.5, hcy - hr * 1.18); ctx.lineTo(p * hr * 0.5 + hr * 0.13, hcy - hr * 0.86); ctx.fill() } }
+  else if (ap.hat === "tophat") { ctx.fillStyle = "#2a2a30"; ctx.fillRect(-hr * 1.1, hcy - hr * 0.72, hr * 2.2, hr * 0.18); ctx.fillRect(-hr * 0.68, hcy - hr * 1.55, hr * 1.36, hr * 0.88) }
+  else if (ap.hat === "hood") { ctx.fillStyle = clothSh; ctx.beginPath(); ctx.arc(0, hcy - hr * 0.08, hr * 1.16, Math.PI * 0.88, Math.PI * 2.12); ctx.fill() }
+  // a tool in hand, to the side
+  const px = w * 0.44, py = -H * 0.42
+  if (ap.prop === "spear") { ctx.fillStyle = "#6b4a2e"; ctx.fillRect(px, -H * 0.98, w * 0.05, H * 0.98); ctx.fillStyle = "#aab0bc"; ctx.beginPath(); ctx.moveTo(px - w * 0.04, -H * 0.98); ctx.lineTo(px + w * 0.1, -H * 0.98); ctx.lineTo(px + w * 0.025, -H * 1.12); ctx.fill() }
+  else if (ap.prop === "staff") { ctx.fillStyle = "#7a5a36"; ctx.fillRect(px, -H * 0.92, w * 0.05, H * 0.92); ctx.fillStyle = "#cfa94e"; ctx.beginPath(); ctx.arc(px + w * 0.025, -H * 0.95, w * 0.08, 0, Math.PI * 2); ctx.fill() }
+  else if (ap.prop === "book") { ctx.fillStyle = "#8a3a2a"; ctx.fillRect(px - w * 0.02, py, w * 0.15, w * 0.19); ctx.fillStyle = "#e8e0d0"; ctx.fillRect(px + w * 0.06, py, w * 0.03, w * 0.19) }
+  else if (ap.prop === "basket") { ctx.fillStyle = "#a07840"; ctx.beginPath(); ctx.arc(px + w * 0.05, py + w * 0.12, w * 0.12, 0, Math.PI); ctx.fill(); ctx.fillStyle = "#7fb05a"; ctx.fillRect(px - w * 0.04, py + w * 0.1, w * 0.18, w * 0.04) }
 }
 
 function drawCreature(ctx: CanvasRenderingContext2D, c: Creature, era: number) {
