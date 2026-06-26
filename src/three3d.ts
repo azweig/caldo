@@ -130,14 +130,27 @@ function eraRoofs(era: number): string[] {
 const modelPool: THREE.Group[] = []
 
 // pools for the DYNAMIC props (they move/spawn) so 3D shows the same wild animals + harvestable crops as 2D
-const animPool: THREE.Mesh[] = []
-const foodPool: THREE.Mesh[] = []
+const animPool: THREE.Group[] = []
+const foodPool: THREE.Group[] = []
 function ensureProps() {
   if (animPool.length) return
-  const animGeo = new THREE.SphereGeometry(0.34, 8, 6)
-  for (let i = 0; i < 16; i++) { const m = new THREE.Mesh(animGeo, new THREE.MeshLambertMaterial({ color: 0xcaa869 })); m.visible = false; scene.add(m); animPool.push(m) }
-  const foodGeo = new THREE.SphereGeometry(0.24, 6, 5), foodMat = new THREE.MeshLambertMaterial({ color: 0xd8472f })
-  for (let i = 0; i < 56; i++) { const m = new THREE.Mesh(foodGeo, foodMat); m.visible = false; scene.add(m); foodPool.push(m) }
+  const bodyGeo = new THREE.BoxGeometry(0.72, 0.4, 0.36), headGeo = new THREE.SphereGeometry(0.22, 8, 6), legGeo = new THREE.BoxGeometry(0.1, 0.3, 0.1)
+  for (let i = 0; i < 16; i++) { // little quadruped: body + head + 4 legs, recoloured per beast
+    const g = new THREE.Group(), mat = new THREE.MeshLambertMaterial({ color: 0xcaa869 })
+    const body = new THREE.Mesh(bodyGeo, mat); body.position.y = 0.36
+    const head = new THREE.Mesh(headGeo, mat); head.position.set(0.42, 0.46, 0)
+    g.add(body, head)
+    for (const [lx, lz] of [[0.26, 0.13], [0.26, -0.13], [-0.26, 0.13], [-0.26, -0.13]]) { const lg = new THREE.Mesh(legGeo, mat); lg.position.set(lx, 0.15, lz); g.add(lg) }
+    g.visible = false; g.userData.mat = mat; scene.add(g); animPool.push(g)
+  }
+  const stemGeo = new THREE.CylinderGeometry(0.04, 0.05, 0.4, 5), berryGeo = new THREE.SphereGeometry(0.16, 7, 6)
+  const stemMat = new THREE.MeshLambertMaterial({ color: 0x4f8a3a }), berryMat = new THREE.MeshLambertMaterial({ color: 0xd8472f })
+  for (let i = 0; i < 56; i++) { // a little plant: green stem + a fruit on top (was a bare red ball)
+    const g = new THREE.Group()
+    const stem = new THREE.Mesh(stemGeo, stemMat); stem.position.y = 0.2
+    const berry = new THREE.Mesh(berryGeo, berryMat); berry.position.y = 0.46
+    g.add(stem, berry); g.visible = false; scene.add(g); foodPool.push(g)
+  }
 }
 
 // procedural low-poly villagers that MATCH the 2D look (same skin/hair palettes + hue-based cloth + age scale),
@@ -158,16 +171,21 @@ function buildRig(grp: THREE.Group) {
   const clothMat = new THREE.MeshLambertMaterial({ color: 0x5a7da0 })
   const skinMat = new THREE.MeshLambertMaterial({ color: 0xe0ac82 })
   const hairMat = new THREE.MeshLambertMaterial({ color: 0x2a1d12 })
-  const legGeo = new THREE.BoxGeometry(0.14, 0.34, 0.14)
-  const ll = new THREE.Mesh(legGeo, legMat); ll.position.set(-0.1, 0.17, 0)
-  const rl = new THREE.Mesh(legGeo, legMat); rl.position.set(0.1, 0.17, 0)
-  const torso = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.5, 0.26), clothMat); torso.position.set(0, 0.62, 0)
-  const armGeo = new THREE.BoxGeometry(0.1, 0.42, 0.12)
-  const la = new THREE.Mesh(armGeo, clothMat); la.position.set(-0.28, 0.62, 0)
-  const ra = new THREE.Mesh(armGeo, clothMat); ra.position.set(0.28, 0.62, 0)
-  const head = new THREE.Mesh(new THREE.SphereGeometry(0.22, 12, 10), skinMat); head.position.set(0, 1.02, 0)
-  const hair = new THREE.Mesh(new THREE.SphereGeometry(0.235, 12, 10, 0, Math.PI * 2, 0, Math.PI * 0.62), hairMat); hair.position.set(0, 1.05, 0)
-  grp.add(ll, rl, torso, la, ra, head, hair)
+  // LEGS pivot at the HIP (geometry hangs below the origin) so the walk swing bends from the joint, not the middle
+  const legGeo = new THREE.BoxGeometry(0.15, 0.4, 0.15); legGeo.translate(0, -0.2, 0)
+  const footGeo = new THREE.BoxGeometry(0.16, 0.1, 0.26)
+  const ll = new THREE.Mesh(legGeo, legMat); ll.position.set(-0.1, 0.44, 0); ll.add(Object.assign(new THREE.Mesh(footGeo, legMat), { position: new THREE.Vector3(0, -0.4, 0.05) }))
+  const rl = new THREE.Mesh(legGeo, legMat); rl.position.set(0.1, 0.44, 0); rl.add(Object.assign(new THREE.Mesh(footGeo, legMat), { position: new THREE.Vector3(0, -0.4, 0.05) }))
+  const torso = new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.54, 0.27), clothMat); torso.position.set(0, 0.72, 0)
+  // ARMS pivot at the SHOULDER, with a little skin hand at the end
+  const armGeo = new THREE.BoxGeometry(0.11, 0.44, 0.13); armGeo.translate(0, -0.22, 0)
+  const handGeo = new THREE.SphereGeometry(0.075, 8, 6)
+  const la = new THREE.Mesh(armGeo, clothMat); la.position.set(-0.31, 0.9, 0); la.add(Object.assign(new THREE.Mesh(handGeo, skinMat), { position: new THREE.Vector3(0, -0.44, 0) }))
+  const ra = new THREE.Mesh(armGeo, clothMat); ra.position.set(0.31, 0.9, 0); ra.add(Object.assign(new THREE.Mesh(handGeo, skinMat), { position: new THREE.Vector3(0, -0.44, 0) }))
+  const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.09, 0.12, 8), skinMat); neck.position.set(0, 1.04, 0)
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.21, 14, 12), skinMat); head.position.set(0, 1.24, 0); head.scale.set(1, 1.08, 0.96)
+  const hair = new THREE.Mesh(new THREE.SphereGeometry(0.225, 14, 12, 0, Math.PI * 2, 0, Math.PI * 0.6), hairMat); hair.position.set(0, 1.27, 0)
+  grp.add(ll, rl, torso, la, ra, neck, head, hair)
   grp.userData.rig = { legMat, clothMat, skinMat, hairMat, ll, rl, la, ra }
 }
 
@@ -262,6 +280,25 @@ function buildTown(world: World) {
     const trunk = new THREE.Mesh(trunkGeo, trunkMat); trunk.position.y = 1
     const leaf = new THREE.Mesh(leafGeo, leafMat); leaf.position.y = 3.6
     tree.add(trunk, leaf); tree.position.set(x, 0, z); tree.scale.setScalar(1 + hashf(i) * 0.8); town.add(tree)
+  }
+  // INNER greenery so the town isn't bare grass — scattered trees, bushes + rocks between the houses
+  const bushMat = new THREE.MeshLambertMaterial({ color: world.era >= 15 ? 0x3a6a6a : 0x3f7a3a }), rockMat = new THREE.MeshLambertMaterial({ color: 0x8a857c })
+  const bushGeo = new THREE.SphereGeometry(0.9, 7, 6), rockGeo = new THREE.DodecahedronGeometry(0.6)
+  for (let i = 0; i < 46; i++) {
+    const px = hashf(i * 5.7 + 1) * WW, pz = hashf(i * 9.3 + 4) * WH
+    const onRoad = Math.abs((px / S % BLOCK) - BLOCK / 2) > BLOCK / 2 - 40 || Math.abs((pz / S % BLOCK) - BLOCK / 2) > BLOCK / 2 - 40
+    if (onRoad) continue // keep streets clear
+    const k = hashf(i * 2.1)
+    if (k < 0.5) { const t = new THREE.Group(); t.add(new THREE.Mesh(trunkGeo, trunkMat), Object.assign(new THREE.Mesh(leafGeo, leafMat), { position: new THREE.Vector3(0, 2.6, 0) })); (t.children[0] as THREE.Mesh).position.y = 1; t.position.set(px, 0, pz); t.scale.setScalar(0.8 + hashf(i * 3) * 0.5); town.add(t) }
+    else if (k < 0.8) { const b = new THREE.Mesh(bushGeo, bushMat); b.position.set(px, 0.6, pz); b.scale.set(1, 0.8, 1); town.add(b) }
+    else { const r = new THREE.Mesh(rockGeo, rockMat); r.position.set(px, 0.4, pz); r.scale.setScalar(0.7 + hashf(i * 4) * 0.8); town.add(r) }
+  }
+  // CLOUDS drifting high above (a few flattened white puffs) so the sky isn't an empty plane
+  const cloudMat = new THREE.MeshBasicMaterial({ color: 0xf2f4f8, transparent: true, opacity: 0.82, fog: false })
+  for (let i = 0; i < 12; i++) {
+    const c = new THREE.Group()
+    for (let p = 0; p < 4; p++) { const puff = new THREE.Mesh(new THREE.SphereGeometry(6 + hashf(i * 7 + p) * 5, 7, 6), cloudMat); puff.position.set((p - 1.5) * 7, hashf(i + p) * 3, hashf(i * 2 + p) * 5); c.add(puff) }
+    c.position.set(hashf(i * 3.3) * WW * 1.5 - WW * 0.25, 75 + hashf(i * 5) * 30, hashf(i * 8.1) * WH * 1.5 - WH * 0.25); c.scale.y = 0.5; town.add(c)
   }
   // ── plaza props: a fountain at the heart of town, market stalls + lamp posts (it feels inhabited) ──
   const cX = WORLD_W * S / 2, cZ = WORLD_H * S / 2
@@ -425,15 +462,16 @@ export function render3D(world: World, me: Creature, yaw: number, pitch = 0) {
     if (ai >= animPool.length) break
     const dx = a.x - me.x, dy = a.y - me.y; if (dx * dx + dy * dy > 620 * 620) continue
     const sp = SPECIES[a.kind], m = animPool[ai++]; m.visible = true
-    ;(m.material as THREE.MeshLambertMaterial).color.setHex(a.tame ? 0xbfe3a0 : sp?.hostile ? 0xcc5533 : 0xcaa869)
-    const sc = 0.7 + (sp?.danger || 0) * 0.5; m.scale.setScalar(sc); m.position.set(a.x * S, 0.34 * sc, a.y * S)
+    ;(m.userData.mat as THREE.MeshLambertMaterial).color.setHex(a.tame ? 0xbfe3a0 : sp?.hostile ? 0xcc5533 : 0xcaa869)
+    const sc = 0.7 + (sp?.danger || 0) * 0.5; m.scale.setScalar(sc); m.position.set(a.x * S, 0, a.y * S)
+    if (Math.abs(a.vx) + Math.abs(a.vy) > 0.04) m.rotation.y = -Math.atan2(a.vy, a.vx) // face where it's heading
   }
   for (; ai < animPool.length; ai++) animPool[ai].visible = false
   let fi = 0
   for (const f of world.food) {
     if (fi >= foodPool.length) break
     const dx = f.x - me.x, dy = f.y - me.y; if (dx * dx + dy * dy > 520 * 520) continue
-    const m = foodPool[fi++]; m.visible = true; m.position.set(f.x * S, 0.5, f.y * S)
+    const m = foodPool[fi++]; m.visible = true; m.position.set(f.x * S, 0, f.y * S)
   }
   for (; fi < foodPool.length; fi++) foodPool[fi].visible = false
 
