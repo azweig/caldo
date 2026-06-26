@@ -165,6 +165,7 @@ export class World {
   discovered = new Set<string>()
   era = 0
   recentTech = ""
+  marketPrice = 1 // a market index (supply vs demand) — drives merchant profit + the price of goods
   cultureName = "" // this town's people (Inca, Azteca, …) — shapes which techs they're drawn to + how fast
   cultureEthos = "" // their way of being (guerrera, sacerdotal, mercante, …)
   cultureBias: Partial<Record<Cat, number>> = {} // per-driver innovation multiplier (their evolution path)
@@ -515,6 +516,23 @@ export class World {
       const pay = Math.min(c.money, h.rent)
       c.money -= pay; ll.money += pay
       if (pay < h.rent) c.mental = Math.max(0, c.mental - 3) // can't make rent → stress
+    }
+  }
+  // MARKET: producers supply goods (food, crafts, art), the town demands them; the price floats with the
+  // balance. merchants profit by trading, and the rich spend on luxuries → coin flows to artisans (a sink).
+  private runMarket(wild: Creature[]) {
+    let producers = 0
+    for (const c of wild) if (c.profCat === "comida" || c.profCat === "oficio" || c.profCat === "construcción" || c.profCat === "arte") producers++
+    const target = Math.max(0.5, Math.min(3, wild.length / (producers * 7 + 1)))
+    this.marketPrice = this.marketPrice * 0.92 + target * 0.08 // prices drift toward supply/demand balance
+    for (const c of wild) {
+      if (c.profCat === "comercio") c.money += this.marketPrice * 3.2 // merchants live off the spread
+      if (c.money > 220 && Math.random() < 0.12) { // the well-off buy luxuries → artisans + merchants earn
+        const spend = Math.min(c.money * 0.12, 35); c.money -= spend
+        const seller = wild[Math.floor(Math.random() * wild.length)]
+        if (seller.profCat === "arte" || seller.profCat === "oficio" || seller.profCat === "comercio") seller.money += spend
+        if (c.life) feel(c, "alegre", 0.28)
+      }
     }
   }
   // POVERTY → HOMELESSNESS: the destitute lose their footing and end up on the street, where life wears them
@@ -946,6 +964,7 @@ export class World {
       this.upgradeHomes() // prosperous families move up to a finer home
       this.housingMarket(wild, byId) // landlords buy + rent out property; tenants pay rent
       this.poverty(wild) // the destitute fall into homelessness; the recovered find shelter
+      this.runMarket(wild) // goods trade at a floating price; merchants profit; the rich buy luxuries
     }
 
     if (this.creatures.filter((c) => !c.isAvatar).length < 8) { // keep a struggling village from going extinct
