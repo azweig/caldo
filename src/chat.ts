@@ -54,7 +54,11 @@ export async function ambientDialogue(a: Creature, b: Creature, writeLang: strin
       const pa = `${a.name} (${psycheLabel(a.psyche)}${a.profession ? ", " + a.profession : ""})`
       const pb = `${b.name} (${psycheLabel(b.psyche)}${b.profession ? ", " + b.profession : ""})`
       const sys = `Escribí un diálogo MUY corto y natural (exactamente 4 líneas, alternando hablante) entre dos vecinos del "caldo", un pueblo donde la vida evoluciona sola. Idioma: ${writeLang}. Formato EXACTO, una por renglón: "NOMBRE: línea". Que su carácter y oficio se noten. Sin comillas, sin explicaciones, sin acotaciones.`
-      const usr = `${pa} conversa con ${pb} sobre la vida del pueblo, su oficio, su familia o sus creencias. No saben que alguien los escucha.`
+      // seed the rich talk with what they're ACTUALLY carrying in code (gossip they heard, their mood) so the
+      // LLM dialogue reflects the real exchange under the hood — fast codes in the background, rich words here.
+      const topic = a.heard || b.heard || "la vida del pueblo, su oficio, su familia o sus creencias"
+      const mood = a.life && a.life.emoInt > 0.3 ? ` ${a.name} anda ${a.life.emotion}.` : ""
+      const usr = `${pa} conversa con ${pb}. Andan comentando esto: "${topic}".${mood} No saben que alguien los escucha.`
       const out = await llmChat([{ role: "system", content: sys }, { role: "user", content: usr }])
       const lines = out.split("\n").map((s) => s.trim()).filter(Boolean).slice(0, 4).map((line) => {
         const m = line.match(/^[-*]?\s*([^:]{1,28}):\s*(.+)$/)
