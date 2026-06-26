@@ -478,14 +478,16 @@ export class World {
   private upgradeHomes() {
     const wealth = new Map<House, number>()
     for (const c of this.creatures) if (!c.isAvatar) wealth.set(c.home, (wealth.get(c.home) || 0) + c.money)
-    const COST = [0, 60, 240, 750], NAMES = ["choza", "casa", "casona", "mansión"]
+    const COST = [0, 150, 700, 3000], NAMES = ["choza", "casa", "casona", "mansión"]
     for (const h of this.houses) {
       if (h.tier >= 3) continue
-      if ((wealth.get(h) || 0) > COST[h.tier + 1] * 1.6) {
-        h.tier++; h.value = COST[h.tier] * 2.2; h.w = 50 + h.tier * 16; h.h = 44 + h.tier * 11
-        let rich: Creature | null = null
-        for (const c of this.creatures) if (c.home === h && !c.isAvatar && (!rich || c.money > rich.money)) rich = c
-        if (rich) { rich.money -= COST[h.tier]; if (rich.life) feel(rich, "orgulloso", 0.6) }
+      const cost = COST[h.tier + 1]
+      if ((wealth.get(h) || 0) > cost * 1.4) {
+        h.tier++; h.value = cost * 2.2; h.w = 50 + h.tier * 16; h.h = 44 + h.tier * 11
+        // building it really drains the household's coin (a major investment) → keeps wealth scarce
+        const fam = this.creatures.filter((c) => c.home === h && !c.isAvatar).sort((a, b) => b.money - a.money)
+        let owe = cost; for (const c of fam) { const pay = Math.min(c.money, owe); c.money -= pay; owe -= pay; if (owe <= 0) break }
+        if (fam[0]?.life) feel(fam[0], "orgulloso", 0.6)
         this.logEvent(`los ${h.surname} prosperaron a una ${NAMES[h.tier]}`)
       }
     }
