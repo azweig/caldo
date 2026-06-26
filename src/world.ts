@@ -161,6 +161,8 @@ export function formatClock(minutes: number): string {
   return `Año ${year} · Día ${day} · ${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}`
 }
 const clampn = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v))
+// strip markup from any save-derived string that reaches the DOM (defense-in-depth; the templates also escape)
+const stripTags = (s: unknown, max = 200): string => String(s ?? "").replace(/[<>"'`]/g, "").slice(0, max)
 
 let NEXT_ID = 1
 // creature ids are a process-global counter (shared across all country Worlds so ids never collide between
@@ -399,22 +401,23 @@ export class World {
   static fromState(s: any, spriteCount: number): World {
     const w = new World(spriteCount, s.region, undefined, true)
     w.gov = s.gov; w.system = s.system || "capitalista"; w.era = s.era; w.clockDays = s.clockDays; w.clockMinutes = s.clockMinutes ?? s.clockDays * 1440; w.tick = s.tick; w.research = s.research
-    w.cultureName = s.cultureName || ""; w.cultureEthos = s.cultureEthos || ""; w.cultureBias = s.cultureBias || {}
+    w.cultureName = stripTags(s.cultureName, 60); w.cultureEthos = stripTags(s.cultureEthos, 60); w.cultureBias = s.cultureBias || {}
     w.discovered = new Set<string>(s.discovered || []); w.techBoost = s.techBoost; w.wisdom = s.wisdom
     w.births = s.births; w.deaths = s.deaths; w.peakGen = s.peakGen; w.plagueUntil = s.plagueUntil
     w.violence = s.violence; w.psychopathy = s.psychopathy; w.religionsCfg = s.religionsCfg
-    w.chronicle = s.chronicle || []; w.houses = s.houses; w.gardens = s.gardens; w.schools = s.schools
+    w.chronicle = (s.chronicle || []).map((e: any) => ({ day: e.day, text: stripTags(e.text, 200) })); w.houses = s.houses; w.gardens = s.gardens; w.schools = s.schools
     for (const h of w.houses) if (h.tier === undefined) { h.tier = 0; h.value = 30; h.rent = 0; h.landlord = 0 }
     w.buildPois() // rebuild the market square (claims reset on load)
     w.animals = s.animals || []
     w.raiders = s.raiders || []
     if (Array.isArray(s.techProgress)) w.techProgress = new Map(s.techProgress) // don't lose in-flight research on reload
-    if (Array.isArray(s.news)) w.news = s.news
+    if (Array.isArray(s.news)) w.news = s.news.map((n: any) => ({ txt: stripTags(n.txt, 200), sent: typeof n.sent === "number" ? n.sent : 0, reach: typeof n.reach === "number" ? n.reach : 1, day: n.day || 0 }))
     w.graves = s.graves || []
-    w.universities = s.universities; w.airport = s.airport; w.foodTarget = 230; w.deeds = s.deeds || []
+    w.universities = s.universities; w.airport = s.airport; w.foodTarget = 230
+    w.deeds = (s.deeds || []).map((d: any) => ({ ...d, name: stripTags(d.name, 60), text: stripTags(d.text, 160) }))
     // SECURITY + INTEGRITY: a save is untrusted input (it could be a crafted localStorage blob). Strip markup
     // from any string that reaches the DOM/LLM, cap lengths + array sizes, and finite-clamp the numbers.
-    const san = (v: unknown, max = 80): string => String(v ?? "").replace(/[<>]/g, "").slice(0, max)
+    const san = (v: unknown, max = 80): string => String(v ?? "").replace(/[<>"'`]/g, "").slice(0, max)
     const sanArr = (v: unknown, n = 6, max = 200): string[] => (Array.isArray(v) ? v.slice(-n).map((x) => san(x, max)) : [])
     const num = (v: unknown, def: number): number => (typeof v === "number" && Number.isFinite(v) ? v : def)
     const byId = new Map<number, Creature>(); let maxId = 0
@@ -425,7 +428,13 @@ export class World {
       if (!cr.life) cr.life = newLife(cr)
       byId.set(cr.id, cr); return cr
     })
-    for (const cr of w.creatures) if (cr.parents && !cr.parents.every((p) => p === 0 || byId.has(p))) cr.parents = null // drop dangling parent refs
+    // referential integrity + sanitize transient/inner strings (a save is untrusted input)
+    for (const cr of w.creatures) {
+      if (cr.parents && !cr.parents.every((p) => p === 0 || byId.has(p))) cr.parents = null // dangling parent refs
+      if (cr.partner && !byId.has(cr.partner)) cr.partner = 0 // dangling partner ref
+      if (cr.life) { const L = cr.life; L.goal = stripTags(L.goal, 60); L.hobby = stripTags(L.hobby, 40); L.quirk = stripTags(L.quirk, 60); L.condition = stripTags(L.condition, 40) }
+    }
+    for (const h of w.houses) if (h.landlord && !byId.has(h.landlord)) { h.landlord = 0; h.rent = 0 } // dangling landlord ref
     w.monarch = s.monarch != null ? byId.get(s.monarch) || null : null
     if (maxId + 1 > NEXT_ID) NEXT_ID = maxId + 1
     return w

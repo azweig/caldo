@@ -9,7 +9,7 @@ import { loadAssets } from "./sprites"
 import { drawWorld, drawChart } from "./render"
 import { respond, greeting, remember, ambientDialogue } from "./chat"
 import { Msg, setLlm, pingLLM, autoDetect, llmConfigured, llmUrl, llmModel } from "./llm"
-import { seedRng, rngState, setRngState } from "./rng"
+import { seedRng, rngState, setRngState, rand } from "./rng"
 import { worldAffairs, relationScore, relationLabel } from "./affairs"
 import { eraName, professionSpace, ERAS, eraProgress } from "./civ"
 import { ENNEAGRAM } from "./psyche"
@@ -71,7 +71,7 @@ function showNpcCard(c: Creature | null) {
     ${c.heard ? `<div class="nc-row">💬 escuchó: «${esc(c.heard)}»</div>` : ""}
     ${c.social?.length ? `<div class="nc-feed">${c.social.slice(-3).map((s) => "· " + esc(s)).join("<br>")}</div>` : ""}
     ${c.sigs?.length ? `<div class="nc-code">📡 hablando en código: ${esc(c.sigs.slice(-4).join(" "))}</div>` : ""}
-    ${L ? `<div class="nc-row">🎯 ${L.goal} <span class="rbar"><i style="width:${Math.round(L.goalProg * 100)}%"></i></span></div><div class="nc-row">🎨 ${L.hobby} · «${L.quirk}»</div>` : ""}
+    ${L ? `<div class="nc-row">🎯 ${esc(L.goal)} <span class="rbar"><i style="width:${Math.round(L.goalProg * 100)}%"></i></span></div><div class="nc-row">🎨 ${esc(L.hobby)} · «${esc(L.quirk)}»</div>` : ""}
     ${relsRow}
     <div class="nc-row">💰 ${Math.round(c.money)} · ${c.money > 800 ? "🎩 rico/a" : c.money > 200 ? "acomodado/a" : c.money > 15 ? "clase media" : "pobre"}${c.home.landlord && c.home.landlord !== c.id && c.home.surname !== c.surname ? " · 🔑 inquilino/a" : ""}${world.houses.some((h) => h.landlord === c.id) ? " · 🏘 propietario/a" : ""}</div>
     <div class="nc-row">🧠 ${Math.round(c.mental)} · 😤 ${Math.round(c.irritability * 100)}% · 🍔 ${Math.round(c.energy)}${L && L.condition ? ` · <b style="color:#d68">${L.condition}</b>` : ""}</div>
@@ -314,7 +314,7 @@ function statsHTML(): string {
     <h3>Transporte</h3>
     <div class="sline">${transportOf(world.era)}</div>
     <h3>Relaciones exteriores</h3>
-    <div class="sline">${countries.filter((c) => c !== countries[active]).map((c) => `${c.flag} ${c.name}: ${relationLabel(relationScore(countries[active], c))}`).join("<br>") || "—"}</div>
+    <div class="sline">${countries.filter((c) => c !== countries[active]).map((c) => `${esc(c.flag)} ${esc(c.name)}: ${relationLabel(relationScore(countries[active], c))}`).join("<br>") || "—"}</div>
     <h3>Riqueza</h3>
     ${(() => { const ws = wealthStats(world); return `${row("desigualdad (Gini)", ws.gini.toFixed(2))}${row("pobre · medio · rico", `${ws.p10} · ${ws.p50} · ${ws.p90}`)}${row("emprendedores · en deuda", `${ws.entrepreneurs} · ${ws.poor}`)}<div class="sline">más ricos: ${ws.richest.slice(0, 3).map((r) => `${r.name} (${r.money})`).join(" · ") || "—"}</div>` })()}
     <h3>Sociedad (histórico)</h3>
@@ -339,7 +339,7 @@ function legendsHTML(): string {
   return gens.slice().reverse().map((g) =>
     `<h3>Generación ${g.gen}</h3>` + g.people.map((p) =>
       `<div class="srow"><span>${p.name}</span><b style="color:${p.impact >= 0 ? "#8fe3a0" : "#e0788a"}">${p.impact >= 0 ? "+" : ""}${p.impact}</b></div>` +
-      `<div class="sline">${p.deeds.slice(-3).join(" · ") || "figura de su tiempo"}</div>` +
+      `<div class="sline">${esc(p.deeds.slice(-3).join(" · ")) || "figura de su tiempo"}</div>` +
       p.works.slice(-3).map((w) => {
         const key = `${w.who}:${w.title}`, r = cachedWork(key)
         const body = r && !r.loading
@@ -532,7 +532,7 @@ function doAction(act: string) {
     const t = courtTargetNear(c)
     if (t) {
       let p = 0.4; if (c.religion && c.religion === t.religion) p += 0.2; p -= Math.min(0.3, Math.abs(ageYears(c) - ageYears(t)) / 60)
-      if (Math.random() < clamp(p, 0.12, 0.9)) { c.partner = t.id; t.partner = c.id; world.chronicle.push({ day: world.clockDays, text: `${c.name} y ${t.name} se enamoraron ❤️` }); flash(`¡${t.name} aceptó! ❤️`) }
+      if (rand() < clamp(p, 0.12, 0.9)) { c.partner = t.id; t.partner = c.id; world.chronicle.push({ day: world.clockDays, text: `${c.name} y ${t.name} se enamoraron ❤️` }); flash(`¡${t.name} aceptó! ❤️`) }
       else flash(`${t.name} te rechazó 💔`)
     }
   } else if (act === "enter") {
@@ -540,7 +540,7 @@ function doAction(act: string) {
     else { const h = houseAtDoor(c); if (h && mayEnter(c, h)) { enterHouse(h); flash(c.home === h ? "entraste a tu casa 🏠" : "te dejaron pasar 🚪") } }
   } else if (act === "child") {
     const p = world.creatures.find((o) => o.id === c.partner)
-    if (p) { if (Math.random() < 0.7) { c.pregnant = 210 + Math.floor(Math.random() * 60); flash("¡van a tener un hijo! 🤰") } else flash(`${p.name} no quiere ahora`) }
+    if (p) { if (rand() < 0.7) { c.pregnant = 210 + Math.floor(rand() * 60); flash("¡van a tener un hijo! 🤰") } else flash(`${p.name} no quiere ahora`) }
   }
   renderPossess()
 }
@@ -669,8 +669,8 @@ function updateHud() {
   const topRel = Object.entries(relCount).sort((a, b) => b[1] - a[1])[0]
   const psychos = wild.filter((c) => c.powerHungry).length
   hud.innerHTML = `
-    <div class="stat"><span>pueblo</span> <b style="color:#fff">${countries[active]?.flag || ""} ${countries[active]?.name || ""}</b>${world.cultureEthos ? ` · <i style="color:#cdbf9a">${world.cultureEthos}</i>` : ""} · ${world.gov === "monarquía" ? "👑 monarquía" : "🏛 república"} · ${world.system === "capitalista" ? "💵 capitalista" : world.system === "socialista" ? "🤝 socialista" : "⛓ dictadura"}</div>
-    ${world.monarch ? `<div class="stat"><span>monarca</span> ${world.monarch.name} ${world.monarch.surname}${world.monarch.powerHungry ? " (déspota)" : ""}</div>` : ""}
+    <div class="stat"><span>pueblo</span> <b style="color:#fff">${esc(countries[active]?.flag || "")} ${esc(countries[active]?.name || "")}</b>${world.cultureEthos ? ` · <i style="color:#cdbf9a">${esc(world.cultureEthos)}</i>` : ""} · ${world.gov === "monarquía" ? "👑 monarquía" : "🏛 república"} · ${world.system === "capitalista" ? "💵 capitalista" : world.system === "socialista" ? "🤝 socialista" : "⛓ dictadura"}</div>
+    ${world.monarch ? `<div class="stat"><span>monarca</span> ${esc(world.monarch.name)} ${esc(world.monarch.surname)}${world.monarch.powerHungry ? " (déspota)" : ""}</div>` : ""}
     <div class="stat"><span>población</span> ${wild.length} · <span>familias</span> ${families} · ⚔️ ${wild.filter((c) => isMature(c) && c.profCat === "defensa").length}${world.animals.some((a) => !a.tame) ? ` · 🐾 ${world.animals.filter((a) => !a.tame).length}` : ""}</div>
     ${world.raiders.length ? `<div class="stat" style="background:rgba(200,30,30,0.25);border-radius:6px;padding:2px 6px"><b style="color:#ff6b6b">🚨 ¡EL PUEBLO ESTÁ BAJO ATAQUE! ${world.raiders.length} invasores</b></div>` : ""}
     <div class="stat"><span>edad media</span> ${avgAge}a · <span>enfermos ✚</span> ${sick}</div>
@@ -682,9 +682,9 @@ function updateHud() {
     <div class="stat"><span>saber 📚</span> ${Math.round(world.wisdom)} · <span>oficios</span> ${professionSpace().toLocaleString()} · <span>univ.</span> ${world.universities.length}</div>
     <div class="stat"><span>investigando</span> ${rp.name} <span class="rbar"><i style="width:${Math.round(rp.frac * 100)}%"></i></span></div>
     <div class="stat"><span>hitos era</span> ${ep.got}/${ep.total} · 🔑 ${ep.keysGot}/${ep.keys} para avanzar</div>
-    ${world.talkOfTown()[0] ? `<div class="stat"><span>se habla de</span> <i style="color:#bcd9ff">${world.talkOfTown()[0].txt}</i></div>` : ""}
-    <div class="stat"><span>historia</span> ${Math.floor(world.clockDays / 360)} años${world.greatestEver() ? ` · 🏆 <i style="color:#ffd98a">${world.greatestEver()!.name}</i>, la figura más grande` : ""}</div>
-    ${world.recentTech ? `<div class="stat"><span>💡 último</span> ${world.recentTech}</div>` : ""}
+    ${world.talkOfTown()[0] ? `<div class="stat"><span>se habla de</span> <i style="color:#bcd9ff">${esc(world.talkOfTown()[0].txt)}</i></div>` : ""}
+    <div class="stat"><span>historia</span> ${Math.floor(world.clockDays / 360)} años${world.greatestEver() ? ` · 🏆 <i style="color:#ffd98a">${esc(world.greatestEver()!.name)}</i>, la figura más grande` : ""}</div>
+    ${world.recentTech ? `<div class="stat"><span>💡 último</span> ${esc(world.recentTech)}</div>` : ""}
     <div class="stat energy"><span>vos</span> ${aAge}a · ${bar} ${Math.round(e)}</div>
     <div class="hint">${possessed ? `🎭 poseés a <b>${possessed.name}</b> · P para soltar` : (!chatting && chatTarget) ? `▸ <b>E</b> hablar · <b>P</b> poseer a ${chatTarget.name}` : "WASD moverte · E hablar · P poseer · espacio pausa"}</div>
   `
@@ -694,8 +694,8 @@ function updateHud() {
     el.title = `${eraName(cw.era)} · ${pop} hab.`
     const dead = pop === 0 // a civilisation that died out — mark it with a skull
     el.classList.toggle("dead", dead)
-    if (dead && !el.innerHTML.includes("💀")) el.innerHTML = `💀 ${countries[i].name}`
-    else if (!dead && el.innerHTML.includes("💀")) el.innerHTML = `${countries[i].flag} ${countries[i].name}`
+    if (dead && !el.innerHTML.includes("💀")) el.innerHTML = `💀 ${esc(countries[i].name)}`
+    else if (!dead && el.innerHTML.includes("💀")) el.innerHTML = `${esc(countries[i].flag)} ${esc(countries[i].name)}`
   }
   if (!statsEl.classList.contains("hidden") && frame % 15 === 0) statsBody.innerHTML = statsHTML()
   if (possessed && frame % 8 === 0) renderPossess()
@@ -706,7 +706,7 @@ function buildTabs() {
   countries.forEach((c, i) => {
     const b = document.createElement("button")
     b.className = "tab" + (i === active ? " active" : "")
-    b.innerHTML = `${c.flag} ${c.name}`
+    b.innerHTML = `${esc(c.flag)} ${esc(c.name)}`
     b.addEventListener("click", () => switchCountry(i))
     tabsEl.appendChild(b)
   })
