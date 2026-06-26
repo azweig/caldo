@@ -572,12 +572,16 @@ export class World {
     }
     const fighters = wild.filter((c) => isMature(c) && (c.profCat === "defensa" || c.profCat === "comida" || c.profCat === "exploración")).length // hunters + soldiers = the town's muscle
     const tamers = wild.filter((c) => isMature(c) && (c.profCat === "cuidado" || c.profCat === "comida")).length
+    const cx = WORLD_W / 2, cy = WORLD_H / 2
     for (let i = this.animals.length - 1; i >= 0; i--) {
       const a = this.animals[i], sp = SPECIES[a.kind]
-      if (Math.random() < 0.06) { a.vx = (Math.random() * 2 - 1) * 1.6; a.vy = (Math.random() * 2 - 1) * 1.6 }
+      if (Math.random() < 0.08) { // beasts drift toward where the people are — predators to hunt, grazers to feed
+        const dx = cx - a.x, dy = cy - a.y, d = Math.hypot(dx, dy) || 1, pull = sp.hostile ? 1.4 : 0.9
+        a.vx = (dx / d) * pull + (Math.random() * 2 - 1) * 1.2; a.vy = (dy / d) * pull + (Math.random() * 2 - 1) * 1.2
+      }
       a.x = clampn(a.x + a.vx, MARGIN, WORLD_W - MARGIN); a.y = clampn(a.y + a.vy, MARGIN, WORLD_H - MARGIN)
       if (a.tame) continue // livestock + pets just live among the people
-      const v = this.nearestCreature({ x: a.x, y: a.y } as Creature, 80, (o) => !o.isAvatar && isMature(o))
+      const v = this.nearestCreature({ x: a.x, y: a.y } as Creature, 110, (o) => !o.isAvatar && isMature(o))
       if (!v) continue
       if (sp.hostile) { // a PREDATOR is close to a villager
         if (fighters > 0 && Math.random() < 0.45) { a.hp--; if (a.hp <= 0) { this.dropMeat(a.x, a.y, sp.food); this.animals.splice(i, 1); if (v.life) feel(v, "orgulloso", 0.4); this.logEvent(`cazaron un ${a.kind} que merodeaba`) } } // fought off → meat
