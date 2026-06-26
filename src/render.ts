@@ -337,7 +337,11 @@ function drawMinimap(ctx: CanvasRenderingContext2D, world: World, avatar: Creatu
 
 // each person's deterministic look, STABLE across their whole life, but it CHANGES as they age + by their lot.
 function appear(c: Creature, era = 5) {
-  const r = (n: number) => { const x = Math.sin((Math.abs(c.id) + 1) * 12.9898 + n * 78.233) * 43758.5; return x - Math.floor(x) }
+  // seed the look from HERITABLE genome (hue + sprite), not the id — so children resemble their parents,
+  // and family lines share a look. recombine() mixes these at birth, so siblings are alike but not identical.
+  const g = c.genome as { hue: number; sprite?: number }
+  const seed = Math.abs(g.hue * 7.13 + (g.sprite || 0) * 31.7 + (Math.abs(c.id) % 3)) + 1
+  const r = (n: number) => { const x = Math.sin(seed * 12.9898 + n * 78.233) * 43758.5; return x - Math.floor(x) }
   const ay = ageYears(c)
   const female = Math.abs(c.id) % 2 === 0
   const skin = c.isAvatar ? "#ffe0b0" : SKIN[Math.floor(r(1) * SKIN.length)]
