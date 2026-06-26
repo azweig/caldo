@@ -335,6 +335,57 @@ function drawMinimap(ctx: CanvasRenderingContext2D, world: World, avatar: Creatu
   ctx.strokeRect(ox + (cam.x - halfW) * sx, oy + (cam.y - halfH) * sy, 2 * halfW * sx, 2 * halfH * sy)
 }
 
+// each person's deterministic look, STABLE across their whole life, but it CHANGES as they age.
+function appear(c: Creature) {
+  const r = (n: number) => { const x = Math.sin((Math.abs(c.id) + 1) * 12.9898 + n * 78.233) * 43758.5; return x - Math.floor(x) }
+  const ay = ageYears(c)
+  const female = Math.abs(c.id) % 2 === 0
+  const skin = c.isAvatar ? "#ffe0b0" : SKIN[Math.floor(r(1) * SKIN.length)]
+  const base = HAIR[Math.floor(r(2) * (HAIR.length - 1))] // a coloured hair (not the grey swatch)
+  const greyT = Math.max(0, Math.min(1, (ay - 46) / 32)) // hair greys + whitens with the years
+  const hair = greyT > 0.62 ? "#d6cfc4" : greyT > 0.28 ? "#9a948a" : base
+  const hairStyle = ay < 2 ? "none" : female ? (r(3) < 0.5 ? "long" : "bun") : r(3) < 0.16 ? "bald" : r(3) < 0.55 ? "short" : "crop"
+  const beard = !female && ay > 22 && r(4) < 0.4 ? (r(5) < 0.5 ? "full" : "stubble") : "none"
+  const cloth = c.isAvatar ? "#ffd34d" : `hsl(${c.genome.hue}, ${38 + Math.floor(r(6) * 18)}%, ${47 + Math.floor(r(7) * 13)}%)`
+  return { ay, female, skin, hair, hairStyle, beard, cloth, r }
+}
+
+// draw a person built up from the feet (y=0). proportions shift across life: babies are tiny + big-headed,
+// children small, teens lanky, adults full, elders a touch stooped — so you SEE someone grow + grow old.
+function drawVillager(ctx: CanvasRenderingContext2D, c: Creature, w: number, moving: boolean, phase: number) {
+  const ap = appear(c), ay = ap.ay
+  const stage = ay < 2 ? 0 : ay < 13 ? 1 : ay < 19 ? 2 : ay < 55 ? 3 : 4 // baby child teen adult elder
+  const hr = w * [0.5, 0.43, 0.37, 0.36, 0.35][stage]
+  const H = w * [0.85, 1.12, 1.4, 1.5, 1.44][stage]
+  const swing = moving ? Math.sin(phase) * w * 0.13 : 0
+  const legH = H * (stage <= 1 ? 0.24 : 0.3), hipY = -legH, shoY = -H * (stage === 0 ? 0.7 : 0.82), hcy = shoY - hr * 0.72
+  const cloth = ap.cloth, clothSh = c.isAvatar ? "#e0b020" : `hsl(${c.genome.hue}, 40%, 40%)`
+  // legs (step in opposition while walking)
+  ctx.fillStyle = "#473828"
+  ctx.fillRect(-w * 0.21, hipY - swing * 0.4, w * 0.16, legH + swing * 0.4)
+  ctx.fillRect(w * 0.05, hipY + swing * 0.4, w * 0.16, legH - swing * 0.4)
+  // arms swing opposite the legs
+  ctx.fillStyle = cloth
+  ctx.fillRect(-w * 0.38, shoY + w * 0.06 + swing * 0.4, w * 0.12, H * 0.42)
+  ctx.fillRect(w * 0.26, shoY + w * 0.06 - swing * 0.4, w * 0.12, H * 0.42)
+  // torso
+  ctx.fillStyle = cloth; ctx.beginPath(); ctx.roundRect(-w * 0.3, shoY, w * 0.6, hipY - shoY + 3, w * 0.16); ctx.fill()
+  ctx.fillStyle = clothSh; ctx.beginPath(); ctx.roundRect(w * 0.06, shoY, w * 0.24, hipY - shoY + 3, w * 0.12); ctx.fill()
+  // head
+  ctx.fillStyle = ap.skin; ctx.beginPath(); ctx.arc(0, hcy, hr, 0, Math.PI * 2); ctx.fill()
+  ctx.fillStyle = "rgba(0,0,0,0.10)"; ctx.beginPath(); ctx.arc(hr * 0.35, hcy, hr, -Math.PI * 0.5, Math.PI * 0.5); ctx.fill()
+  // beard
+  if (ap.beard !== "none") { ctx.fillStyle = ap.hair; ctx.globalAlpha *= ap.beard === "stubble" ? 0.45 : 1; ctx.beginPath(); ctx.arc(0, hcy + hr * 0.25, hr * 0.85, 0.1 * Math.PI, 0.9 * Math.PI); ctx.fill(); ctx.globalAlpha = ctx.globalAlpha / (ap.beard === "stubble" ? 0.45 : 1) }
+  // hair by style
+  ctx.fillStyle = ap.hair
+  if (ap.hairStyle === "long") { ctx.beginPath(); ctx.roundRect(-hr * 1.05, hcy - hr * 0.4, hr * 2.1, hr * 1.7, hr * 0.6); ctx.fill(); ctx.fillStyle = ap.skin; ctx.beginPath(); ctx.arc(0, hcy + hr * 0.1, hr * 0.92, 0, Math.PI * 2); ctx.fill() }
+  else if (ap.hairStyle === "bun") { ctx.beginPath(); ctx.arc(0, hcy - hr * 0.95, hr * 0.45, 0, Math.PI * 2); ctx.fill(); ctx.beginPath(); ctx.arc(0, hcy - hr * 0.1, hr * 1.02, Math.PI * 1.02, Math.PI * 2.02); ctx.fill() }
+  else if (ap.hairStyle === "bald") { ctx.beginPath(); ctx.arc(0, hcy + hr * 0.05, hr * 1.0, Math.PI * 1.15, Math.PI * 1.85); ctx.fill() } // just a fringe
+  else if (ap.hairStyle !== "none") { ctx.beginPath(); ctx.arc(0, hcy - hr * (ap.hairStyle === "crop" ? 0.18 : 0.12), hr * 1.02, Math.PI * 1.0, Math.PI * 2.04); ctx.fill() }
+  // an eye, when facing the camera
+  if (c.facing >= 0) { ctx.fillStyle = "rgba(30,20,15,0.75)"; ctx.beginPath(); ctx.arc(hr * 0.34, hcy + hr * 0.04, hr * 0.13, 0, Math.PI * 2); ctx.fill() }
+}
+
 function drawCreature(ctx: CanvasRenderingContext2D, c: Creature, _era: number) {
   const ageScale = c.isAvatar || isMature(c) ? 1 : 0.5 + 0.5 * Math.min(1, ageYears(c) / 16)
   const w = (24 + c.genome.size * 16) * ageScale
@@ -361,25 +412,7 @@ function drawCreature(ctx: CanvasRenderingContext2D, c: Creature, _era: number) 
   ctx.translate(c.x, c.y - bob)
   ctx.rotate(sway)
   if (c.facing < 0) ctx.scale(-1, 1)
-  // a cohesive little villager (feet at y=0, built upward): legs, cloth torso + arms, skin head, hair cap
-  const H = w * 1.5, swing = moving ? Math.sin(phase) * w * 0.13 : 0
-  const skin = c.isAvatar ? "#ffe0b0" : SKIN[Math.floor(Math.abs(c.genome.hue + c.id)) % SKIN.length]
-  const cloth = c.isAvatar ? "#ffd34d" : `hsl(${c.genome.hue}, 42%, 54%)`, clothSh = c.isAvatar ? "#e0b020" : `hsl(${c.genome.hue}, 42%, 43%)`
-  const hair = HAIR[Math.floor(Math.abs(c.id)) % HAIR.length]
-  const legH = H * 0.3, hipY = -legH, shoY = -H * 0.82, hr = w * 0.36, hcy = shoY - hr * 0.72
-  ctx.fillStyle = "#4a3b2a" // legs (step in opposition)
-  ctx.fillRect(-w * 0.21, hipY - swing * 0.4, w * 0.16, legH + swing * 0.4)
-  ctx.fillRect(w * 0.05, hipY + swing * 0.4, w * 0.16, legH - swing * 0.4)
-  ctx.fillStyle = cloth // arms swing opposite the legs
-  ctx.fillRect(-w * 0.38, shoY + w * 0.06 + swing * 0.4, w * 0.12, H * 0.42)
-  ctx.fillRect(w * 0.26, shoY + w * 0.06 - swing * 0.4, w * 0.12, H * 0.42)
-  ctx.fillStyle = cloth // torso
-  ctx.beginPath(); ctx.roundRect(-w * 0.3, shoY, w * 0.6, hipY - shoY + 3, w * 0.16); ctx.fill()
-  ctx.fillStyle = clothSh; ctx.beginPath(); ctx.roundRect(w * 0.06, shoY, w * 0.24, hipY - shoY + 3, w * 0.12); ctx.fill()
-  ctx.fillStyle = skin; ctx.beginPath(); ctx.arc(0, hcy, hr, 0, Math.PI * 2); ctx.fill() // head
-  ctx.fillStyle = "rgba(0,0,0,0.10)"; ctx.beginPath(); ctx.arc(hr * 0.35, hcy, hr, -Math.PI * 0.5, Math.PI * 0.5); ctx.fill() // head shading
-  ctx.fillStyle = hair; ctx.beginPath(); ctx.arc(0, hcy - hr * 0.12, hr * 1.02, Math.PI * 1.02, Math.PI * 2.02); ctx.fill() // hair cap
-  if (c.facing >= 0) { ctx.fillStyle = "rgba(30,20,15,0.7)"; ctx.beginPath(); ctx.arc(hr * 0.36, hcy + hr * 0.05, hr * 0.13, 0, Math.PI * 2); ctx.fill() } // an eye, face-forward
+  drawVillager(ctx, c, w, moving, phase)
   ctx.restore()
 
   // profession-category arc at the feet (see the social fabric at a glance)
