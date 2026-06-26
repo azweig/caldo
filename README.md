@@ -34,7 +34,7 @@ Sin LLM, igual juega con la voz simple. Variables: `PORT`, `CALDO_MODEL`.
 - **WASD / flechas** — mover tu avatar
 - **E** — hablar con quien tengas cerca (pausa el mundo)
 - **scroll** — zoom
-- **espacio** — pausa · **slider** — velocidad del tiempo (1 semana/s → 2½ años/s)
+- **espacio** — pausa · **slider** — velocidad del tiempo (de ~1 min/s hasta decenas de años/s)
 - **R** — re-entrar si moriste
 
 ## Cómo funciona
@@ -45,15 +45,26 @@ Sin LLM, igual juega con la voz simple. Variables: `PORT`, `CALDO_MODEL`.
 - **Pueblo**: mapa grande con grilla de **calles** y **casas** (una familia por casa); cámara con zoom que sigue al avatar.
 - El **gráfico** en vivo muestra el promedio del genoma cambiando — la evolución pasando.
 
-## Roadmap
+## Estado
 
-- [x] v0: mundo evolutivo + avatar + chat por personalidad
-- [x] tiempo en días, vida ~80 años, enfermedades, familias
-- [x] pueblo con calles, casas y cámara/zoom
-- [ ] **NPCs con LLM**: personalidad + memoria + voz fluida (Ollama self-hosted) — en progreso
-- [ ] árbol genealógico, plaza/mercado, depredadores, cerebros neuronales
+- [x] mundo evolutivo + avatar + chat por personalidad
+- [x] tiempo en días, vida ~80 años, enfermedades, familias, generaciones
+- [x] pueblo con calles, casas (por tier), plaza/mercado con puestos reclamables
+- [x] **NPCs con LLM**: personalidad + memoria + voz fluida (Ollama self-hosted, ⚙)
+- [x] economía (oficios, riqueza, alquileres, pobreza), cultura (libros/arte), política
+- [x] animales (caza/domesticación), guerra entre pueblos + raids, 100+ culturas
+- [x] eras realistas (Paleolítico = epopeya), apariencia individual que crece + envejece
+- [ ] árbol genealógico visual, cerebros neuronales
 
-Sprites pixel-art reusados del proyecto Puglit.
+## Desarrollo
+
+```bash
+npm test          # suite vitest (determinismo, serialización, invariantes)
+npm run build     # tsc --noEmit + vite build
+```
+
+- La simulación es **determinista** (RNG con semilla): misma semilla → mismo mundo. La semilla se guarda en el save.
+- **Seguridad**: el output del LLM se renderiza inerte (sin XSS); `serve.mjs` bindea a `127.0.0.1` por defecto (`HOST=0.0.0.0` para exponer), proxy con allow-list + `PROXY_TOKEN` opcional; la URL del LLM debe ser `https` (o localhost).
 
 ## Licencia
 

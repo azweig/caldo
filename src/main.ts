@@ -798,11 +798,15 @@ function loop() {
     const minPerFrame = rate / 60 // in-world minutes added this frame (~60fps)
     let steps = 0
     for (const cn of countries) {
+      const isActive = cn.world === world
       let add = minPerFrame
-      if (possessBusy && cn.world === world) add = Math.max(add, 7) // montage: fast-forward the shift (day→night)
-      cn.world.clockMinutes += add
+      if (possessBusy && isActive) add = Math.max(add, 7) // montage: fast-forward the shift (day→night)
+      cn.world.clockMinutes += add // in-world time always advances
+      // PERF: the active world steps every frame (smooth); off-screen worlds are decimated — they only run
+      // their step() every 3rd frame and catch up in a burst, so most frames only simulate the one you watch.
+      if (!isActive && frame % 3 !== 0) continue
       const want = Math.floor(cn.world.clockMinutes / 1440) // whole in-world days elapsed
-      const cap = cn.world === world ? 40 : 10
+      const cap = isActive ? 40 : 26
       let s = 0
       while (cn.world.clockDays < want && s < cap) { cn.world.step(); s++ }
       steps += s
