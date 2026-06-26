@@ -546,6 +546,11 @@ export class World {
       } else if (c.money < 1 && c.mental < 38 && !c.life.condition && Math.random() < 0.025) {
         c.life.condition = "sin techo"; c.life.condDays = 9999; feel(c, "afligido", 0.65); c.life.rep = Math.max(-1, c.life.rep - 0.15); this.logEvent(`${c.name} ${c.surname} quedó en la calle`)
       }
+      // MADNESS: crushing, prolonged despair can break a mind — they lose their trade and wander, muttering
+      if (c.life.condition === "locura") { c.mental = Math.min(28, c.mental + 0.05); c.irritability = Math.min(1, c.irritability + 0.002) }
+      else if (c.mental < 11 && c.life.condition !== "locura" && Math.random() < 0.012) {
+        c.life.condition = "locura"; c.life.condDays = 9999; c.profBase = ""; c.profCat = ""; c.profession = "perdió la razón"; feel(c, "asustado", 0.7); this.logEvent(`${c.name} ${c.surname} perdió la cordura`)
+      }
     }
   }
   // a family line: how many living members share the surname + their collective standing (dynasty reputation)

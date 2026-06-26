@@ -52,6 +52,7 @@ function showNpcCard(c: Creature | null) {
     ${L ? `<div class="nc-inner">${emo ? emo + " · " : ""}${innerLine(c)}</div>` : ""}
     ${L ? `<div class="nc-row">🎯 ${L.goal} <span class="rbar"><i style="width:${Math.round(L.goalProg * 100)}%"></i></span></div><div class="nc-row">🎨 ${L.hobby} · «${L.quirk}»</div>` : ""}
     ${relsRow}
+    <div class="nc-row">💰 ${Math.round(c.money)} · ${c.money > 800 ? "🎩 rico/a" : c.money > 200 ? "acomodado/a" : c.money > 15 ? "clase media" : "pobre"}${c.home.landlord && c.home.landlord !== c.id && c.home.surname !== c.surname ? " · 🔑 inquilino/a" : ""}${world.houses.some((h) => h.landlord === c.id) ? " · 🏘 propietario/a" : ""}</div>
     <div class="nc-row">🧠 ${Math.round(c.mental)} · 😤 ${Math.round(c.irritability * 100)}% · 🍔 ${Math.round(c.energy)}${L && L.condition ? ` · <b style="color:#d68">${L.condition}</b>` : ""}</div>
     <div class="nc-acts"><button id="nc-talk">💬 Hablar</button>${canCourt ? '<button id="nc-court">💘 Cortejar</button>' : ""}<button id="nc-x">✕</button></div>`
   npccard.classList.remove("hidden")
@@ -808,6 +809,9 @@ function loop() {
     const hour = hourOf()
     for (const c of world.creatures) {
       if (c === possessed || c.isAvatar || c.controlled) continue
+      if (c.life?.condition === "locura") { // the mad wander aimlessly, muttering, going nowhere
+        const a = routinePhase * 5 + c.id; c.x += Math.cos(a) * 1.1; c.y += Math.sin(a * 1.7) * 1.1; c.vx = Math.cos(a); c.vy = Math.sin(a); continue
+      }
       const dest = routineDest(c, hour)
       const dx = dest.x - c.x, dy = dest.y - c.y, d = Math.hypot(dx, dy) || 1
       let mvx = 0, mvy = 0
