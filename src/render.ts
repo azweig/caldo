@@ -462,6 +462,14 @@ function drawCreature(ctx: CanvasRenderingContext2D, c: Creature, era: number) {
   const bob = moving ? Math.abs(Math.sin(phase)) * w * 0.07 : Math.sin(wT * 0.08 + c.id) * w * 0.013 // walk bounce, or a gentle breathing when still
   const sway = moving ? Math.sin(phase) * 0.05 : 0
 
+  // RENOWN: a soul who has earned great regard over their life carries a soft golden aura — earned, not given
+  const rep = c.life?.rep || 0
+  if (!c.isAvatar && rep > 0.5 && !indoors) {
+    ctx.save(); ctx.globalCompositeOperation = "lighter"; ctx.globalAlpha = Math.min(0.5, (rep - 0.5) * 0.9)
+    const gg = ctx.createRadialGradient(c.x, c.y - w * 0.8, 2, c.x, c.y - w * 0.8, w * 1.3)
+    gg.addColorStop(0, "rgba(255,220,120,0.7)"); gg.addColorStop(1, "rgba(255,220,120,0)")
+    ctx.fillStyle = gg; ctx.beginPath(); ctx.arc(c.x, c.y - w * 0.8, w * 1.3, 0, Math.PI * 2); ctx.fill(); ctx.restore()
+  }
   // soft ground shadow — grounds the figure + gives the scene depth
   ctx.save()
   ctx.globalAlpha = 0.2 * dim
