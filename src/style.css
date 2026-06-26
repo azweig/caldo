@@ -262,6 +262,7 @@ body { font-family: ui-monospace, "SF Mono", Menlo, monospace; color: #dfe7ee; }
   border: 1px solid rgba(120, 200, 255, 0.35);
   border-radius: 14px; padding: 12px 14px;
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+  z-index: 12;
 }
 #chat-who { color: #9cd2ff; font-size: 12px; margin-bottom: 8px; font-weight: 600; }
 #chat-log { max-height: 180px; overflow-y: auto; font-size: 13px; line-height: 1.5; margin-bottom: 9px; }
