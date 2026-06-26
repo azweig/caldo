@@ -475,7 +475,9 @@ export class World {
 
   scatterFood() {
     const g = rnd(this.gardens)
-    this.food.push({ x: clampn(g.x + (rand() * 2 - 1) * 90, MARGIN, WORLD_W - MARGIN), y: clampn(g.y + (rand() * 2 - 1) * 90, MARGIN, WORLD_H - MARGIN) })
+    // crops grow in ROWS, not scattered — snap to a tidy grid inside the plot so a field reads as cultivated
+    const col = Math.round((rand() * 2 - 1) * 5) * 17, row = Math.round((rand() * 2 - 1) * 5) * 17
+    this.food.push({ x: clampn(g.x + col, MARGIN, WORLD_W - MARGIN), y: clampn(g.y + row, MARGIN, WORLD_H - MARGIN) })
   }
 
   // the town GROWS: build a house in a free lot (the world stops being static as the population rises)

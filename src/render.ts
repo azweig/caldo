@@ -85,12 +85,13 @@ function drawStaticLayer(ctx: CanvasRenderingContext2D, world: World) {
     ctx.fillStyle = leaf; ctx.beginPath(); ctx.arc(px, py - r * 0.5, r, 0, Math.PI * 2); ctx.fill()
     ctx.fillStyle = leafHi; ctx.beginPath(); ctx.arc(px - r * 0.3, py - r * 0.8, r * 0.5, 0, Math.PI * 2); ctx.fill()
   }
-  const season = sea, cropCol = season === 3 ? "rgba(150,160,120,0.5)" : season === 2 ? "rgba(170,150,70,0.55)" : "rgba(90,170,80,0.6)"
+  const season = sea
   for (const g of world.gardens) {
-    ctx.fillStyle = season === 3 ? "rgba(120,135,120,0.12)" : "rgba(70,150,90,0.12)"
-    ctx.beginPath(); ctx.arc(g.x, g.y, 95, 0, Math.PI * 2); ctx.fill()
-    ctx.fillStyle = cropCol
-    for (let i = 0; i < 22; i++) { const a = i * 2.39996, r = 18 + (i % 6) * 13; const px = g.x + Math.cos(a) * r, py = g.y + Math.sin(a) * r * 0.8; ctx.fillRect(px - 1, py - 4, 2, 5) }
+    // a tilled FIELD: soil disc + parallel furrow rows (so it reads as cultivated, not a random green smear)
+    ctx.fillStyle = season === 3 ? "rgba(96,84,66,0.5)" : "rgba(110,84,52,0.5)"
+    ctx.beginPath(); ctx.arc(g.x, g.y, 92, 0, Math.PI * 2); ctx.fill()
+    ctx.strokeStyle = "rgba(70,52,32,0.4)"; ctx.lineWidth = 2
+    for (let ry = -80; ry <= 80; ry += 17) { const hw = Math.sqrt(Math.max(0, 92 * 92 - ry * ry)); ctx.beginPath(); ctx.moveTo(g.x - hw, g.y + ry); ctx.lineTo(g.x + hw, g.y + ry); ctx.stroke() }
   }
   const path = world.era >= 9 ? "#b3ada3" : PATH_COL[sea]
   ctx.fillStyle = path
