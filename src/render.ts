@@ -138,11 +138,14 @@ export function drawWorld(
     if ((c.x - hx) ** 2 + (c.y - hy) ** 2 < 80 * 80) present.set(c.home, (present.get(c.home) || 0) + 1)
   }
 
-  // houses
-  const hImg = pix(`/pix_houses/${eraTier2D(world.era)}.png`)
+  // houses — the sprite reflects the home's TIER (choza→casa→casona→mansión→edificio) in an era style
+  const et = world.era, hstyle = et >= 12 ? "modern" : et >= 9 ? "industrial" : "medieval"
+  const tierName = ["choza", "casa", "casona", "mansion", "edificio"]
   const nightNow = (() => { const h = (world.clockMinutes % 1440) / 60; return h < 6 || h >= 19 })()
   for (const h of world.houses) {
     const n = present.get(h) || 0
+    let hImg = pix(`/house_tiers/${hstyle}_${tierName[h.tier || 0]}.png`)
+    if (hImg.complete && hImg.naturalWidth === 0) hImg = pix(`/pix_houses/${eraTier2D(world.era)}.png`) // fallback if that combo wasn't generated
     if (hImg.naturalWidth > 0) { // pixel-art house sprite, sized to the lot (roof rises above)
       const hw = h.w * 1.7, hh = hw * (hImg.naturalHeight / hImg.naturalWidth)
       ctx.save(); ctx.globalAlpha = 0.18; ctx.fillStyle = "#000" // soft shadow grounds the building
