@@ -370,6 +370,13 @@ function drawCreature(ctx: CanvasRenderingContext2D, c: Creature, era: number) {
     const e = (EMO as Record<string, string>)[c.life.emotion]
     if (e) { ctx.font = "16px serif"; ctx.textAlign = "center"; ctx.fillText(e, c.x, c.y - w - (c.sick ? 18 : 6)); ctx.textAlign = "left" }
   }
+  // the machine-chatter they trade floats up as faint 0s and 1s when they pause to talk (idle = conversing)
+  if (!c.isAvatar && !moving && c.sigs && c.sigs.length) {
+    const bits = c.sigs[c.sigs.length - 1].replace(/[+\-]\d+$/, "")
+    const rise = (wT * 0.5 + c.id * 7) % 32
+    ctx.font = "9px ui-monospace, monospace"; ctx.fillStyle = "rgba(110,227,154,0.6)"; ctx.textAlign = "center"
+    ctx.globalAlpha = 0.55 * (1 - rise / 32); ctx.fillText(bits, c.x, c.y - w - 16 - rise); ctx.globalAlpha = 1; ctx.textAlign = "left"
+  }
 }
 
 function label(ctx: CanvasRenderingContext2D, text: string, x: number, y: number, color: string) {

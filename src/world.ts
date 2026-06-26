@@ -7,7 +7,7 @@ import { Genome, randomGenome, recombine } from "./genome"
 import { Psyche, randomPsyche, inheritPsyche } from "./psyche"
 import { Cat, Boosts, Prof, Tech, PROFS, TECHS, availableProfs, availableTechs, canAdvanceEra, economyOf, professionTitle, eraName } from "./civ"
 import { Life, newLife, lifeTick, feel, bond, decideIntent } from "./life"
-import { Sig, KIND, codeOf } from "./comms"
+import { Sig, KIND, codeOf, decode } from "./comms"
 import { pickReligion, EconSystem } from "./civconfig"
 import { genPerson, inheritDark, classify, DarkTriad, Archetype } from "./population"
 import { runSociety } from "./society"
@@ -110,6 +110,7 @@ export interface Creature {
   irritability: number // 0..1 — rises with stress + low mental health; tips them toward conflict/crime
   life?: Life        // the inner life: needs, emotion, goal, vocation, hobby, quirk, relationships, reputation
   sigs?: string[]    // recent compact chatter codes (transient — the binary they "speak" when unobserved)
+  heard?: string     // the last thing they overheard, DECODED into words (transient, for the click card)
 }
 
 // a notable act, logged so we can later rank the most INFLUENTIAL people per generation
@@ -458,7 +459,8 @@ export class World {
     const third = wild[Math.floor(Math.random() * wild.length)]
     if (third !== a && third !== b && third.life && Math.abs(third.life.rep) > 0.12) {
       bond(a, third.id, third.life.rep * 0.04); bond(b, third.id, third.life.rep * 0.04)
-      sigs.push({ k: third.life.rep < -0.3 ? KIND.WARN : KIND.GOSSIP, s: third.id, v: third.life.rep * 6 })
+      const g: Sig = { k: third.life.rep < -0.3 ? KIND.WARN : KIND.GOSSIP, s: third.id, v: third.life.rep * 6 }
+      sigs.push(g); b.heard = decode(g, `${third.name} ${third.surname}`); a.heard = b.heard // both now carry the rumour
     }
     // IDEA — learning DIFFUSES socially: the more learned rubs off on the less (knowledge spreads by talking)
     if (Math.abs(a.knowledge - b.knowledge) > 6) { const hi = a.knowledge > b.knowledge ? a : b, lo = hi === a ? b : a; lo.knowledge = Math.min(hi.knowledge, lo.knowledge + 0.5); sigs.push({ k: KIND.IDEA, s: hi.id, v: 3 }) }

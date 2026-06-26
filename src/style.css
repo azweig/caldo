@@ -132,6 +132,7 @@ body { font-family: ui-monospace, "SF Mono", Menlo, monospace; color: #dfe7ee; }
 #npccard .nc-name { color: #ffe6a3; font-weight: bold; font-size: 15px; margin-bottom: 5px; }
 #npccard .nc-row { color: #aebccd; font-size: 12px; margin: 2px 0; }
 #npccard .nc-inner { color: #cdbf9a; font-size: 12px; font-style: italic; margin: 4px 0; }
+#npccard .nc-code { color: #6fe39a; font-size: 10.5px; font-family: ui-monospace, monospace; margin: 3px 0; opacity: 0.8; letter-spacing: 0.5px; }
 #npccard .nc-row .rbar { display: inline-block; width: 70px; height: 6px; background: rgba(255,255,255,0.12); border-radius: 3px; vertical-align: middle; overflow: hidden; }
 #npccard .nc-row .rbar i { display: block; height: 100%; background: linear-gradient(90deg,#8fe3a0,#ffe6a3); }
 #npccard .nc-acts { display: flex; gap: 6px; margin-top: 10px; }
