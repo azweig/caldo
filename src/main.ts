@@ -51,7 +51,8 @@ function showNpcCard(c: Creature | null) {
     ${parLine}
     ${L ? `<div class="nc-inner">${emo ? emo + " · " : ""}${innerLine(c)}</div>` : ""}
     ${c.heard ? `<div class="nc-row">💬 escuchó: «${c.heard}»</div>` : ""}
-    ${c.sigs?.length ? `<div class="nc-code">📡 ${c.sigs.slice(-4).join(" ")}</div>` : ""}
+    ${c.social?.length ? `<div class="nc-feed">${c.social.slice(-3).map((s) => "· " + s).join("<br>")}</div>` : ""}
+    ${c.sigs?.length ? `<div class="nc-code">📡 hablando en código: ${c.sigs.slice(-4).join(" ")}</div>` : ""}
     ${L ? `<div class="nc-row">🎯 ${L.goal} <span class="rbar"><i style="width:${Math.round(L.goalProg * 100)}%"></i></span></div><div class="nc-row">🎨 ${L.hobby} · «${L.quirk}»</div>` : ""}
     ${relsRow}
     <div class="nc-row">💰 ${Math.round(c.money)} · ${c.money > 800 ? "🎩 rico/a" : c.money > 200 ? "acomodado/a" : c.money > 15 ? "clase media" : "pobre"}${c.home.landlord && c.home.landlord !== c.id && c.home.surname !== c.surname ? " · 🔑 inquilino/a" : ""}${world.houses.some((h) => h.landlord === c.id) ? " · 🏘 propietario/a" : ""}</div>
