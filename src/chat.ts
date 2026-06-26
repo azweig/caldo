@@ -1,3 +1,4 @@
+import { rand } from "./rng"
 // chat.ts — give every creature a voice. If an LLM is configured (llm.ts → your GPU box), each
 // creature speaks fluidly IN CHARACTER, conditioned on its personality + real life state + memory of
 // past chats with you. If not, a built-in templated voice keeps it working offline. respond() picks
@@ -114,7 +115,7 @@ const lastSaid = new Map<number, string>()
 function vary(c: Creature, options: string[]): string {
   const last = lastSaid.get(c.id)
   const pool = options.length > 1 ? options.filter((o) => o !== last) : options
-  const r = pool[Math.floor(Math.random() * pool.length)]
+  const r = pool[Math.floor(rand() * pool.length)]
   lastSaid.set(c.id, r)
   return r
 }

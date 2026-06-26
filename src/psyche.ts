@@ -1,3 +1,4 @@
+import { rand } from "./rng"
 // psyche.ts — psychology-grounded personalities. Three layers, all heritable:
 //   1) Big Five / OCEAN (Costa & McCrae) — the validated trait model, continuous (0..1).
 //   2) Enneagram core (9 types) — the deep DESIRE + FEAR + central belief that drives behaviour.
@@ -58,7 +59,7 @@ const BELIEF_STANCES: ((s: string) => string)[] = [
   (s) => `${cap(s)} corrompe a quien lo persigue`,
   (s) => `el que comprende ${s} no muere del todo`,
 ]
-const rnd = <T>(a: T[]): T => a[Math.floor(Math.random() * a.length)]
+const rnd = <T>(a: T[]): T => a[Math.floor(rand() * a.length)]
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
 export function genBelief(): string {
   return rnd(BELIEF_STANCES)(rnd(BELIEF_SUBJECTS))
@@ -67,30 +68,30 @@ export function genBelief(): string {
     .replace(/^(Los|Las) (\S+) traerá /, "$1 $2 traerán ")
 }
 
-const randFive = (): BigFive => ({ o: Math.random(), c: Math.random(), e: Math.random(), a: Math.random(), n: Math.random() })
+const randFive = (): BigFive => ({ o: rand(), c: rand(), e: rand(), a: rand(), n: rand() })
 const applyLean = (f: BigFive, l: Partial<BigFive>): BigFive => ({ o: cl(f.o + (l.o || 0)), c: cl(f.c + (l.c || 0)), e: cl(f.e + (l.e || 0)), a: cl(f.a + (l.a || 0)), n: cl(f.n + (l.n || 0)) })
 
 function pickBeliefs(n: number, from = BELIEFS): string[] {
   const pool = [...from], out: string[] = []
-  for (let i = 0; i < n && pool.length; i++) out.push(pool.splice(Math.floor(Math.random() * pool.length), 1)[0])
+  for (let i = 0; i < n && pool.length; i++) out.push(pool.splice(Math.floor(rand() * pool.length), 1)[0])
   return out
 }
 
 export function randomPsyche(): Psyche {
-  const type = Math.floor(Math.random() * ENNEAGRAM.length)
-  return { five: applyLean(randFive(), ENNEAGRAM[type].lean), type, beliefs: pickBeliefs(2 + (Math.random() < 0.5 ? 0 : 1)) }
+  const type = Math.floor(rand() * ENNEAGRAM.length)
+  return { five: applyLean(randFive(), ENNEAGRAM[type].lean), type, beliefs: pickBeliefs(2 + (rand() < 0.5 ? 0 : 1)) }
 }
 
 // children inherit a blended Big Five (+noise), usually a parent's core, and a mix of parents' beliefs
 // — with a small chance of a NEW belief (drift) so cultures evolve down the generations.
 export function inheritPsyche(a: Psyche, b: Psyche): Psyche {
-  const mix = (x: number, y: number) => cl((x + y) / 2 + (Math.random() * 2 - 1) * 0.14)
+  const mix = (x: number, y: number) => cl((x + y) / 2 + (rand() * 2 - 1) * 0.14)
   const five: BigFive = { o: mix(a.five.o, b.five.o), c: mix(a.five.c, b.five.c), e: mix(a.five.e, b.five.e), a: mix(a.five.a, b.five.a), n: mix(a.five.n, b.five.n) }
-  const type = Math.random() < 0.7 ? (Math.random() < 0.5 ? a.type : b.type) : Math.floor(Math.random() * ENNEAGRAM.length)
+  const type = rand() < 0.7 ? (rand() < 0.5 ? a.type : b.type) : Math.floor(rand() * ENNEAGRAM.length)
   const inherited = [...new Set([...a.beliefs, ...b.beliefs])]
   const beliefs = pickBeliefs(Math.min(2, inherited.length), inherited)
   // cultural drift: a new generation may take up a belief from elsewhere — or INVENT one nobody held before
-  if (Math.random() < 0.32) { const fresh = Math.random() < 0.45 ? genBelief() : pickBeliefs(1)[0]; if (fresh && !beliefs.includes(fresh)) beliefs.push(fresh) }
+  if (rand() < 0.32) { const fresh = rand() < 0.45 ? genBelief() : pickBeliefs(1)[0]; if (fresh && !beliefs.includes(fresh)) beliefs.push(fresh) }
   return { five, type, beliefs }
 }
 

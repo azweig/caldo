@@ -1,3 +1,4 @@
+import { rand } from "./rng"
 // society.ts — the economic + legal + cultural layer that runs each periodic tick on a World.
 // Money flows (living costs, merchants, entrepreneurs, bankruptcy), crime + Noahide courts ("black sheep"),
 // and creative works (books + art) by the rare openness-rich creators. Every notable act is logged as a
@@ -9,7 +10,7 @@ import { feel, bond } from "./life"
 import { conscience, NOAHIDE } from "./morality"
 import { runPolitics } from "./politics"
 
-const rnd = <T>(a: T[]): T => a[Math.floor(Math.random() * a.length)]
+const rnd = <T>(a: T[]): T => a[Math.floor(rand() * a.length)]
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
 
 const BOOK_THEMES = ["el origen del mundo", "los astros y el destino", "la memoria de los ancestros", "el arte de gobernar", "la naturaleza del alma", "viajes a tierras lejanas", "el amor y la pérdida", "las leyes de los números", "la caída de los reinos", "sueños y presagios"]
@@ -62,14 +63,14 @@ export function runSociety(w: World, wild: Creature[]) {
   if (sellers.length) { const share = Math.min(pot * 0.5 / sellers.length, 60 + w.era * 8); for (const s of sellers) s.money += share } // merchants collect part of spending, capped
   for (const c of adults) {
     const entrepreneurial = c.archetype === "emprendedor" || (c.psyche.five.o > 0.58 && c.psyche.five.n < 0.46 && c.psyche.five.e > 0.5)
-    if (entrepreneurial && !c.business && c.money > 35 && Math.random() < (c.archetype === "emprendedor" ? 0.08 : 0.03)) {
+    if (entrepreneurial && !c.business && c.money > 35 && rand() < (c.archetype === "emprendedor" ? 0.08 : 0.03)) {
       c.business = true; c.money -= 25
       w.logDeed({ day: w.clockDays, gen: c.generation, who: c.id, name: `${c.name} ${c.surname}`, kind: "negocio", text: "fundó un negocio", impact: 6 })
     }
     if (c.business) {
       c.money += price * 4
       const risk = 0.02 + 0.06 * (1 - c.psyche.five.c)
-      if (c.money < 0 || Math.random() < risk) {
+      if (c.money < 0 || rand() < risk) {
         c.business = false; c.money = Math.max(c.money, -25)
         w.logDeed({ day: w.clockDays, gen: c.generation, who: c.id, name: `${c.name} ${c.surname}`, kind: "quiebra", text: "quebró su negocio", impact: -3 })
       }
@@ -84,15 +85,15 @@ export function runSociety(w: World, wild: Creature[]) {
     const con = conscience(personOf(c))
     const stress = c.irritability * 0.5 + (1 - c.mental / 100) * 0.5 // desperation + a short fuse
     if (con - stress * 0.45 > 0.28) continue // the desperate + irritable cross the line more easily
-    if (Math.random() > (0.4 - con + stress * 0.3) * 0.08) continue
+    if (rand() > (0.4 - con + stress * 0.3) * 0.08) continue
     const victim = rnd(adults.filter((o) => o !== c))
     if (!victim) continue
     let lawKey = "robo"
-    if (c.dark.psycho > 0.6 && Math.random() < 0.28) lawKey = "asesinato"
-    else if (c.partner && c.dark.mach > 0.5 && Math.random() < 0.3) lawKey = "inmoralidad"
+    if (c.dark.psycho > 0.6 && rand() < 0.28) lawKey = "asesinato"
+    else if (c.partner && c.dark.mach > 0.5 && rand() < 0.3) lawKey = "inmoralidad"
     c.crimes = (c.crimes || 0) + 1
     const law = NOAHIDE.find((l) => l.key === lawKey)!
-    const caught = Math.random() < 0.35 + w.era * 0.02 // better institutions catch more
+    const caught = rand() < 0.35 + w.era * 0.02 // better institutions catch more
     if (lawKey === "asesinato") {
       const vi = w.creatures.indexOf(victim); if (vi >= 0) { w.creatures.splice(vi, 1); w.deaths++; w.deathCauses.violencia++ }
       w.logDeed({ day: w.clockDays, gen: c.generation, who: c.id, name: `${c.name} ${c.surname}`, kind: "crimen", text: `asesinó a ${victim.name} ${victim.surname}`, impact: -20 })
@@ -104,7 +105,7 @@ export function runSociety(w: World, wild: Creature[]) {
       if (c.life) c.life.rep = Math.max(-1, c.life.rep - 0.2)
       if (lawKey === "inmoralidad") { // an affair — the betrayed partner burns with jealousy
         const sp = w.creatures.find((o) => o.id === c.partner)
-        if (sp?.life && Math.random() < 0.5) { feel(sp, "celoso", 0.85); sp.mental = Math.max(0, sp.mental - 10); bond(sp, c.id, -0.7); if (Math.random() < 0.5) { sp.partner = 0; c.partner = 0; sp.pregnant = 0 } }
+        if (sp?.life && rand() < 0.5) { feel(sp, "celoso", 0.85); sp.mental = Math.max(0, sp.mental - 10); bond(sp, c.id, -0.7); if (rand() < 0.5) { sp.partner = 0; c.partner = 0; sp.pregnant = 0 } }
       } else { feel(victim, "enojado", 0.7); bond(victim, c.id, -0.6) } // the victim resents the thief
       if (caught) { c.money -= price * 10 * (0.4 + 0.6 * law.severity); w.logDeed({ day: w.clockDays, gen: c.generation, who: c.id, name: `${c.name} ${c.surname}`, kind: "justicia", text: "multado por el tribunal", impact: 0 }) }
     }
@@ -115,14 +116,14 @@ export function runSociety(w: World, wild: Creature[]) {
     const writer = !!c.profBase && c.profBase.toLowerCase().includes("escrit")
     const artist = c.profCat === "arte"
     if ((!writer && !artist) || c.psyche.five.o < 0.6) continue
-    if (Math.random() > 0.015 + 0.03 * c.psyche.five.o) continue
+    if (rand() > 0.015 + 0.03 * c.psyche.five.o) continue
     const impact = Math.round(4 + c.knowledge / 12 + c.psyche.five.o * 6)
-    if (writer || Math.random() < 0.4) {
+    if (writer || rand() < 0.4) {
       const title = `«${cap(rnd(BOOK_THEMES))}»`
       w.logDeed({ day: w.clockDays, gen: c.generation, who: c.id, name: `${c.name} ${c.surname}`, kind: "libro", text: `escribió ${title}`, impact, content: `${rnd(BOOK_OPENERS)} …` })
     } else {
       const title = `${rnd(ART_FORMS)} sobre ${rnd(ART_SUBJ)}`
-      w.logDeed({ day: w.clockDays, gen: c.generation, who: c.id, name: `${c.name} ${c.surname}`, kind: "obra", text: `creó ${title}`, impact, content: ART_DESC[Math.floor(Math.random() * ART_DESC.length)] })
+      w.logDeed({ day: w.clockDays, gen: c.generation, who: c.id, name: `${c.name} ${c.surname}`, kind: "obra", text: `creó ${title}`, impact, content: ART_DESC[Math.floor(rand() * ART_DESC.length)] })
     }
     w.wisdom = Math.min(100, w.wisdom + impact * 0.04)
     if (c.life) { feel(c, "orgulloso", 0.8); c.life.rep = Math.min(1, c.life.rep + 0.15); if (c.life.goalKey === "obra") c.life.goalProg = Math.min(1, c.life.goalProg + 0.18) } // the artist's pride + renown

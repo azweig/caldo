@@ -9,6 +9,7 @@ import { Cat, Boosts, Prof, Tech, PROFS, TECHS, availableProfs, availableTechs, 
 import { Life, newLife, lifeTick, feel, bond, decideIntent } from "./life"
 import { Sig, KIND, codeOf, decode } from "./comms"
 import { Animal, SPECIES, SPECIES_KEYS, Enemy, ENEMIES } from "./animals"
+import { rand } from "./rng"
 import { pickReligion, EconSystem } from "./civconfig"
 import { genPerson, inheritDark, classify, DarkTriad, Archetype } from "./population"
 import { runSociety } from "./society"
@@ -54,8 +55,8 @@ const POP_CAP = 280 // per country (several countries simulate at once now)
 // realistic multiple-birth odds: ~3% twins, ~0.2% triplets, else a single
 // a struggling tribe rebounds with big broods (boom>1 when the population is small) — a baby-boom rebound
 function litterSize(boom = 1): number {
-  const r = Math.random()
-  if (boom > 2 && r < 0.1) return 3 + Math.floor(Math.random() * 2) // 3-4 children at once when near-wiped
+  const r = rand()
+  if (boom > 2 && r < 0.1) return 3 + Math.floor(rand() * 2) // 3-4 children at once when near-wiped
   return r < 0.004 * boom ? 3 : r < 0.04 * boom ? 2 : 1
 }
 
@@ -137,13 +138,13 @@ const SURNAMES = ["Vdel", "Korr", "Mire", "Saum", "Theli", "Nax", "Orbe", "Pell"
 // when a couple founds their own household the family tree BRANCHES: one line absorbs the other, or a wholly
 // new blended surname is born (a new dynasty). this is what makes lineages split + recombine over generations.
 function foundSurname(a: string, b: string): string {
-  if (Math.random() < 0.5) return a.length >= b.length ? a : b // one line carries on
+  if (rand() < 0.5) return a.length >= b.length ? a : b // one line carries on
   const s = a.slice(0, Math.max(2, Math.ceil(a.length / 2))) + b.slice(Math.floor(b.length / 2)).toLowerCase()
   return s[0].toUpperCase() + s.slice(1)
 }
-const rnd = <T>(a: T[]): T => a[Math.floor(Math.random() * a.length)]
+const rnd = <T>(a: T[]): T => a[Math.floor(rand() * a.length)]
 function given(): string {
-  let s = ""; const n = 2 + Math.floor(Math.random() * 2)
+  let s = ""; const n = 2 + Math.floor(rand() * 2)
   for (let i = 0; i < n; i++) s += rnd(GIVEN)
   return s[0].toUpperCase() + s.slice(1)
 }
@@ -162,6 +163,9 @@ export function formatClock(minutes: number): string {
 const clampn = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v))
 
 let NEXT_ID = 1
+// creature ids are a process-global counter (shared across all country Worlds so ids never collide between
+// them). Reset it when a fresh seeded game starts so a run is fully reproducible from (seed) alone.
+export function resetCreatureIds(): void { NEXT_ID = 1 }
 
 export class World {
   width = WORLD_W
@@ -228,16 +232,16 @@ export class World {
     let si = 0
     for (let bx = BLOCK; bx < WORLD_W - BLOCK / 2; bx += BLOCK) {
       for (let by = BLOCK; by < WORLD_H - BLOCK / 2; by += BLOCK) {
-        if (Math.random() < 0.25) continue // some empty lots
+        if (rand() < 0.25) continue // some empty lots
         const w = 58, h = 50
-        const cx = bx + BLOCK / 2 + (Math.random() * 40 - 20)
-        const cy = by + BLOCK / 2 + (Math.random() * 30 - 15)
+        const cx = bx + BLOCK / 2 + (rand() * 40 - 20)
+        const cy = by + BLOCK / 2 + (rand() * 30 - 15)
         this.houses.push({ x: cx - w / 2, y: cy - h / 2, w, h, surname: SURNAMES[si % SURNAMES.length], hue: (si * 47) % 360, tier: 0, value: 30, rent: 0, landlord: 0 })
         si++
       }
     }
     // gardens (food grows here) — a few per quadrant, off the houses
-    for (let i = 0; i < 16; i++) this.gardens.push({ x: MARGIN + Math.random() * (WORLD_W - 2 * MARGIN), y: MARGIN + Math.random() * (WORLD_H - 2 * MARGIN) })
+    for (let i = 0; i < 16; i++) this.gardens.push({ x: MARGIN + rand() * (WORLD_W - 2 * MARGIN), y: MARGIN + rand() * (WORLD_H - 2 * MARGIN) })
 
     // schools — the two seats of learning; the cultural ratchet flows through here
     this.schools.push({ x: WORLD_W * 0.33 - 48, y: WORLD_H * 0.5 - 40, w: 96, h: 80 })
@@ -255,11 +259,11 @@ export class World {
     for (let i = 0; i < FOUNDERS; i++) {
       const f = i % FAMILIES, home = famHome[f]
       const c = this.spawn(randomGenome(spriteCount), 1, home)
-      c.ageDays = Math.random() * 38 * DAYS_PER_YEAR
-      c.knowledge = startKnow + Math.random() * 28
+      c.ageDays = rand() * 38 * DAYS_PER_YEAR
+      c.knowledge = startKnow + rand() * 28
       c.religion = famReligion[f] // a household shares its faith
-      c.powerHungry = Math.random() < this.psychopathy
-      c.x = home.x + Math.random() * 30; c.y = home.y + Math.random() * 30
+      c.powerHungry = rand() < this.psychopathy
+      c.x = home.x + rand() * 30; c.y = home.y + rand() * 30
       this.assignProfession(c)
       this.creatures.push(c)
     }
@@ -279,7 +283,7 @@ export class World {
     this.era = era
   }
 
-  private lifespanFor(g: Genome): number { return Math.round(g.longevity * DAYS_PER_YEAR * (0.9 + Math.random() * 0.2) * (1 + this.techBoost.life)) }
+  private lifespanFor(g: Genome): number { return Math.round(g.longevity * DAYS_PER_YEAR * (0.9 + rand() * 0.2) * (1 + this.techBoost.life)) }
 
   // ── profession: chosen at maturity from what's available, biased by family, fit, popularity + need ──
   private fit(cat: Cat, c: Creature): number {
@@ -319,7 +323,7 @@ export class World {
     const avail = availableProfs(this.era, this.universities.length > 0, c.knowledge)
     const pool = avail.length ? avail : PROFS.filter((p) => p.e === 0)
     const weights = pool.map((p) => this.profWeight(p, c))
-    let r = Math.random() * weights.reduce((a, b) => a + b, 0)
+    let r = rand() * weights.reduce((a, b) => a + b, 0)
     let chosen = pool[pool.length - 1]
     for (let i = 0; i < pool.length; i++) { r -= weights[i]; if (r <= 0) { chosen = pool[i]; break } }
     c.profBase = chosen.n; c.profCat = chosen.c
@@ -333,7 +337,7 @@ export class World {
   // a deeply mismatched, unhappy worker may RETRAIN into a trade that fits them better (career change)
   private maybeRetrain(c: Creature) {
     if (!c.life || !c.profBase || c.life.vocFit > 0.4 || c.mental > 45 || c.life.mastery > 0.5) return
-    if (Math.random() > 0.04) return
+    if (rand() > 0.04) return
     const prev = c.profBase; c.heritProf = "" // free choice this time
     c.profBase = ""; c.life.mastery = 0; this.assignProfession(c)
     if (c.profBase !== prev) { feel(c, "esperanzado", 0.5); this.logEvent(`${c.name} ${c.surname} dejó de ser ${prev} y aprendió ${c.profBase}`) }
@@ -440,7 +444,7 @@ export class World {
       profession: "", profBase: "", profCat: "", heritProf: "",
       religion: "", powerHungry: false, money: 0, controlled: false,
       dark: person.dark, archetype: classify(ps.five, person.dark), crimes: 0, business: false,
-      health: 88, mental: 78, irritability: Math.max(0.05, Math.min(0.95, ps.five.n * 0.6 + Math.random() * 0.2)),
+      health: 88, mental: 78, irritability: Math.max(0.05, Math.min(0.95, ps.five.n * 0.6 + rand() * 0.2)),
     }
     c.life = newLife(c)
     return c
@@ -448,15 +452,15 @@ export class World {
 
   scatterFood() {
     const g = rnd(this.gardens)
-    this.food.push({ x: clampn(g.x + (Math.random() * 2 - 1) * 90, MARGIN, WORLD_W - MARGIN), y: clampn(g.y + (Math.random() * 2 - 1) * 90, MARGIN, WORLD_H - MARGIN) })
+    this.food.push({ x: clampn(g.x + (rand() * 2 - 1) * 90, MARGIN, WORLD_W - MARGIN), y: clampn(g.y + (rand() * 2 - 1) * 90, MARGIN, WORLD_H - MARGIN) })
   }
 
   // the town GROWS: build a house in a free lot (the world stops being static as the population rises)
   private addHouse(surname: string): House | null {
     for (let t = 0; t < 40; t++) {
       // anywhere with room (not only block corners) so the town can keep sprouting new households
-      const cx = MARGIN + 45 + Math.random() * (WORLD_W - 2 * MARGIN - 90)
-      const cy = MARGIN + 45 + Math.random() * (WORLD_H - 2 * MARGIN - 90)
+      const cx = MARGIN + 45 + rand() * (WORLD_W - 2 * MARGIN - 90)
+      const cy = MARGIN + 45 + rand() * (WORLD_H - 2 * MARGIN - 90)
       let ok = true
       for (const h of this.houses) if ((h.x + h.w / 2 - cx) ** 2 + (h.y + h.h / 2 - cy) ** 2 < 62 * 62) { ok = false; break }
       if (ok) { const h: House = { x: cx - 29, y: cy - 25, w: 58, h: 50, surname, hue: (this.houses.length * 47) % 360, tier: 0, value: 30, rent: 0, landlord: 0 }; this.houses.push(h); return h }
@@ -486,11 +490,11 @@ export class World {
     // leaves a full-text memory (so memory stays light). gossip, ideas, feelings spread through the codes.
     const pairs = Math.min(30, Math.ceil(wild.length / 5))
     for (let k = 0; k < pairs; k++) {
-      const a = wild[Math.floor(Math.random() * wild.length)]
+      const a = wild[Math.floor(rand() * wild.length)]
       const b = this.nearestCreature(a, 70, (o) => !o.isAvatar && o !== a)
       if (!b) continue
       this.exchangeSignals(a, b, wild)
-      if (Math.random() < 0.2) { const [na, nb] = this.socialNotes(a, b); a.social.push(na); b.social.push(nb); while (a.social.length > 6) a.social.shift(); while (b.social.length > 6) b.social.shift() }
+      if (rand() < 0.2) { const [na, nb] = this.socialNotes(a, b); a.social.push(na); b.social.push(nb); while (a.social.length > 6) a.social.shift(); while (b.social.length > 6) b.social.shift() }
     }
   }
   // two minds trade a burst of compact signals — each updates the other (bonds, reputation, knowledge, mood)
@@ -498,14 +502,14 @@ export class World {
     const sigs: Sig[] = []
     const click = ((a.psyche.five.a + b.psyche.five.a) / 2 - 0.4) - Math.abs(a.psyche.five.e - b.psyche.five.e) * 0.25
     const kin = a.surname === b.surname ? 0.08 : 0, neigh = (a.home.x - b.home.x) ** 2 + (a.home.y - b.home.y) ** 2 < 160 * 160 ? 0.05 : 0
-    if (a.irritability > 0.6 && b.irritability > 0.6 && Math.random() < 0.4) { bond(a, b.id, -0.18); bond(b, a.id, -0.18); feel(a, "enojado", 0.5); feel(b, "enojado", 0.5); sigs.push({ k: KIND.EMOTE, s: a.id, v: -5 }) }
+    if (a.irritability > 0.6 && b.irritability > 0.6 && rand() < 0.4) { bond(a, b.id, -0.18); bond(b, a.id, -0.18); feel(a, "enojado", 0.5); feel(b, "enojado", 0.5); sigs.push({ k: KIND.EMOTE, s: a.id, v: -5 }) }
     else { bond(a, b.id, click * 0.07 + kin + neigh); bond(b, a.id, click * 0.07 + kin + neigh); sigs.push({ k: KIND.GREET, s: b.id, v: click > 0 ? 2 : -2 }) }
-    if (a.dark.mach > 0.6 && Math.random() < 0.25) bond(b, a.id, -0.12)
+    if (a.dark.mach > 0.6 && rand() < 0.25) bond(b, a.id, -0.12)
     // KINDRED SPIRITS: people who share a trade, a hobby or a life dream click — they bond + trade more ideas
     const shared = (a.profCat && a.profCat === b.profCat) || (a.life?.hobby && a.life.hobby === b.life?.hobby) || (a.life?.goalKey && a.life.goalKey === b.life?.goalKey)
     if (shared) { bond(a, b.id, 0.05); bond(b, a.id, 0.05); if (a.knowledge !== b.knowledge) { const hi = a.knowledge > b.knowledge ? a : b, lo = hi === a ? b : a; lo.knowledge = Math.min(hi.knowledge, lo.knowledge + 0.4) } }
     // GOSSIP / WARN about a third party — reputation travels the network
-    const third = wild[Math.floor(Math.random() * wild.length)]
+    const third = wild[Math.floor(rand() * wild.length)]
     if (third !== a && third !== b && third.life && Math.abs(third.life.rep) > 0.12) {
       bond(a, third.id, third.life.rep * 0.04); bond(b, third.id, third.life.rep * 0.04)
       const g: Sig = { k: third.life.rep < -0.3 ? KIND.WARN : KIND.GOSSIP, s: third.id, v: third.life.rep * 6 }
@@ -519,19 +523,19 @@ export class World {
     // OPINION / BELIEF spreads — the more charismatic + respected talker can pass on a conviction (or a faith)
     const persuader = (a.psyche.five.e + (a.life?.rep || 0)) > (b.psyche.five.e + (b.life?.rep || 0)) ? a : b, listener = persuader === a ? b : a
     const charisma = persuader.psyche.five.e * (0.55 + (persuader.life?.rep || 0) * 0.45)
-    if (persuader.psyche.beliefs.length && listener.psyche.beliefs.length && Math.random() < 0.06 * charisma) {
-      const blf = persuader.psyche.beliefs[Math.floor(Math.random() * persuader.psyche.beliefs.length)]
-      if (!listener.psyche.beliefs.includes(blf)) { listener.psyche.beliefs[Math.floor(Math.random() * listener.psyche.beliefs.length)] = blf; sigs.push({ k: KIND.OPINION, s: persuader.id, v: 3 }) }
+    if (persuader.psyche.beliefs.length && listener.psyche.beliefs.length && rand() < 0.06 * charisma) {
+      const blf = persuader.psyche.beliefs[Math.floor(rand() * persuader.psyche.beliefs.length)]
+      if (!listener.psyche.beliefs.includes(blf)) { listener.psyche.beliefs[Math.floor(rand() * listener.psyche.beliefs.length)] = blf; sigs.push({ k: KIND.OPINION, s: persuader.id, v: 3 }) }
     }
-    if (persuader.religion && listener.religion && persuader.religion !== listener.religion && Math.random() < 0.015 * charisma) { listener.religion = persuader.religion; if (listener.life) feel(listener, "esperanzado", 0.3) } // a conversion of faith
+    if (persuader.religion && listener.religion && persuader.religion !== listener.religion && rand() < 0.015 * charisma) { listener.religion = persuader.religion; if (listener.life) feel(listener, "esperanzado", 0.3) } // a conversion of faith
     // NEWS spreads with NETWORK EFFECTS: juicy + already-popular news goes viral, and a chatty extravert is an
     // influencer who pushes it further. as it travels it can MUTATE — sentiment distorts into misinformation.
     if (this.news.length) {
-      const n = this.news[this.news.length - 1 - Math.floor(Math.random() * Math.min(5, this.news.length))]
+      const n = this.news[this.news.length - 1 - Math.floor(rand() * Math.min(5, this.news.length))]
       const influence = 0.22 * (0.6 + a.psyche.five.e * 0.8) * (1 + Math.min(2, n.reach * 0.012)) // viral + influencer
-      if (Math.random() < influence) {
+      if (rand() < influence) {
         n.reach++; b.heard = n.txt; sigs.push({ k: KIND.NEWS, s: 0, v: n.sent * 4 })
-        if (Math.random() < 0.06 && !n.txt.startsWith("(se dice)")) { n.sent = Math.max(-1, Math.min(1, n.sent + (Math.random() < 0.5 ? -0.7 : 0.7))); n.txt = "(se dice) " + n.txt } // the rumour distorts
+        if (rand() < 0.06 && !n.txt.startsWith("(se dice)")) { n.sent = Math.max(-1, Math.min(1, n.sent + (rand() < 0.5 ? -0.7 : 0.7))); n.txt = "(se dice) " + n.txt } // the rumour distorts
         if (n.sent < 0 && b.life) feel(b, "asustado", 0.2); else if (n.sent > 0 && b.life) feel(b, "alegre", 0.15)
       }
     }
@@ -575,14 +579,14 @@ export class World {
     for (const c of wild) { const a = occupants.get(c.home) || []; a.push(c); occupants.set(c.home, a) }
     // a rich aldeano invests spare coin in a vacant house → becomes a landlord
     for (const c of wild) {
-      if (c.money < 600 || ageYears(c) < 22 || Math.random() > 0.03) continue
+      if (c.money < 600 || ageYears(c) < 22 || rand() > 0.03) continue
       const vacant = this.houses.find((h) => !occupants.has(h) && h.landlord === 0 && h.surname !== c.surname)
       if (vacant) { vacant.landlord = c.id; vacant.rent = Math.max(2, Math.round(vacant.value * 0.05)); c.money -= vacant.value * 0.5; if (c.life) feel(c, "orgulloso", 0.4); this.logEvent(`${c.name} ${c.surname} compró una casa para alquilar`) }
     }
     // APARTMENT BUILDINGS: from the industrial era, a tycoon erects a tall block that houses many families
     if (this.era >= 9 && this.houses.filter((h) => h.tier === 4).length < Math.floor(wild.length / 45) && this.houses.length < 170) {
       const tycoon = wild.filter((c) => c.money > 1600 && ageYears(c) > 24).sort((a, b) => b.money - a.money)[0]
-      if (tycoon && Math.random() < 0.2) { const nh = this.addHouse(tycoon.surname); if (nh) { nh.tier = 4; nh.w = 74; nh.h = 66; nh.value = 2200; nh.rent = 18; nh.landlord = tycoon.id; tycoon.money -= 1100; this.logEvent(`${tycoon.name} ${tycoon.surname} construyó un edificio de apartamentos`) } }
+      if (tycoon && rand() < 0.2) { const nh = this.addHouse(tycoon.surname); if (nh) { nh.tier = 4; nh.w = 74; nh.h = 66; nh.value = 2200; nh.rent = 18; nh.landlord = tycoon.id; tycoon.money -= 1100; this.logEvent(`${tycoon.name} ${tycoon.surname} construyó un edificio de apartamentos`) } }
     }
     // tenants pay their landlord; the destitute fall behind (→ pressure toward homelessness)
     for (const c of wild) {
@@ -600,31 +604,31 @@ export class World {
     const want = Math.min(16, 4 + Math.floor(wild.length / 22))
     while (this.animals.length < want) { // wild animals wander in from the edges
       const avail = SPECIES_KEYS.filter((k) => SPECIES[k].era <= this.era)
-      const kind = avail[Math.floor(Math.random() * avail.length)]
-      const edge = Math.random() < 0.5
-      this.animals.push({ id: NEXT_ID++, x: edge ? MARGIN + Math.random() * 60 : WORLD_W - MARGIN - Math.random() * 60, y: MARGIN + Math.random() * (WORLD_H - 2 * MARGIN), vx: 0, vy: 0, kind, hp: SPECIES[kind].danger > 0 ? 3 : 1, tame: false, owner: 0 })
+      const kind = avail[Math.floor(rand() * avail.length)]
+      const edge = rand() < 0.5
+      this.animals.push({ id: NEXT_ID++, x: edge ? MARGIN + rand() * 60 : WORLD_W - MARGIN - rand() * 60, y: MARGIN + rand() * (WORLD_H - 2 * MARGIN), vx: 0, vy: 0, kind, hp: SPECIES[kind].danger > 0 ? 3 : 1, tame: false, owner: 0 })
     }
     const fighters = wild.filter((c) => isMature(c) && (c.profCat === "defensa" || c.profCat === "comida" || c.profCat === "exploración")).length // hunters + soldiers = the town's muscle
     const tamers = wild.filter((c) => isMature(c) && (c.profCat === "cuidado" || c.profCat === "comida")).length
     const cx = WORLD_W / 2, cy = WORLD_H / 2
     for (let i = this.animals.length - 1; i >= 0; i--) {
       const a = this.animals[i], sp = SPECIES[a.kind]
-      if (Math.random() < 0.08) { // beasts drift toward where the people are — predators to hunt, grazers to feed
+      if (rand() < 0.08) { // beasts drift toward where the people are — predators to hunt, grazers to feed
         const dx = cx - a.x, dy = cy - a.y, d = Math.hypot(dx, dy) || 1, pull = sp.hostile ? 1.4 : 0.9
-        a.vx = (dx / d) * pull + (Math.random() * 2 - 1) * 1.2; a.vy = (dy / d) * pull + (Math.random() * 2 - 1) * 1.2
+        a.vx = (dx / d) * pull + (rand() * 2 - 1) * 1.2; a.vy = (dy / d) * pull + (rand() * 2 - 1) * 1.2
       }
       if (a.tame) { const o = a.owner ? this.creatures.find((c) => c.id === a.owner) : null; if (o) { a.vx = (o.x - a.x) * 0.03 + a.vx * 0.5; a.vy = (o.y - a.y) * 0.03 + a.vy * 0.5 } a.x = clampn(a.x + a.vx, MARGIN, WORLD_W - MARGIN); a.y = clampn(a.y + a.vy, MARGIN, WORLD_H - MARGIN); continue } // pets follow their owner
       a.x = clampn(a.x + a.vx, MARGIN, WORLD_W - MARGIN); a.y = clampn(a.y + a.vy, MARGIN, WORLD_H - MARGIN)
       const v = this.nearestCreature({ x: a.x, y: a.y } as Creature, 110, (o) => !o.isAvatar && isMature(o))
       if (!v) continue
       if (sp.hostile) { // a PREDATOR is close to a villager
-        if (fighters > 0 && Math.random() < 0.5) { a.hp--; if (a.hp <= 0) { this.dropMeat(a.x, a.y, sp.food); this.animals.splice(i, 1); if (v.life) feel(v, "orgulloso", 0.4); this.logEvent(`cazaron un ${a.kind} que merodeaba`) } } // fought off → meat
-        else if (Math.random() < sp.danger * 0.3) { v.health = Math.max(0, v.health - 24); if (v.life) feel(v, "asustado", 0.85); this.logEvent(v.health <= 0 ? `un ${a.kind} mató a ${v.name} ${v.surname}` : `un ${a.kind} atacó a ${v.name} ${v.surname}`) } // it mauls a villager
-      } else if (sp.tameable && tamers > 0 && Math.random() < 0.12) { a.tame = true; a.owner = v.id; if (v.life) feel(v, "alegre", 0.4); this.logEvent(`${v.name} ${v.surname} domesticó un ${a.kind}`) } // tamed → livestock/pet
-      else if (sp.food > 0 && fighters > 0 && Math.random() < 0.1) { this.dropMeat(a.x, a.y, sp.food); this.animals.splice(i, 1) } // hunted for meat
+        if (fighters > 0 && rand() < 0.5) { a.hp--; if (a.hp <= 0) { this.dropMeat(a.x, a.y, sp.food); this.animals.splice(i, 1); if (v.life) feel(v, "orgulloso", 0.4); this.logEvent(`cazaron un ${a.kind} que merodeaba`) } } // fought off → meat
+        else if (rand() < sp.danger * 0.3) { v.health = Math.max(0, v.health - 24); if (v.life) feel(v, "asustado", 0.85); this.logEvent(v.health <= 0 ? `un ${a.kind} mató a ${v.name} ${v.surname}` : `un ${a.kind} atacó a ${v.name} ${v.surname}`) } // it mauls a villager
+      } else if (sp.tameable && tamers > 0 && rand() < 0.12) { a.tame = true; a.owner = v.id; if (v.life) feel(v, "alegre", 0.4); this.logEvent(`${v.name} ${v.surname} domesticó un ${a.kind}`) } // tamed → livestock/pet
+      else if (sp.food > 0 && fighters > 0 && rand() < 0.1) { this.dropMeat(a.x, a.y, sp.food); this.animals.splice(i, 1) } // hunted for meat
     }
   }
-  private dropMeat(x: number, y: number, n: number) { for (let k = 0; k < n; k++) this.food.push({ x: clampn(x + (Math.random() * 2 - 1) * 40, MARGIN, WORLD_W - MARGIN), y: clampn(y + (Math.random() * 2 - 1) * 40, MARGIN, WORLD_H - MARGIN) }) }
+  private dropMeat(x: number, y: number, n: number) { for (let k = 0; k < n; k++) this.food.push({ x: clampn(x + (rand() * 2 - 1) * 40, MARGIN, WORLD_W - MARGIN), y: clampn(y + (rand() * 2 - 1) * 40, MARGIN, WORLD_H - MARGIN) }) }
   // the town's fighting power: soldiers (by skill) + scouts + a militia of everyone else, sharper each era
   militaryStrength(): number {
     let s = 0
@@ -643,25 +647,25 @@ export class World {
       r.x = clampn(r.x + (dx / d) * 2.4, MARGIN, WORLD_W - MARGIN); r.y = clampn(r.y + (dy / d) * 2.4, MARGIN, WORLD_H - MARGIN)
       const v = this.nearestCreature({ x: r.x, y: r.y } as Creature, 95, (o) => !o.isAvatar && isMature(o))
       if (!v) continue
-      if (army > 3 && Math.random() < 0.28 + Math.min(0.4, army * 0.012)) { r.hp--; if (r.hp <= 0) { this.raiders.splice(i, 1); if (v.life) feel(v, "orgulloso", 0.5) } } // the militia cuts one down
-      else if (Math.random() < 0.06 * (ENEMIES[r.kind]?.power || 1)) { // a villager is struck + food/coin looted
+      if (army > 3 && rand() < 0.28 + Math.min(0.4, army * 0.012)) { r.hp--; if (r.hp <= 0) { this.raiders.splice(i, 1); if (v.life) feel(v, "orgulloso", 0.5) } } // the militia cuts one down
+      else if (rand() < 0.06 * (ENEMIES[r.kind]?.power || 1)) { // a villager is struck + food/coin looted
         const lethal = Math.max(0, 0.42 - army * 0.05) // the weaker the militia, the deadlier the raid
-        v.health = Math.max(0, Math.random() < lethal ? 0 : v.health - 30); v.money = Math.max(0, v.money - 25)
+        v.health = Math.max(0, rand() < lethal ? 0 : v.health - 30); v.money = Math.max(0, v.money - 25)
         if (v.life) feel(v, "asustado", 0.95); this.logEvent(v.health <= 0 ? `${v.name} ${v.surname} cayó ante ${ENEMIES[r.kind]?.label || "los invasores"}` : `${v.name} ${v.surname} fue herido en el ataque`)
         for (let k = 0; k < 5 && this.food.length; k++) this.food.pop()
       }
     }
-    if (this.raiders.length) { if (Math.random() < 0.05) { const n = this.raiders.length; this.raiders = []; this.logEvent(n > 0 ? `el pueblo resistió y los invasores huyeron` : ``) } return }
+    if (this.raiders.length) { if (rand() < 0.05) { const n = this.raiders.length; this.raiders = []; this.logEvent(n > 0 ? `el pueblo resistió y los invasores huyeron` : ``) } return }
     // chance to START a raid (per ~20-tick period)
     const avail = Object.keys(ENEMIES).filter((k) => this.era >= ENEMIES[k].min && this.era <= ENEMIES[k].max)
     if (!avail.length) return
     const wealth = wild.reduce((a, c) => a + c.money, 0) / wild.length
     const base = this.era < 9 ? 0.014 : 0.004 // pre-modern raiding common; modern terrorism rare
     const p = base * (1 + this.violence * 1.2) * (1 + Math.min(1.2, wealth / 350)) / (1 + army * 0.035)
-    if (Math.random() < p) {
-      const kind = avail[Math.floor(Math.random() * avail.length)]
-      const n = 2 + Math.floor(Math.random() * 4), ex = Math.random() < 0.5 ? MARGIN + 30 : WORLD_W - MARGIN - 30, ey = MARGIN + Math.random() * (WORLD_H - 2 * MARGIN)
-      for (let k = 0; k < n; k++) this.raiders.push({ x: ex + (Math.random() * 2 - 1) * 50, y: ey + (Math.random() * 2 - 1) * 50, vx: 0, vy: 0, kind, hp: 2 })
+    if (rand() < p) {
+      const kind = avail[Math.floor(rand() * avail.length)]
+      const n = 2 + Math.floor(rand() * 4), ex = rand() < 0.5 ? MARGIN + 30 : WORLD_W - MARGIN - 30, ey = MARGIN + rand() * (WORLD_H - 2 * MARGIN)
+      for (let k = 0; k < n; k++) this.raiders.push({ x: ex + (rand() * 2 - 1) * 50, y: ey + (rand() * 2 - 1) * 50, vx: 0, vy: 0, kind, hp: 2 })
       this.logEvent(`¡${ENEMIES[kind].label} ataca el pueblo!`)
     }
   }
@@ -674,9 +678,9 @@ export class World {
     this.marketPrice = this.marketPrice * 0.92 + target * 0.08 // prices drift toward supply/demand balance
     for (const c of wild) {
       if (c.profCat === "comercio") c.money += this.marketPrice * 3.2 // merchants live off the spread
-      if (c.money > 220 && Math.random() < 0.12) { // the well-off buy luxuries → artisans + merchants earn
+      if (c.money > 220 && rand() < 0.12) { // the well-off buy luxuries → artisans + merchants earn
         const spend = Math.min(c.money * 0.12, 35); c.money -= spend
-        const seller = wild[Math.floor(Math.random() * wild.length)]
+        const seller = wild[Math.floor(rand() * wild.length)]
         if (seller.profCat === "arte" || seller.profCat === "oficio" || seller.profCat === "comercio") seller.money += spend
         if (c.life) feel(c, "alegre", 0.28)
       }
@@ -690,12 +694,12 @@ export class World {
       if (c.life.condition === "sin techo") {
         c.health = Math.max(0, c.health - 0.6); c.mental = Math.max(0, c.mental - 0.5) // sleeping rough wears you down
         if (c.money > 28) { c.life.condition = ""; c.life.condDays = 0; feel(c, "esperanzado", 0.6); this.logEvent(`${c.name} ${c.surname} consiguió techo de nuevo`) }
-      } else if (c.money < 1 && c.mental < 38 && !c.life.condition && Math.random() < 0.025) {
+      } else if (c.money < 1 && c.mental < 38 && !c.life.condition && rand() < 0.025) {
         c.life.condition = "sin techo"; c.life.condDays = 9999; feel(c, "afligido", 0.65); c.life.rep = Math.max(-1, c.life.rep - 0.15); this.logEvent(`${c.name} ${c.surname} quedó en la calle`)
       }
       // MADNESS: crushing, prolonged despair can break a mind — they lose their trade and wander, muttering
       if (c.life.condition === "locura") { c.mental = Math.min(28, c.mental + 0.05); c.irritability = Math.min(1, c.irritability + 0.002) }
-      else if (c.mental < 11 && c.life.condition !== "locura" && Math.random() < 0.012) {
+      else if (c.mental < 11 && c.life.condition !== "locura" && rand() < 0.012) {
         c.life.condition = "locura"; c.life.condDays = 9999; c.profBase = ""; c.profCat = ""; c.profession = "perdió la razón"; feel(c, "asustado", 0.7); this.logEvent(`${c.name} ${c.surname} perdió la cordura`)
       }
     }
@@ -817,7 +821,7 @@ export class World {
         }
         if (!pick) continue
         const m = driveMatch(v.profCat, pick.drive)
-        if (m < 0.5 && Math.random() > 0.25) continue // outside your field you only dabble
+        if (m < 0.5 && rand() > 0.25) continue // outside your field you only dabble
         const curiosity = 0.7 + (v.archetype === "emprendedor" || v.archetype === "líder" ? 0.5 : 0)
         const connect = 1 + Math.min(0.55, Object.keys(v.life?.rels || {}).length * 0.07) // a well-connected mind has more idea inputs → COLLECTIVE intelligence
         const contrib = v.genome.intellect * (v.knowledge / 100) * m * curiosity * boost * INNOV_RATE * (this.cultureBias[pick.drive] ?? 1) * connect
@@ -845,8 +849,8 @@ export class World {
     // MARKET DAY: a few times a month merchants gather at the plaza to trade — extra coin + a hum of gossip
     if (this.clockDays % 14 === 0) for (const c of this.creatures) if (!c.isAvatar && c.life && (c.profCat === "comercio" || c.profCat === "oficio")) { c.money += 6; c.life.social = Math.min(100, c.life.social + 14) }
     // plague: a rare epidemic that can take the wise and tip the village into a dark age
-    if (this.clockDays > this.plagueUntil + 1500 && Math.random() < 0.00012) {
-      this.plagueUntil = this.clockDays + 130 + Math.floor(Math.random() * 160)
+    if (this.clockDays > this.plagueUntil + 1500 && rand() < 0.00012) {
+      this.plagueUntil = this.clockDays + 130 + Math.floor(rand() * 160)
       this.logEvent("⚠ una peste cayó sobre el pueblo")
     }
     const plague = this.clockDays < this.plagueUntil ? 3.4 : 1
@@ -880,7 +884,7 @@ export class World {
           if (c.life && (this.clockDays + c.id) % 3 === 0) c.life.intent = decideIntent(c)
           // higher education: a studious young adult enrols at the university to keep learning a trade
           const ay = ageYears(c)
-          if (c.life && this.universities[0] && ay >= 18 && ay <= 27 && c.psyche.five.c + c.psyche.five.o > 1.05 && c.energy > GO_FORAGE_AT && Math.random() < 0.5) c.life.intent = "estudiar"
+          if (c.life && this.universities[0] && ay >= 18 && ay <= 27 && c.psyche.five.c + c.psyche.five.o > 1.05 && c.energy > GO_FORAGE_AT && rand() < 0.5) c.life.intent = "estudiar"
           const intent = c.life?.intent || "comer"
           // hunger only commands them when they're genuinely hungry; the rest of the time they live their OWN life
           if (c.energy < 62 || intent === "comer") { const f = this.nearestFood(c, c.genome.vision * 3); const gd = this.nearestGarden(c); tx = f ? f.x : gd.x; ty = f ? f.y : gd.y }
@@ -951,11 +955,11 @@ export class World {
       const cling = this.creatures.length < 30 ? 0.32 : 1 // a near-wiped tribe clings to life (lower mortality) so it can recover
       // climate: the tropics breed fevers (summer worst), the cold lands sicken in deep winter
       const climS = this.region % 4 === 3 ? (seasonOf(this.clockDays) === 1 ? 1.7 : 1.3) : this.region % 4 === 1 && seasonOf(this.clockDays) === 3 ? 1.6 : 1
-      if (!c.sick) { if (Math.random() < 0.00009 * (1.25 - g.resistance) * ageRisk * plague / healthM * frail * climS) { c.sick = true; c.sickDays = 0 } }
+      if (!c.sick) { if (rand() < 0.00009 * (1.25 - g.resistance) * ageRisk * plague / healthM * frail * climS) { c.sick = true; c.sickDays = 0 } }
       else {
         c.sickDays++
-        if (Math.random() < 0.022 * (0.5 + g.resistance) * healthM) { c.sick = false; c.sickDays = 0 }
-        else if (Math.random() < 0.006 * (1.3 - g.resistance) * ageRisk / healthM * cling) { if (!c.isAvatar && !c.controlled) { this.deaths++; this.deathCauses.enfermedad++; continue } }
+        if (rand() < 0.022 * (0.5 + g.resistance) * healthM) { c.sick = false; c.sickDays = 0 }
+        else if (rand() < 0.006 * (1.3 - g.resistance) * ageRisk / healthM * cling) { if (!c.isAvatar && !c.controlled) { this.deaths++; this.deathCauses.enfermedad++; continue } }
       }
 
       if (!c.isAvatar && !c.controlled) {
@@ -963,26 +967,26 @@ export class World {
         else if (this.era < 2) c.energy = Math.max(c.energy, 48) // a hunter-gatherer BAND shares its catch — a stable tribe doesn't mass-starve (foraging tops them up well above this; this is the floor that keeps the long stone age alive + fertile)
         else if (c.energy < 25) c.energy = 25 // farming/market eras: food is BOUGHT — survival rides on health/money
         if (c.health <= 0) { this.deaths++; this.deathCauses.pobreza++; continue } // died of poverty (couldn't afford food/care)
-        if (c.ageDays > c.lifespanDays && Math.random() < (c.ageDays - c.lifespanDays) / (0.18 * c.lifespanDays) * cling) { if (c.life && c.life.rep > 0.35) { this.graves.push({ x: c.x, y: c.y, name: `${c.name} ${c.surname}` }); if (this.graves.length > 40) this.graves.shift() } this.deaths++; this.deathCauses.vejez++; continue } // a respected elder gets a remembered grave
-        if (isMature(c) && Math.random() < 0.0000052 * violenceRate) { this.deaths++; this.deathCauses.violencia++; this.logEvent(`${c.name} ${c.surname} murió en un acto de violencia`); continue }
+        if (c.ageDays > c.lifespanDays && rand() < (c.ageDays - c.lifespanDays) / (0.18 * c.lifespanDays) * cling) { if (c.life && c.life.rep > 0.35) { this.graves.push({ x: c.x, y: c.y, name: `${c.name} ${c.surname}` }); if (this.graves.length > 40) this.graves.shift() } this.deaths++; this.deathCauses.vejez++; continue } // a respected elder gets a remembered grave
+        if (isMature(c) && rand() < 0.0000052 * violenceRate) { this.deaths++; this.deathCauses.violencia++; this.logEvent(`${c.name} ${c.surname} murió en un acto de violencia`); continue }
       }
 
       // gestation → BIRTH (pairing + conception happen in the periodic demographics block below)
       if (!c.isAvatar && c.pregnant > 0) {
         c.pregnant--
-        if (c.life && Math.random() < 0.02) feel(c, "esperanzado", 0.45) // carrying a life, full of hope
+        if (c.life && rand() < 0.02) feel(c, "esperanzado", 0.45) // carrying a life, full of hope
         if (c.pregnant <= 0 && this.creatures.length + newborns.length < POP_CAP) {
           const mate = byId.get(c.partner)
           const mateG = mate ? mate.genome : randomGenome(this.spriteCount), mateP = mate ? mate.psyche : randomPsyche() // unknown father if out of wedlock
           const boom = this.creatures.length < 22 ? 3 : this.creatures.length < 40 ? 1.5 : 1 // only a tiny tribe has big broods; normal villages = mostly single births
           const litter = litterSize(boom)
           for (let b = 0; b < litter; b++) {
-            const child = this.spawn(recombine(g, mateG, this.spriteCount), c.generation + 1, c.home, c.home.x + (Math.random() * 24 - 12), c.home.y + (Math.random() * 18 - 9), inheritPsyche(c.psyche, mateP))
+            const child = this.spawn(recombine(g, mateG, this.spriteCount), c.generation + 1, c.home, c.home.x + (rand() * 24 - 12), c.home.y + (rand() * 18 - 9), inheritPsyche(c.psyche, mateP))
             child.energy = CHILD_ENERGY
             child.parents = [c.id, c.partner]
-            child.heritProf = Math.random() < 0.5 ? c.profBase : (mate ? mate.profBase : c.profBase)
-            child.religion = Math.random() < 0.85 ? (Math.random() < 0.5 ? c.religion : (mate ? mate.religion : c.religion)) : pickReligion(this.religionsCfg)
-            child.powerHungry = Math.random() < this.psychopathy * ((c.powerHungry || (mate && mate.powerHungry)) ? 1.8 : 1)
+            child.heritProf = rand() < 0.5 ? c.profBase : (mate ? mate.profBase : c.profBase)
+            child.religion = rand() < 0.85 ? (rand() < 0.5 ? c.religion : (mate ? mate.religion : c.religion)) : pickReligion(this.religionsCfg)
+            child.powerHungry = rand() < this.psychopathy * ((c.powerHungry || (mate && mate.powerHungry)) ? 1.8 : 1)
             child.dark = inheritDark(c.dark, mate ? mate.dark : c.dark); child.archetype = classify(child.psyche.five, child.dark)
             if (child.life) child.life.rep = (((c.life?.rep || 0) + (mate?.life?.rep || 0)) / 2) * 0.4 // born into the family's standing
             newborns.push(child); this.births++
@@ -1068,7 +1072,7 @@ export class World {
       const homeCt = new Map<House, number>(); for (const c of wild) homeCt.set(c.home, (homeCt.get(c.home) || 0) + 1)
       for (const c of wild) {
         if (c.partner || !c.life || c.psyche.five.o < 0.62 || c.money < 18) continue
-        const ay = ageYears(c); if (ay < 18 || ay > 30 || Math.random() > 0.012) continue
+        const ay = ageYears(c); if (ay < 18 || ay > 30 || rand() > 0.012) continue
         // a vacant rental, OR an apartment building with room (they hold many families)
         const rental = this.houses.find((h) => h.landlord && h.landlord !== c.id && h.surname !== c.surname && ((homeCt.get(h) || 0) === 0 || (h.tier === 4 && (homeCt.get(h) || 0) < 9)))
         if (rental) { c.home = rental; homeCt.set(rental, (homeCt.get(rental) || 0) + 1); feel(c, "esperanzado", 0.5); this.logEvent(`${c.name} ${c.surname} alquiló su primera casa`) }
@@ -1077,7 +1081,7 @@ export class World {
       // FRIENDS HELP each other: someone with means quietly lends a hand to a poor close friend
       for (const c of wild) {
         if (!c.life || c.money < 20) continue
-        for (const k of Object.keys(c.life.rels)) if (c.life.rels[+k] > 0.5) { const fr = byId.get(+k); if (fr && fr.money < 4 && Math.random() < 0.3) { fr.money += 6; c.money -= 6; feel(fr, "alegre", 0.4); break } }
+        for (const k of Object.keys(c.life.rels)) if (c.life.rels[+k] > 0.5) { const fr = byId.get(+k); if (fr && fr.money < 4 && rand() < 0.3) { fr.money += 6; c.money -= 6; feel(fr, "alegre", 0.4); break } }
       }
 
       // ── demographics: form couples, then conceive (logistic growth toward a tech-scaled capacity) ──
@@ -1088,7 +1092,7 @@ export class World {
         const p = byId.get(c.partner); if (!p) continue
         const incompat = Math.abs(c.psyche.five.a - p.psyche.five.a) + (c.religion && c.religion !== p.religion ? 0.3 : 0)
         const strain = (c.irritability + p.irritability) * 0.5 + (1 - (c.mental + p.mental) / 200) * 0.5 + incompat * 0.4
-        if (Math.random() < strain * 0.012) {
+        if (rand() < strain * 0.012) {
           c.partner = 0; p.partner = 0; c.pregnant = 0
           feel(c, "afligido", 0.7); feel(p, "afligido", 0.7); bond(c, p.id, -0.5); bond(p, c.id, -0.5) // heartbreak + resentment
           this.logDeed({ day: this.clockDays, gen: c.generation, who: c.id, name: `${c.name} ${c.surname}`, kind: "divorcio", text: `se divorció de ${p.name} ${p.surname}`, impact: -1 })
@@ -1109,7 +1113,7 @@ export class World {
           const compat = 1 - Math.abs(a.psyche.five.a - b.psyche.five.a) * 0.6 - (a.religion && a.religion !== b.religion ? 0.3 : 0)
           const warmth = (a.life?.rels[b.id] || 0) * 1.5, ageGap = Math.abs(ageYears(a) - ageYears(b)) / 22
           const coParent = Math.min(0.9, (aKids + (depKids.get(b.id) || 0)) * 0.18) // children to raise → a partner is sorely needed
-          const score = compat + warmth - ageGap + coParent + Math.random() * 0.5 // values + warmth + a spark of chemistry
+          const score = compat + warmth - ageGap + coParent + rand() * 0.5 // values + warmth + a spark of chemistry
           if (score > bs) { bs = score; best = b }
         }
         if (!best) continue
@@ -1120,8 +1124,8 @@ export class World {
         const cash = a.money + best.money
         const ct = new Map<House, number>(); for (const o of wild) ct.set(o.home, (ct.get(o.home) || 0) + 1)
         const rental = this.houses.find((h) => h.landlord && h.landlord !== a.id && h.landlord !== best.id && ((ct.get(h) || 0) === 0 || (h.tier === 4 && (ct.get(h) || 0) < 9)))
-        if (rental && (cash < 60 || Math.random() < 0.5)) { a.home = rental; best.home = rental } // become tenants
-        else if (this.houses.length < 130 && Math.random() < 0.7) {
+        if (rental && (cash < 60 || rand() < 0.5)) { a.home = rental; best.home = rental } // become tenants
+        else if (this.houses.length < 130 && rand() < 0.7) {
           const sn = foundSurname(a.surname, best.surname); const nh = this.addHouse(sn)
           if (nh) { a.home = nh; best.home = nh; a.surname = sn; best.surname = sn }
         }
@@ -1141,15 +1145,15 @@ export class World {
         const mate = byId.get(c.partner)!, mAy = ageYears(mate)
         if (mAy >= MATURITY_YEARS && mAy <= FERTILE_MAX && c.id > c.partner) continue // both fertile → only lower-id bears
         const parity = Math.max(0.2, 1 - c.children * 0.07) // fertility wanes after many children (age, fatigue) → families top out ~6-9, not 17
-        if (Math.random() < 0.85 * growth * parity) c.pregnant = GESTATION_MIN + Math.floor(Math.random() * 60) // conceive (~7-9 months)
+        if (rand() < 0.85 * growth * parity) c.pregnant = GESTATION_MIN + Math.floor(rand() * 60) // conceive (~7-9 months)
       }
       // children out of wedlock: an unpartnered fertile adult may conceive with a passing fling
       for (const c of wild) {
         if (c.partner || c.pregnant > 0) continue
         const ay = ageYears(c)
         if (ay < MATURITY_YEARS || ay > FERTILE_MAX || c.energy <= REPRO_MIN_ENERGY || this.clockDays - c.lastRepro < REPRO_COOLDOWN) continue
-        if (this.nearestCreature(c, 75, (o) => !o.isAvatar && isMature(o) && o !== c && ageYears(o) <= FERTILE_MAX) && Math.random() < 0.06 * growth) {
-          c.pregnant = GESTATION_MIN + Math.floor(Math.random() * 60) // single-parent pregnancy (father uninvolved)
+        if (this.nearestCreature(c, 75, (o) => !o.isAvatar && isMature(o) && o !== c && ageYears(o) <= FERTILE_MAX) && rand() < 0.06 * growth) {
+          c.pregnant = GESTATION_MIN + Math.floor(rand() * 60) // single-parent pregnancy (father uninvolved)
         }
       }
 
@@ -1162,11 +1166,11 @@ export class World {
       this.runAnimals(wild) // wild beasts roam, raid, get hunted or tamed
       this.runRaids(wild) // raids from beyond the map — savages, nomads, pirates, terrorists by era
       for (const n of this.news) n.reach = Math.max(1, n.reach - 0.6) // yesterday's news fades from the talk
-      if (Math.random() < 0.04 && wild.length > 20) { const v = wild[Math.floor(Math.random() * wild.length)]; this.news.push({ txt: `(rumor) dicen que ${v.name} ${v.surname} esconde algo`, sent: -0.6, reach: 1, day: this.clockDays }); if (this.news.length > 14) this.news.shift() } // a juicy false rumour is born
+      if (rand() < 0.04 && wild.length > 20) { const v = wild[Math.floor(rand() * wild.length)]; this.news.push({ txt: `(rumor) dicen que ${v.name} ${v.surname} esconde algo`, sent: -0.6, reach: 1, day: this.clockDays }); if (this.news.length > 14) this.news.shift() } // a juicy false rumour is born
     }
 
     if (this.creatures.filter((c) => !c.isAvatar).length < 8) { // keep a struggling village from going extinct
-      for (let i = 0; i < 10; i++) { const c = this.spawn(randomGenome(this.spriteCount), 1, rnd(this.houses)); c.ageDays = (16 + Math.random() * 16) * DAYS_PER_YEAR; this.assignProfession(c); this.creatures.push(c) }
+      for (let i = 0; i < 10; i++) { const c = this.spawn(randomGenome(this.spriteCount), 1, rnd(this.houses)); c.ageDays = (16 + rand() * 16) * DAYS_PER_YEAR; this.assignProfession(c); this.creatures.push(c) }
     }
   }
 }

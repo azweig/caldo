@@ -1,3 +1,4 @@
+import { rand } from "./rng"
 // civconfig.ts — how a civilisation is BORN. The player configures it once (or starts a new one,
 // which destroys the old): the starting era, the religious mix, how violent it is, what fraction are
 // power-obsessed "psychopaths", and how many monarchies vs independent republics. The world then
@@ -53,7 +54,7 @@ export function buildCountries(monarchies: number, republics: number): CountryCf
   const out: CountryCfg[] = []
   // a monarchy leans authoritarian (dictatorship); republics alternate capitalist / socialist — for variety
   const sysFor = (gov: Gov, i: number): EconSystem => gov === "monarquía" ? "dictadura" : (i % 2 ? "socialista" : "capitalista")
-  const pool = [...CULTURES].sort(() => Math.random() - 0.5) // each town gets a RANDOM distinct culture
+  const pool = [...CULTURES].sort(() => rand() - 0.5) // each town gets a RANDOM distinct culture
   const add = (gov: Gov, i: number) => { const cul = pool[i % pool.length]; out.push({ name: cul.name, flag: cul.flag, gov, lang: (i % 2 ? "en" : "es") as LangCode, system: sysFor(gov, i), culture: cul }) }
   let i = 0
   for (let m = 0; m < monarchies; m++) add("monarquía", i++)
@@ -76,7 +77,7 @@ export function defaultConfig(): CivConfig {
 /** pick a religion index by the configured weights */
 export function pickReligion(religions: { name: string; pct: number }[]): string {
   const total = religions.reduce((s, r) => s + Math.max(0, r.pct), 0) || 1
-  let r = Math.random() * total
+  let r = rand() * total
   for (const rel of religions) { r -= Math.max(0, rel.pct); if (r <= 0) return rel.name }
   return religions[0]?.name || "sin credo (ateos)"
 }

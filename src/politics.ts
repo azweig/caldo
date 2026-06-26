@@ -1,3 +1,4 @@
+import { rand } from "./rng"
 // politics.ts — the economic-political SYSTEM of a country shapes its society each periodic tick:
 //   capitalista → free market, no redistribution (high inequality), workers may unionise
 //   socialista  → the state taxes + shares wealth (low inequality), strong safety net
@@ -32,7 +33,7 @@ export function runPolitics(w: World, adults: Creature[], price: number) {
   // ── UNIONS — workers organise to raise the floor (banned/crushed under a dictatorship) ──
   if (sys !== "dictadura") {
     const workers = adults.filter((c) => !c.business && c.profCat !== "comercio" && c.profCat !== "liderazgo" && c.money < median)
-    if (workers.length >= 8 && Math.random() < 0.05) {
+    if (workers.length >= 8 && rand() < 0.05) {
       const leader = workers.reduce((b, c) => (c.psyche.five.e + c.psyche.five.a > b.psyche.five.e + b.psyche.five.a ? c : b), workers[0])
       for (const wk of workers) wk.money += price * 5 // collective bargaining
       w.logDeed({ day: w.clockDays, gen: leader.generation, who: leader.id, name: `${leader.name} ${leader.surname}`, kind: "sindicato", text: `organizó un sindicato de ${workers.length} trabajadores`, impact: 10 })
@@ -45,10 +46,10 @@ export function runPolitics(w: World, adults: Creature[], price: number) {
     const poverty = Math.max(0, 1 - (c.money + 20) / (median + 40))
     const oppression = sys === "dictadura" ? 0.55 : 0.08
     const urge = c.psyche.five.o * 0.4 + poverty * 0.4 + oppression * 0.5 - c.psyche.five.a * 0.3
-    if (Math.random() > urge * 0.018) continue
+    if (rand() > urge * 0.018) continue
     const name = `${c.name} ${c.surname}`
     if (sys === "dictadura") {
-      if (Math.random() < 0.55) {
+      if (rand() < 0.55) {
         const ci = w.creatures.indexOf(c); if (ci >= 0) { w.creatures.splice(ci, 1); w.deaths++; w.deathCauses.violencia++ }
         w.repressed++
         w.logDeed({ day: w.clockDays, gen: c.generation, who: c.id, name, kind: "represión", text: "desapareció por conspirar contra el régimen", impact: -6 })

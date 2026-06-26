@@ -4,11 +4,12 @@
 // Conversation pauses the world automatically, so you can talk at any time scale.
 
 import "./style.css"
-import { World, Creature, House, formatClock, ageYears, isMature, seasonOf, SEASONS, WORLD_W, WORLD_H } from "./world"
+import { World, Creature, House, formatClock, ageYears, isMature, seasonOf, SEASONS, WORLD_W, WORLD_H, resetCreatureIds } from "./world"
 import { loadAssets } from "./sprites"
 import { drawWorld, drawChart } from "./render"
 import { respond, greeting, remember, ambientDialogue } from "./chat"
 import { Msg, setLlm, pingLLM, autoDetect, llmConfigured, llmUrl, llmModel } from "./llm"
+import { seedRng, rngState, setRngState } from "./rng"
 import { eraName, professionSpace, ERAS, eraProgress } from "./civ"
 import { ENNEAGRAM } from "./psyche"
 import { LangCode, WRITE_LANG, langName, heard } from "./i18n"
@@ -128,6 +129,8 @@ let countries: Country[] = []
 let active = 0
 let migrateAcc = 0
 let frame = 0
+let gameSeed = 1          // the run's RNG seed (reproducible); persisted in the save
+let pendingCatchUp = 0    // offline-progression ticks still to process, chunked across frames
 let spriteCount = 8
 let loopStarted = false
 let saveAt = 0
@@ -840,6 +843,11 @@ function exitHouse() { const h = insideHouse; insideHouse = null; if (h && posse
 
 function loop() {
   frame++
+  if (pendingCatchUp > 0) { // offline progression, processed in small chunks per frame so the load never freezes
+    const chunk = Math.min(pendingCatchUp, 60)
+    for (let t = 0; t < chunk; t++) for (const c of countries) c.world.step()
+    pendingCatchUp -= chunk
+  }
   zoom += (targetZoom - zoom) * 0.12 // smooth cinematic zoom toward the target
   // you control your avatar OR the creature you possess, in REAL TIME (smooth) regardless of world speed
   const me = possessed || avatar
@@ -984,6 +992,8 @@ function startRunning() {
   if (!loopStarted) { loopStarted = true; setScale(scaleIndex); loop() }
 }
 function newGame(cfg: CivConfig) {
+  gameSeed = (Math.floor(Math.random() * 0xffffffff) >>> 0) || 1 // a fresh seed → reproducible run
+  seedRng(gameSeed); resetCreatureIds()
   countries = cfg.countries.map((c, i) => {
     const eth = ethosOf(c.culture) // the culture decides aggression, faith + which techs they chase
     return {
@@ -1001,21 +1011,31 @@ function newGame(cfg: CivConfig) {
   active = 0; world = countries[0].world; avatar = world.addAvatar()
   startRunning(); saveGame()
 }
-function continueGame(save: { active: number; savedAt: number; countries: { name: string; flag: string; lang: LangCode; state: unknown }[] }) {
+function continueGame(save: { active: number; savedAt: number; rng?: number; seed?: number; countries: { name: string; flag: string; lang: LangCode; state: unknown }[] }) {
+  gameSeed = save.seed || gameSeed
+  setRngState(save.rng || gameSeed || 1) // restore the exact RNG stream so the load is deterministic
   countries = save.countries.map((cc) => ({ name: cc.name, flag: cc.flag, lang: cc.lang, world: World.fromState(cc.state, spriteCount) }))
   active = Math.min(save.active || 0, countries.length - 1)
   world = countries[active].world; avatar = world.addAvatar()
-  // offline progression — the civilisations kept advancing while you were away (capped so load is fast)
-  const catchUp = Math.min(2500, Math.floor(Math.max(0, (Date.now() - (save.savedAt || Date.now())) / 1000)) * 20)
-  for (let t = 0; t < catchUp; t++) for (const c of countries) c.world.step()
+  // offline progression — kept advancing while you were away. Chunked across frames so the load never freezes.
+  pendingCatchUp = Math.min(1500, Math.floor(Math.max(0, (Date.now() - (save.savedAt || Date.now())) / 1000)) * 20)
   startRunning()
 }
 function saveGame() {
   if (!countries.length) return
+  const payload = { version: 2, seed: gameSeed, rng: rngState(), savedAt: Date.now(), active, countries: countries.map((c) => ({ name: c.name, flag: c.flag, lang: c.lang, state: c.world.toState() })) }
   try {
-    localStorage.setItem(SAVE_KEY, JSON.stringify({ savedAt: Date.now(), active, countries: countries.map((c) => ({ name: c.name, flag: c.flag, lang: c.lang, state: c.world.toState() })) }))
-  } catch { /* quota — non-fatal */ }
+    localStorage.setItem(SAVE_KEY, JSON.stringify(payload))
+  } catch (e) {
+    if (e instanceof DOMException && (e.name === "QuotaExceededError" || e.name === "NS_ERROR_DOM_QUOTA_REACHED")) {
+      // too big for localStorage → fall back to saving ONLY the active country, and warn the player
+      try { localStorage.setItem(SAVE_KEY, JSON.stringify({ ...payload, countries: [payload.countries[active]], active: 0 })); saveWarn("⚠ guardado reducido (solo el país activo) — civilización muy grande") }
+      catch { saveWarn("⚠ no se pudo guardar — civilización demasiado grande") }
+    }
+  }
 }
+let saveWarnAt = 0
+function saveWarn(msg: string) { if (Date.now() - saveWarnAt < 60000) return; saveWarnAt = Date.now(); const el = document.getElementById("save-warn"); if (el) { el.textContent = msg; el.classList.remove("hidden"); setTimeout(() => el.classList.add("hidden"), 8000) } }
 function loadSave(): { active: number; savedAt: number; countries: { name: string; flag: string; lang: LangCode; state: any }[] } | null {
   try { const raw = localStorage.getItem(SAVE_KEY); return raw ? JSON.parse(raw) : null } catch { return null }
 }

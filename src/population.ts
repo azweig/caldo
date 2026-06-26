@@ -1,3 +1,4 @@
+import { rand } from "./rng"
 // population.ts — generate people whose PERSONALITIES follow real-world base rates (no cheating):
 // Big Five ~ normal distribution; Dark-Triad traits derived from the profile + noise; clinical/archetype
 // labels thresholded to match prevalences reported in the psychology literature (psychopathy ~1%, NPD
@@ -11,8 +12,8 @@ const cl = (v: number, lo = 0.02, hi = 0.98) => Math.max(lo, Math.min(hi, v))
 // standard normal via Box–Muller
 export function gauss(mean: number, sd: number): number {
   let u = 0, v = 0
-  while (u === 0) u = Math.random()
-  while (v === 0) v = Math.random()
+  while (u === 0) u = rand()
+  while (v === 0) v = rand()
   return mean + sd * Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v)
 }
 

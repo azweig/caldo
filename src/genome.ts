@@ -1,3 +1,4 @@
+import { rand } from "./rng"
 // genome.ts — the heritable code of a creature. Evolution engine: children inherit a MIX of both
 // parents' genomes (recombination) plus small mutations; selection (who survives to reproduce) does
 // the rest. Now includes life-history traits: longevity (how long it can live) and resistance (to
@@ -16,7 +17,7 @@ export interface Genome {
 }
 
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v))
-const jitter = (v: number, amt: number) => v + (Math.random() * 2 - 1) * amt
+const jitter = (v: number, amt: number) => v + (rand() * 2 - 1) * amt
 
 export const TRAIT_BOUNDS = {
   speed: [0.3, 3.2] as const,
@@ -30,15 +31,15 @@ export const TRAIT_BOUNDS = {
 
 export function randomGenome(spriteCount: number): Genome {
   return {
-    speed: 0.6 + Math.random() * 1.4,
-    vision: 50 + Math.random() * 90,
-    size: 0.8 + Math.random() * 0.8,
-    metabolism: 0.7 + Math.random() * 0.6,
-    longevity: 72 + Math.random() * 16,   // centred near 80
-    resistance: 0.3 + Math.random() * 0.5,
-    intellect: 0.3 + Math.random() * 0.4,
-    sprite: Math.floor(Math.random() * spriteCount),
-    hue: Math.random() * 360,
+    speed: 0.6 + rand() * 1.4,
+    vision: 50 + rand() * 90,
+    size: 0.8 + rand() * 0.8,
+    metabolism: 0.7 + rand() * 0.6,
+    longevity: 72 + rand() * 16,   // centred near 80
+    resistance: 0.3 + rand() * 0.5,
+    intellect: 0.3 + rand() * 0.4,
+    sprite: Math.floor(rand() * spriteCount),
+    hue: rand() * 360,
   }
 }
 
@@ -53,14 +54,14 @@ export function mutate(g: Genome, spriteCount: number): Genome {
     longevity: clamp(jitter(g.longevity, r * 8), ...TRAIT_BOUNDS.longevity),
     resistance: clamp(jitter(g.resistance, r * 0.5), ...TRAIT_BOUNDS.resistance),
     intellect: clamp(jitter(g.intellect, r * 0.5), ...TRAIT_BOUNDS.intellect),
-    sprite: Math.random() < 0.02 ? Math.floor(Math.random() * spriteCount) : g.sprite,
-    hue: (g.hue + (Math.random() * 2 - 1) * 14 + 360) % 360,
+    sprite: rand() < 0.02 ? Math.floor(rand() * spriteCount) : g.sprite,
+    hue: (g.hue + (rand() * 2 - 1) * 14 + 360) % 360,
   }
 }
 
 // A child of TWO parents: each gene comes from one parent at random (recombination), then mutates.
 export function recombine(a: Genome, b: Genome, spriteCount: number): Genome {
-  const pick = <K extends keyof Genome>(k: K): Genome[K] => (Math.random() < 0.5 ? a[k] : b[k])
+  const pick = <K extends keyof Genome>(k: K): Genome[K] => (rand() < 0.5 ? a[k] : b[k])
   const child: Genome = {
     speed: pick("speed"),
     vision: pick("vision"),

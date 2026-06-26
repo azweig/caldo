@@ -1,3 +1,4 @@
+import { rand } from "./rng"
 // life.ts — the inner life that makes an aldeano feel like a person, not a forager:
 // NEEDS (rest/social/fun) that decay and press on the mind · a primary EMOTION that reacts to events and
 // fades · a long-term GOAL drawn from their character · a VOCATION fit + craft MASTERY that grows with years ·
@@ -28,9 +29,9 @@ export function decideIntent(c: Creature): string {
   if (L.rest < 28) return "descansar"
   if (L.social < 30 + f.e * 22) return "socializar"                  // extraverts seek company much sooner
   if (L.fun < 26) return "disfrutar"
-  if (!c.partner && L.goalKey === "amor" && Math.random() < 0.4) return "cortejar"
+  if (!c.partner && L.goalKey === "amor" && rand() < 0.4) return "cortejar"
   if (c.profCat && (f.c > 0.45 || L.goalKey === "rico" || L.goalKey === "obra" || L.goalKey === "poder")) return "trabajar"
-  return Math.random() < 0.45 ? "socializar" : "trabajar"           // the rest potter between people + work
+  return rand() < 0.45 ? "socializar" : "trabajar"           // the rest potter between people + work
 }
 export const INTENT_LABEL: Record<string, string> = {
   comer: "buscando comida", descansar: "yendo a descansar", socializar: "buscando compañía",
@@ -72,7 +73,7 @@ function pickHobby(c: Creature): string {
 export function newLife(c: Creature): Life {
   const g = pickGoal(c)
   return {
-    rest: 70 + Math.random() * 20, social: 60 + Math.random() * 25, fun: 60 + Math.random() * 25,
+    rest: 70 + rand() * 20, social: 60 + rand() * 25, fun: 60 + rand() * 25,
     emotion: "neutral", emoInt: 0,
     goal: g.goal, goalKey: g.key, goalProg: 0,
     vocFit: 0.5, mastery: 0,
@@ -122,7 +123,7 @@ export function lifeTick(c: Creature, partnerAlive: boolean, householdSize: numb
   if (L.social < 22) { drag += 0.4; feel(c, "triste", 0.35) }
   if (L.fun < 22) { drag += 0.3; feel(c, "aburrido", 0.4) }
   if (L.social > 70 && L.fun > 70 && c.partner) feel(c, "alegre", 0.3) // a full, connected life lifts the spirit
-  if (Math.random() < 0.02) feel(c, Math.random() < 0.7 ? "alegre" : "triste", 0.24) // the small good + bad days of an ordinary life
+  if (rand() < 0.02) feel(c, rand() < 0.7 ? "alegre" : "triste", 0.24) // the small good + bad days of an ordinary life
   c.mental = clamp(c.mental - drag)
   if (L.intent && L.intent !== "vagar" && L.intent !== "comer") c.mental = clamp(c.mental + 0.3) // living by your own choices is quietly fulfilling
   c.irritability = Math.max(0, Math.min(1, c.irritability + (L.rest < 25 ? 0.012 : -0.004)))
