@@ -288,6 +288,7 @@ export class World {
     let w = this.fit(p.c, c)
     if (p.n === c.heritProf) w *= c.psyche.five.o > 0.66 ? 1.3 : 4 // family trade pulls hard — unless they're the open, independent sort who forge their OWN path
     if (c.powerHungry && (p.c === "liderazgo" || p.c === "defensa")) w *= 3 // the ambitious seek power
+    if (p.c === "defensa") { const threat = this.animals.reduce((s, a) => s + (SPECIES[a.kind].hostile && !a.tame ? 1 : 0), 0); w *= 1 + threat * 0.12 + this.violence * 0.5 } // beasts at the gates + a violent age → the town arms itself
     const pop = this.profPop[p.n] || 0
     w *= 0.5 + 0.55 * Math.log1p(pop) + (pop > 0 ? 0.4 : 0) // social learning: known trades are easier to enter
     w *= 1 + 1.2 / (1 + (this.profCounts[p.c] || 0)) // village need: under-filled categories pull harder
@@ -337,6 +338,15 @@ export class World {
   }
   // what the town is buzzing about — the events that spread widest through the gossip network
   talkOfTown(): { txt: string; reach: number; sent: number }[] { return [...this.news].sort((a, b) => b.reach - a.reach).slice(0, 5) }
+  graves: { x: number; y: number; name: string }[] = [] // where the town's notable dead are remembered
+  // the single greatest figure in the whole history of this people (most cumulative renown across their deeds)
+  greatestEver(): { name: string; impact: number } | null {
+    const by = new Map<number, { name: string; impact: number }>()
+    for (const d of this.deeds) { const e = by.get(d.who) || { name: d.name, impact: 0 }; e.impact += d.impact; by.set(d.who, e) }
+    let best: { name: string; impact: number } | null = null
+    for (const e of by.values()) if (!best || e.impact > best.impact) best = e
+    return best && best.impact > 8 ? best : null
+  }
   researchProgress(): { name: string; frac: number } {
     const avail = availableTechs(this.discovered, this.era)
     if (!avail.length) return { name: "—", frac: 1 }
@@ -361,7 +371,7 @@ export class World {
   toState() {
     const hi = new Map<House, number>(); this.houses.forEach((h, i) => hi.set(h, i))
     const C = (c: Creature) => ({ id: c.id, x: c.x, y: c.y, e: c.energy, ad: c.ageDays, ls: c.lifespanDays, gen: c.generation, nm: c.name, sn: c.surname, h: hi.get(c.home) ?? 0, k: c.knowledge, pf: c.profession, pb: c.profBase, pc: c.profCat, hp: c.heritProf, sick: c.sick, ch: c.children, par: c.parents, rel: c.religion, pw: c.powerHungry, g: c.genome, ps: c.psyche, mem: c.memory, soc: c.social, gh: c.goingHome, pt: c.partner, pg: c.pregnant, mny: c.money, dk: c.dark, arc: c.archetype, crm: c.crimes, biz: c.business, hl: c.health, mt: c.mental, ir: c.irritability, lf: c.life })
-    return { region: this.region, gov: this.gov, system: this.system, era: this.era, cultureName: this.cultureName, cultureEthos: this.cultureEthos, cultureBias: this.cultureBias, clockDays: this.clockDays, clockMinutes: this.clockMinutes, tick: this.tick, research: this.research, discovered: [...this.discovered], techBoost: this.techBoost, wisdom: this.wisdom, births: this.births, deaths: this.deaths, peakGen: this.peakGen, plagueUntil: this.plagueUntil, violence: this.violence, psychopathy: this.psychopathy, religionsCfg: this.religionsCfg, chronicle: this.chronicle.slice(-60), houses: this.houses, gardens: this.gardens, schools: this.schools, universities: this.universities, airport: this.airport, monarch: this.monarch?.id ?? null, animals: this.animals, deeds: this.deeds.slice(-300), creatures: this.creatures.filter((c) => !c.isAvatar).map(C) }
+    return { region: this.region, gov: this.gov, system: this.system, era: this.era, cultureName: this.cultureName, cultureEthos: this.cultureEthos, cultureBias: this.cultureBias, clockDays: this.clockDays, clockMinutes: this.clockMinutes, tick: this.tick, research: this.research, discovered: [...this.discovered], techBoost: this.techBoost, wisdom: this.wisdom, births: this.births, deaths: this.deaths, peakGen: this.peakGen, plagueUntil: this.plagueUntil, violence: this.violence, psychopathy: this.psychopathy, religionsCfg: this.religionsCfg, chronicle: this.chronicle.slice(-60), houses: this.houses, gardens: this.gardens, schools: this.schools, universities: this.universities, airport: this.airport, monarch: this.monarch?.id ?? null, animals: this.animals, graves: this.graves, deeds: this.deeds.slice(-300), creatures: this.creatures.filter((c) => !c.isAvatar).map(C) }
   }
   static fromState(s: any, spriteCount: number): World {
     const w = new World(spriteCount, s.region, undefined, true)
@@ -373,6 +383,7 @@ export class World {
     w.chronicle = s.chronicle || []; w.houses = s.houses; w.gardens = s.gardens; w.schools = s.schools
     for (const h of w.houses) if (h.tier === undefined) { h.tier = 0; h.value = 30; h.rent = 0; h.landlord = 0 }
     w.animals = s.animals || []
+    w.graves = s.graves || []
     w.universities = s.universities; w.airport = s.airport; w.foodTarget = 230; w.deeds = s.deeds || []
     const byId = new Map<number, Creature>(); let maxId = 0
     w.creatures = (s.creatures || []).map((c: any) => {
@@ -579,8 +590,8 @@ export class World {
         const dx = cx - a.x, dy = cy - a.y, d = Math.hypot(dx, dy) || 1, pull = sp.hostile ? 1.4 : 0.9
         a.vx = (dx / d) * pull + (Math.random() * 2 - 1) * 1.2; a.vy = (dy / d) * pull + (Math.random() * 2 - 1) * 1.2
       }
+      if (a.tame) { const o = a.owner ? this.creatures.find((c) => c.id === a.owner) : null; if (o) { a.vx = (o.x - a.x) * 0.03 + a.vx * 0.5; a.vy = (o.y - a.y) * 0.03 + a.vy * 0.5 } a.x = clampn(a.x + a.vx, MARGIN, WORLD_W - MARGIN); a.y = clampn(a.y + a.vy, MARGIN, WORLD_H - MARGIN); continue } // pets follow their owner
       a.x = clampn(a.x + a.vx, MARGIN, WORLD_W - MARGIN); a.y = clampn(a.y + a.vy, MARGIN, WORLD_H - MARGIN)
-      if (a.tame) continue // livestock + pets just live among the people
       const v = this.nearestCreature({ x: a.x, y: a.y } as Creature, 110, (o) => !o.isAvatar && isMature(o))
       if (!v) continue
       if (sp.hostile) { // a PREDATOR is close to a villager
@@ -865,7 +876,7 @@ export class World {
         if (this.era < 2) { if (c.energy <= 0) { this.deaths++; this.deathCauses.hambre++; continue } } // hunter-gatherer: forage or starve
         else if (c.energy < 25) c.energy = 25 // farming/market eras: food is BOUGHT — survival rides on health/money, not foraging
         if (c.health <= 0) { this.deaths++; this.deathCauses.pobreza++; continue } // died of poverty (couldn't afford food/care)
-        if (c.ageDays > c.lifespanDays && Math.random() < (c.ageDays - c.lifespanDays) / (0.18 * c.lifespanDays)) { this.deaths++; this.deathCauses.vejez++; continue }
+        if (c.ageDays > c.lifespanDays && Math.random() < (c.ageDays - c.lifespanDays) / (0.18 * c.lifespanDays)) { if (c.life && c.life.rep > 0.35) { this.graves.push({ x: c.x, y: c.y, name: `${c.name} ${c.surname}` }); if (this.graves.length > 40) this.graves.shift() } this.deaths++; this.deathCauses.vejez++; continue } // a respected elder gets a remembered grave
         if (isMature(c) && Math.random() < 0.0000052 * violenceRate) { this.deaths++; this.deathCauses.violencia++; this.logEvent(`${c.name} ${c.surname} murió en un acto de violencia`); continue }
       }
 

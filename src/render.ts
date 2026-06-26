@@ -230,6 +230,12 @@ export function drawWorld(
     ctx.beginPath(); ctx.moveTo(bx - 6, by); ctx.lineTo(bx, by - 4); ctx.lineTo(bx + 6, by); ctx.stroke()
   }
 
+  // graves — where respected elders are remembered (small headstones, name shown up close)
+  for (const gr of world.graves) {
+    ctx.fillStyle = "#8a8a7a"; ctx.fillRect(gr.x - 3, gr.y - 8, 6, 9); ctx.fillRect(gr.x - 5, gr.y - 5, 10, 3)
+    if (cam.zoom > 1.6) { ctx.font = "8px ui-monospace, monospace"; ctx.fillStyle = "rgba(200,200,210,0.6)"; ctx.textAlign = "center"; ctx.fillText(gr.name, gr.x, gr.y - 12); ctx.textAlign = "left" }
+  }
+
   // animals — wild beasts (predators ringed red) + tamed livestock/pets (green collar)
   for (const a of world.animals) {
     ctx.save(); ctx.globalAlpha = 0.22; ctx.fillStyle = "#000"; ctx.beginPath(); ctx.ellipse(a.x, a.y + 6, 12, 5, 0, 0, Math.PI * 2); ctx.fill(); ctx.restore()
@@ -321,6 +327,7 @@ function drawMinimap(ctx: CanvasRenderingContext2D, world: World, avatar: Creatu
   ctx.strokeStyle = "rgba(255,255,255,0.12)"; ctx.strokeRect(ox + 0.5, oy + 0.5, mw, mh)
   ctx.fillStyle = "rgba(80,160,100,0.45)"
   for (const g of world.gardens) ctx.fillRect(ox + g.x * sx - 1, oy + g.y * sy - 1, 3, 3)
+  for (const a of world.animals) { ctx.fillStyle = a.tame ? "rgba(110,227,154,0.9)" : SPECIES[a.kind]?.hostile ? "rgba(255,70,70,0.95)" : "rgba(220,200,120,0.8)"; ctx.fillRect(ox + a.x * sx - 1, oy + a.y * sy - 1, 2.5, 2.5) } // beasts: red=predator, green=tame
   for (const c of world.creatures) {
     if (c.isAvatar) continue
     ctx.fillStyle = `hsl(${c.genome.hue},65%,62%)`

@@ -633,7 +633,7 @@ function updateHud() {
   hud.innerHTML = `
     <div class="stat"><span>pueblo</span> <b style="color:#fff">${countries[active]?.flag || ""} ${countries[active]?.name || ""}</b>${world.cultureEthos ? ` · <i style="color:#cdbf9a">${world.cultureEthos}</i>` : ""} · ${world.gov === "monarquía" ? "👑 monarquía" : "🏛 república"} · ${world.system === "capitalista" ? "💵 capitalista" : world.system === "socialista" ? "🤝 socialista" : "⛓ dictadura"}</div>
     ${world.monarch ? `<div class="stat"><span>monarca</span> ${world.monarch.name} ${world.monarch.surname}${world.monarch.powerHungry ? " (déspota)" : ""}</div>` : ""}
-    <div class="stat"><span>población</span> ${wild.length} · <span>familias</span> ${families}</div>
+    <div class="stat"><span>población</span> ${wild.length} · <span>familias</span> ${families} · ⚔️ ${wild.filter((c) => isMature(c) && c.profCat === "defensa").length}${world.animals.some((a) => !a.tame) ? ` · 🐾 ${world.animals.filter((a) => !a.tame).length}` : ""}</div>
     <div class="stat"><span>edad media</span> ${avgAge}a · <span>enfermos ✚</span> ${sick}</div>
     <div class="stat"><span>generación</span> ${world.peakGen} · <span>nac</span> ${world.births} · <span>muertes</span> ${world.deaths}</div>
     <div class="stat"><span>era</span> <b style="color:#bcd9ff">${eraName(world.era)}</b> · ${SEASONS[seasonOf(world.clockDays)]}</div>
@@ -644,6 +644,7 @@ function updateHud() {
     <div class="stat"><span>investigando</span> ${rp.name} <span class="rbar"><i style="width:${Math.round(rp.frac * 100)}%"></i></span></div>
     <div class="stat"><span>hitos era</span> ${ep.got}/${ep.total} · 🔑 ${ep.keysGot}/${ep.keys} para avanzar</div>
     ${world.talkOfTown()[0] ? `<div class="stat"><span>se habla de</span> <i style="color:#bcd9ff">${world.talkOfTown()[0].txt}</i></div>` : ""}
+    <div class="stat"><span>historia</span> ${Math.floor(world.clockDays / 360)} años${world.greatestEver() ? ` · 🏆 <i style="color:#ffd98a">${world.greatestEver()!.name}</i>, la figura más grande` : ""}</div>
     ${world.recentTech ? `<div class="stat"><span>💡 último</span> ${world.recentTech}</div>` : ""}
     <div class="stat energy"><span>vos</span> ${aAge}a · ${bar} ${Math.round(e)}</div>
     <div class="hint">${possessed ? `🎭 poseés a <b>${possessed.name}</b> · P para soltar` : (!chatting && chatTarget) ? `▸ <b>E</b> hablar · <b>P</b> poseer a ${chatTarget.name}` : "WASD moverte · E hablar · P poseer · espacio pausa"}</div>
