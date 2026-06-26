@@ -335,8 +335,8 @@ function drawMinimap(ctx: CanvasRenderingContext2D, world: World, avatar: Creatu
   ctx.strokeRect(ox + (cam.x - halfW) * sx, oy + (cam.y - halfH) * sy, 2 * halfW * sx, 2 * halfH * sy)
 }
 
-// each person's deterministic look, STABLE across their whole life, but it CHANGES as they age.
-function appear(c: Creature) {
+// each person's deterministic look, STABLE across their whole life, but it CHANGES as they age + by their lot.
+function appear(c: Creature, era = 5) {
   const r = (n: number) => { const x = Math.sin((Math.abs(c.id) + 1) * 12.9898 + n * 78.233) * 43758.5; return x - Math.floor(x) }
   const ay = ageYears(c)
   const female = Math.abs(c.id) % 2 === 0
@@ -346,14 +346,22 @@ function appear(c: Creature) {
   const hair = greyT > 0.62 ? "#d6cfc4" : greyT > 0.28 ? "#9a948a" : base
   const hairStyle = ay < 2 ? "none" : female ? (r(3) < 0.5 ? "long" : "bun") : r(3) < 0.16 ? "bald" : r(3) < 0.55 ? "short" : "crop"
   const beard = !female && ay > 22 && r(4) < 0.4 ? (r(5) < 0.5 ? "full" : "stubble") : "none"
-  const cloth = c.isAvatar ? "#ffd34d" : `hsl(${c.genome.hue}, ${38 + Math.floor(r(6) * 18)}%, ${47 + Math.floor(r(7) * 13)}%)`
-  return { ay, female, skin, hair, hairStyle, beard, cloth, r }
+  // CLOTHING by trade, wealth + era: a scholar's robe, a soldier's armour, a merchant's fine coat; the rich
+  // wear brighter, trimmed cloth, the poor drab + patched; deep past = earthy furs, late eras = brighter dyes.
+  const cat = c.profCat
+  const garb = c.life?.condition === "sin techo" ? "rags" : cat === "defensa" ? "armour" : cat === "saber" || cat === "enseñanza" || cat === "espíritu" || cat === "salud" ? "robe" : cat === "comercio" || cat === "liderazgo" ? "fine" : cat === "comida" || cat === "construcción" || cat === "oficio" ? "work" : "tunic"
+  const money = (c as any).money || 0
+  const wealth = garb === "rags" ? 0 : money > 700 ? 2 : money > 120 ? 1 : 0
+  const sat = (garb === "rags" ? 8 : era <= 1 ? 22 : 30) + wealth * 10 + Math.floor(r(6) * 12)
+  const lum = (garb === "rags" ? 36 : 46) + wealth * 6 + Math.floor(r(7) * 12)
+  const cloth = c.isAvatar ? "#ffd34d" : garb === "armour" ? `hsl(${(c.genome.hue + 200) % 360}, 12%, 42%)` : `hsl(${c.genome.hue}, ${sat}%, ${lum}%)`
+  return { ay, female, skin, hair, hairStyle, beard, cloth, garb, wealth, r }
 }
 
 // draw a person built up from the feet (y=0). proportions shift across life: babies are tiny + big-headed,
 // children small, teens lanky, adults full, elders a touch stooped — so you SEE someone grow + grow old.
-function drawVillager(ctx: CanvasRenderingContext2D, c: Creature, w: number, moving: boolean, phase: number) {
-  const ap = appear(c), ay = ap.ay
+function drawVillager(ctx: CanvasRenderingContext2D, c: Creature, w: number, moving: boolean, phase: number, era = 5) {
+  const ap = appear(c, era), ay = ap.ay
   const stage = ay < 2 ? 0 : ay < 13 ? 1 : ay < 19 ? 2 : ay < 55 ? 3 : 4 // baby child teen adult elder
   const hr = w * [0.5, 0.43, 0.37, 0.36, 0.35][stage]
   const H = w * [0.85, 1.12, 1.4, 1.5, 1.44][stage]
@@ -371,6 +379,15 @@ function drawVillager(ctx: CanvasRenderingContext2D, c: Creature, w: number, mov
   // torso
   ctx.fillStyle = cloth; ctx.beginPath(); ctx.roundRect(-w * 0.3, shoY, w * 0.6, hipY - shoY + 3, w * 0.16); ctx.fill()
   ctx.fillStyle = clothSh; ctx.beginPath(); ctx.roundRect(w * 0.06, shoY, w * 0.24, hipY - shoY + 3, w * 0.12); ctx.fill()
+  // GARB — the cut of their clothes tells their trade + station (drawn over the legs where it's a robe/skirt)
+  if (stage >= 2) {
+    if (ap.garb === "robe") { ctx.fillStyle = cloth; ctx.beginPath(); ctx.moveTo(-w * 0.3, hipY - 2); ctx.lineTo(w * 0.3, hipY - 2); ctx.lineTo(w * 0.42, -1); ctx.lineTo(-w * 0.42, -1); ctx.closePath(); ctx.fill(); ctx.fillStyle = clothSh; ctx.fillRect(w * 0.04, hipY - 2, w * 0.3, legH) }
+    else if (ap.garb === "armour") { ctx.fillStyle = "rgba(225,228,236,0.22)"; ctx.fillRect(-w * 0.34, shoY - 1, w * 0.68, w * 0.13); ctx.fillStyle = "#4a3a26"; ctx.fillRect(-w * 0.3, hipY - w * 0.12, w * 0.6, w * 0.08) }
+    else if (ap.garb === "fine") { ctx.fillStyle = ap.wealth >= 2 ? "#e8c560" : "rgba(255,255,255,0.32)"; ctx.fillRect(-w * 0.04, shoY, w * 0.08, hipY - shoY) }
+    else if (ap.garb === "work") { ctx.fillStyle = "rgba(110,82,46,0.55)"; ctx.fillRect(-w * 0.17, shoY + w * 0.16, w * 0.34, (hipY - shoY) * 0.82) }
+    else if (ap.garb === "rags") { ctx.fillStyle = "rgba(0,0,0,0.28)"; ctx.fillRect(-w * 0.12, shoY + w * 0.22, w * 0.13, w * 0.13); ctx.fillRect(w * 0.1, hipY - w * 0.2, w * 0.1, w * 0.1) }
+    if (ap.wealth >= 2 && ap.garb !== "rags") { ctx.fillStyle = "rgba(232,200,96,0.6)"; ctx.fillRect(-w * 0.3, hipY - 3, w * 0.6, 2.5) } // gold hem of the well-off
+  }
   // head
   ctx.fillStyle = ap.skin; ctx.beginPath(); ctx.arc(0, hcy, hr, 0, Math.PI * 2); ctx.fill()
   ctx.fillStyle = "rgba(0,0,0,0.10)"; ctx.beginPath(); ctx.arc(hr * 0.35, hcy, hr, -Math.PI * 0.5, Math.PI * 0.5); ctx.fill()
@@ -386,7 +403,7 @@ function drawVillager(ctx: CanvasRenderingContext2D, c: Creature, w: number, mov
   if (c.facing >= 0) { ctx.fillStyle = "rgba(30,20,15,0.75)"; ctx.beginPath(); ctx.arc(hr * 0.34, hcy + hr * 0.04, hr * 0.13, 0, Math.PI * 2); ctx.fill() }
 }
 
-function drawCreature(ctx: CanvasRenderingContext2D, c: Creature, _era: number) {
+function drawCreature(ctx: CanvasRenderingContext2D, c: Creature, era: number) {
   const ageScale = c.isAvatar || isMature(c) ? 1 : 0.5 + 0.5 * Math.min(1, ageYears(c) / 16)
   const w = (24 + c.genome.size * 16) * ageScale
   // inside their own house → drawn faint (they "went in"; the lit windows represent them)
@@ -412,7 +429,7 @@ function drawCreature(ctx: CanvasRenderingContext2D, c: Creature, _era: number) 
   ctx.translate(c.x, c.y - bob)
   ctx.rotate(sway)
   if (c.facing < 0) ctx.scale(-1, 1)
-  drawVillager(ctx, c, w, moving, phase)
+  drawVillager(ctx, c, w, moving, phase, era)
   ctx.restore()
 
   // profession-category arc at the feet (see the social fabric at a glance)
