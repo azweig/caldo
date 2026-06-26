@@ -59,7 +59,8 @@ export const SPEED_SCALE = 11
 const GO_HOME_AT = 120   // fed → walk home
 const GO_FORAGE_AT = 98  // hungry → walk to a garden (forage early; a big map makes trips long)
 
-export interface House { x: number; y: number; w: number; h: number; surname: string; hue: number }
+// tier 0 choza · 1 casa · 2 casona · 3 mansión · 4 edificio (multi-familia). homes UPGRADE as a family prospers.
+export interface House { x: number; y: number; w: number; h: number; surname: string; hue: number; tier: number; value: number; rent: number; landlord: number }
 export interface Garden { x: number; y: number }
 export interface School { x: number; y: number; w: number; h: number }
 
@@ -215,7 +216,7 @@ export class World {
         const w = 58, h = 50
         const cx = bx + BLOCK / 2 + (Math.random() * 40 - 20)
         const cy = by + BLOCK / 2 + (Math.random() * 30 - 15)
-        this.houses.push({ x: cx - w / 2, y: cy - h / 2, w, h, surname: SURNAMES[si % SURNAMES.length], hue: (si * 47) % 360 })
+        this.houses.push({ x: cx - w / 2, y: cy - h / 2, w, h, surname: SURNAMES[si % SURNAMES.length], hue: (si * 47) % 360, tier: 0, value: 30, rent: 0, landlord: 0 })
         si++
       }
     }
@@ -355,6 +356,7 @@ export class World {
     w.births = s.births; w.deaths = s.deaths; w.peakGen = s.peakGen; w.plagueUntil = s.plagueUntil
     w.violence = s.violence; w.psychopathy = s.psychopathy; w.religionsCfg = s.religionsCfg
     w.chronicle = s.chronicle || []; w.houses = s.houses; w.gardens = s.gardens; w.schools = s.schools
+    for (const h of w.houses) if (h.tier === undefined) { h.tier = 0; h.value = 30; h.rent = 0; h.landlord = 0 }
     w.universities = s.universities; w.airport = s.airport; w.foodTarget = 230; w.deeds = s.deeds || []
     const byId = new Map<number, Creature>(); let maxId = 0
     w.creatures = (s.creatures || []).map((c: any) => {
@@ -407,7 +409,7 @@ export class World {
       const cy = MARGIN + 45 + Math.random() * (WORLD_H - 2 * MARGIN - 90)
       let ok = true
       for (const h of this.houses) if ((h.x + h.w / 2 - cx) ** 2 + (h.y + h.h / 2 - cy) ** 2 < 62 * 62) { ok = false; break }
-      if (ok) { const h: House = { x: cx - 29, y: cy - 25, w: 58, h: 50, surname, hue: (this.houses.length * 47) % 360 }; this.houses.push(h); return h }
+      if (ok) { const h: House = { x: cx - 29, y: cy - 25, w: 58, h: 50, surname, hue: (this.houses.length * 47) % 360, tier: 0, value: 30, rent: 0, landlord: 0 }; this.houses.push(h); return h }
     }
     return null
   }
@@ -471,6 +473,22 @@ export class World {
     let best: Food | null = null, bd = radius * radius
     for (const f of this.food) { const d = (f.x - c.x) ** 2 + (f.y - c.y) ** 2; if (d < bd) { bd = d; best = f } }
     return best
+  }
+  // homes EVOLVE: a family that accumulates wealth invests it in a finer house (choza → casa → casona → mansión)
+  private upgradeHomes() {
+    const wealth = new Map<House, number>()
+    for (const c of this.creatures) if (!c.isAvatar) wealth.set(c.home, (wealth.get(c.home) || 0) + c.money)
+    const COST = [0, 60, 240, 750], NAMES = ["choza", "casa", "casona", "mansión"]
+    for (const h of this.houses) {
+      if (h.tier >= 3) continue
+      if ((wealth.get(h) || 0) > COST[h.tier + 1] * 1.6) {
+        h.tier++; h.value = COST[h.tier] * 2.2; h.w = 50 + h.tier * 16; h.h = 44 + h.tier * 11
+        let rich: Creature | null = null
+        for (const c of this.creatures) if (c.home === h && !c.isAvatar && (!rich || c.money > rich.money)) rich = c
+        if (rich) { rich.money -= COST[h.tier]; if (rich.life) feel(rich, "orgulloso", 0.6) }
+        this.logEvent(`los ${h.surname} prosperaron a una ${NAMES[h.tier]}`)
+      }
+    }
   }
   // a family line: how many living members share the surname + their collective standing (dynasty reputation)
   dynasty(surname: string): { size: number; rep: number } {
@@ -868,6 +886,7 @@ export class World {
       }
 
       runSociety(this, wild) // economy, crime + courts, and culture (books/art)
+      this.upgradeHomes() // prosperous families move up to a finer home
     }
 
     if (this.creatures.filter((c) => !c.isAvatar).length < 8) { // keep a struggling village from going extinct
