@@ -8,6 +8,7 @@ import { Psyche, randomPsyche, inheritPsyche } from "./psyche"
 import { Cat, Boosts, Prof, Tech, PROFS, TECHS, availableProfs, availableTechs, canAdvanceEra, economyOf, professionTitle, eraName } from "./civ"
 import { Life, newLife, lifeTick, feel, bond, decideIntent } from "./life"
 import { Sig, KIND, codeOf, decode } from "./comms"
+import { Animal, SPECIES, SPECIES_KEYS } from "./animals"
 import { pickReligion, EconSystem } from "./civconfig"
 import { genPerson, inheritDark, classify, DarkTriad, Archetype } from "./population"
 import { runSociety } from "./society"
@@ -325,6 +326,7 @@ export class World {
     if (c.profBase !== prev) { feel(c, "esperanzado", 0.5); this.logEvent(`${c.name} ${c.surname} dejó de ser ${prev} y aprendió ${c.profBase}`) }
   }
 
+  animals: Animal[] = [] // wild + domestic beasts roaming the land
   news: { txt: string; sent: number; reach: number; day: number }[] = [] // recent events that spread as gossip
   private logEvent(text: string) {
     this.chronicle.push({ day: this.clockDays, text }); if (this.chronicle.length > 80) this.chronicle.shift()
@@ -359,7 +361,7 @@ export class World {
   toState() {
     const hi = new Map<House, number>(); this.houses.forEach((h, i) => hi.set(h, i))
     const C = (c: Creature) => ({ id: c.id, x: c.x, y: c.y, e: c.energy, ad: c.ageDays, ls: c.lifespanDays, gen: c.generation, nm: c.name, sn: c.surname, h: hi.get(c.home) ?? 0, k: c.knowledge, pf: c.profession, pb: c.profBase, pc: c.profCat, hp: c.heritProf, sick: c.sick, ch: c.children, par: c.parents, rel: c.religion, pw: c.powerHungry, g: c.genome, ps: c.psyche, mem: c.memory, soc: c.social, gh: c.goingHome, pt: c.partner, pg: c.pregnant, mny: c.money, dk: c.dark, arc: c.archetype, crm: c.crimes, biz: c.business, hl: c.health, mt: c.mental, ir: c.irritability, lf: c.life })
-    return { region: this.region, gov: this.gov, system: this.system, era: this.era, cultureName: this.cultureName, cultureEthos: this.cultureEthos, cultureBias: this.cultureBias, clockDays: this.clockDays, clockMinutes: this.clockMinutes, tick: this.tick, research: this.research, discovered: [...this.discovered], techBoost: this.techBoost, wisdom: this.wisdom, births: this.births, deaths: this.deaths, peakGen: this.peakGen, plagueUntil: this.plagueUntil, violence: this.violence, psychopathy: this.psychopathy, religionsCfg: this.religionsCfg, chronicle: this.chronicle.slice(-60), houses: this.houses, gardens: this.gardens, schools: this.schools, universities: this.universities, airport: this.airport, monarch: this.monarch?.id ?? null, deeds: this.deeds.slice(-300), creatures: this.creatures.filter((c) => !c.isAvatar).map(C) }
+    return { region: this.region, gov: this.gov, system: this.system, era: this.era, cultureName: this.cultureName, cultureEthos: this.cultureEthos, cultureBias: this.cultureBias, clockDays: this.clockDays, clockMinutes: this.clockMinutes, tick: this.tick, research: this.research, discovered: [...this.discovered], techBoost: this.techBoost, wisdom: this.wisdom, births: this.births, deaths: this.deaths, peakGen: this.peakGen, plagueUntil: this.plagueUntil, violence: this.violence, psychopathy: this.psychopathy, religionsCfg: this.religionsCfg, chronicle: this.chronicle.slice(-60), houses: this.houses, gardens: this.gardens, schools: this.schools, universities: this.universities, airport: this.airport, monarch: this.monarch?.id ?? null, animals: this.animals, deeds: this.deeds.slice(-300), creatures: this.creatures.filter((c) => !c.isAvatar).map(C) }
   }
   static fromState(s: any, spriteCount: number): World {
     const w = new World(spriteCount, s.region, undefined, true)
@@ -370,6 +372,7 @@ export class World {
     w.violence = s.violence; w.psychopathy = s.psychopathy; w.religionsCfg = s.religionsCfg
     w.chronicle = s.chronicle || []; w.houses = s.houses; w.gardens = s.gardens; w.schools = s.schools
     for (const h of w.houses) if (h.tier === undefined) { h.tier = 0; h.value = 30; h.rent = 0; h.landlord = 0 }
+    w.animals = s.animals || []
     w.universities = s.universities; w.airport = s.airport; w.foodTarget = 230; w.deeds = s.deeds || []
     const byId = new Map<number, Creature>(); let maxId = 0
     w.creatures = (s.creatures || []).map((c: any) => {
@@ -557,6 +560,33 @@ export class World {
       if (pay < h.rent) c.mental = Math.max(0, c.mental - 3) // can't make rent → stress
     }
   }
+  // ANIMALS: wild beasts roam + raid; the town hunts, tames, or suffers them — depending on WHO lives there
+  private runAnimals(wild: Creature[]) {
+    if (!wild.length) return
+    const want = Math.min(16, 4 + Math.floor(wild.length / 22))
+    while (this.animals.length < want) { // wild animals wander in from the edges
+      const avail = SPECIES_KEYS.filter((k) => SPECIES[k].era <= this.era)
+      const kind = avail[Math.floor(Math.random() * avail.length)]
+      const edge = Math.random() < 0.5
+      this.animals.push({ id: NEXT_ID++, x: edge ? MARGIN + Math.random() * 60 : WORLD_W - MARGIN - Math.random() * 60, y: MARGIN + Math.random() * (WORLD_H - 2 * MARGIN), vx: 0, vy: 0, kind, hp: SPECIES[kind].danger > 0 ? 3 : 1, tame: false, owner: 0 })
+    }
+    const fighters = wild.filter((c) => isMature(c) && (c.profCat === "defensa" || c.profCat === "comida" || c.profCat === "exploración")).length // hunters + soldiers = the town's muscle
+    const tamers = wild.filter((c) => isMature(c) && (c.profCat === "cuidado" || c.profCat === "comida")).length
+    for (let i = this.animals.length - 1; i >= 0; i--) {
+      const a = this.animals[i], sp = SPECIES[a.kind]
+      if (Math.random() < 0.06) { a.vx = (Math.random() * 2 - 1) * 1.6; a.vy = (Math.random() * 2 - 1) * 1.6 }
+      a.x = clampn(a.x + a.vx, MARGIN, WORLD_W - MARGIN); a.y = clampn(a.y + a.vy, MARGIN, WORLD_H - MARGIN)
+      if (a.tame) continue // livestock + pets just live among the people
+      const v = this.nearestCreature({ x: a.x, y: a.y } as Creature, 80, (o) => !o.isAvatar && isMature(o))
+      if (!v) continue
+      if (sp.hostile) { // a PREDATOR is close to a villager
+        if (fighters > 0 && Math.random() < 0.45) { a.hp--; if (a.hp <= 0) { this.dropMeat(a.x, a.y, sp.food); this.animals.splice(i, 1); if (v.life) feel(v, "orgulloso", 0.4); this.logEvent(`cazaron un ${a.kind} que merodeaba`) } } // fought off → meat
+        else if (Math.random() < sp.danger * 0.05) { v.health = Math.max(0, v.health - 26); if (v.life) feel(v, "asustado", 0.85); this.logEvent(v.health <= 0 ? `un ${a.kind} mató a ${v.name} ${v.surname}` : `un ${a.kind} atacó a ${v.name} ${v.surname}`) } // it mauls a villager
+      } else if (sp.tameable && tamers > 0 && Math.random() < 0.02) { a.tame = true; a.owner = v.id; if (v.life) feel(v, "alegre", 0.4); this.logEvent(`${v.name} domesticó un ${a.kind}`) } // tamed → livestock/pet
+      else if (sp.food > 0 && fighters > 0 && Math.random() < 0.025) { this.dropMeat(a.x, a.y, sp.food); this.animals.splice(i, 1) } // hunted for meat
+    }
+  }
+  private dropMeat(x: number, y: number, n: number) { for (let k = 0; k < n; k++) this.food.push({ x: clampn(x + (Math.random() * 2 - 1) * 40, MARGIN, WORLD_W - MARGIN), y: clampn(y + (Math.random() * 2 - 1) * 40, MARGIN, WORLD_H - MARGIN) }) }
   // MARKET: producers supply goods (food, crafts, art), the town demands them; the price floats with the
   // balance. merchants profit by trading, and the rich spend on luxuries → coin flows to artisans (a sink).
   private runMarket(wild: Creature[]) {
@@ -667,7 +697,8 @@ export class World {
     // (region 0 templado · 1 frío · 2 desierto · 3 selvático)
     const seas = seasonOf(this.clockDays)
     const climF = [1.0, seas === 3 ? 0.5 : 0.9, 0.7, 1.25][this.region % 4] // food yield by climate + season
-    { let n = Math.min(this.foodTarget - this.food.length, Math.ceil((2 + this.creatures.length * 0.5) * climF)); while (n-- > 0) this.scatterFood() }
+    const livestock = this.animals.reduce((s, a) => s + (a.tame && SPECIES[a.kind].food > 0 ? 1 : 0), 0) // herds give steady food
+    { let n = Math.min(this.foodTarget - this.food.length, Math.ceil((2 + this.creatures.length * 0.5) * climF + livestock * 0.5)); while (n-- > 0) this.scatterFood() }
 
     // ── civilisation: EMERGENT discoveries — real aldeanos get IDEAS and try to BUILD them ──
     // no global counter: progress on a tech only comes from actual mature, educated, curious individuals
@@ -1016,6 +1047,7 @@ export class World {
       this.housingMarket(wild, byId) // landlords buy + rent out property; tenants pay rent
       this.poverty(wild) // the destitute fall into homelessness; the recovered find shelter
       this.runMarket(wild) // goods trade at a floating price; merchants profit; the rich buy luxuries
+      this.runAnimals(wild) // wild beasts roam, raid, get hunted or tamed
       for (const n of this.news) n.reach = Math.max(1, n.reach - 0.6) // yesterday's news fades from the talk
       if (Math.random() < 0.04 && wild.length > 20) { const v = wild[Math.floor(Math.random() * wild.length)]; this.news.push({ txt: `(rumor) dicen que ${v.name} ${v.surname} esconde algo`, sent: -0.6, reach: 1, day: this.clockDays }); if (this.news.length > 14) this.news.shift() } // a juicy false rumour is born
     }

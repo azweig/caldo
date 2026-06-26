@@ -649,7 +649,14 @@ function updateHud() {
     <div class="hint">${possessed ? `🎭 poseés a <b>${possessed.name}</b> · P para soltar` : (!chatting && chatTarget) ? `▸ <b>E</b> hablar · <b>P</b> poseer a ${chatTarget.name}` : "WASD moverte · E hablar · P poseer · espacio pausa"}</div>
   `
   clockEl.textContent = formatClock(world.clockMinutes)
-  for (let i = 0; i < tabsEl.children.length; i++) if (countries[i]) (tabsEl.children[i] as HTMLElement).title = `${eraName(countries[i].world.era)} · ${countries[i].world.creatures.filter((c) => !c.isAvatar).length} hab.`
+  for (let i = 0; i < tabsEl.children.length; i++) if (countries[i]) {
+    const cw = countries[i].world, pop = cw.creatures.filter((c) => !c.isAvatar).length, el = tabsEl.children[i] as HTMLElement
+    el.title = `${eraName(cw.era)} · ${pop} hab.`
+    const dead = pop === 0 // a civilisation that died out — mark it with a skull
+    el.classList.toggle("dead", dead)
+    if (dead && !el.innerHTML.includes("💀")) el.innerHTML = `💀 ${countries[i].name}`
+    else if (!dead && el.innerHTML.includes("💀")) el.innerHTML = `${countries[i].flag} ${countries[i].name}`
+  }
   if (!statsEl.classList.contains("hidden") && frame % 15 === 0) statsBody.innerHTML = statsHTML()
   if (possessed && frame % 8 === 0) renderPossess()
 }

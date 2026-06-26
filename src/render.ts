@@ -6,6 +6,7 @@ import { World, Creature, House, ageYears, isMature, seasonOf, WORLD_W, WORLD_H,
 import { Assets } from "./sprites"
 import { TRAIT_BOUNDS } from "./genome"
 import { EMO } from "./life"
+import { emojiOf, SPECIES } from "./animals"
 
 export interface Cam { x: number; y: number; zoom: number }
 
@@ -227,6 +228,14 @@ export function drawWorld(
     const bx = (wT * 1.1 + b * 360 + seedR(b * 9) * WORLD_W) % WORLD_W, by = 70 + b * 80 + Math.sin(wT * 0.04 + b) * 18
     ctx.strokeStyle = "rgba(40,45,55,0.5)"; ctx.lineWidth = 1.4
     ctx.beginPath(); ctx.moveTo(bx - 6, by); ctx.lineTo(bx, by - 4); ctx.lineTo(bx + 6, by); ctx.stroke()
+  }
+
+  // animals — wild beasts (predators ringed red) + tamed livestock/pets (green collar)
+  for (const a of world.animals) {
+    ctx.save(); ctx.globalAlpha = 0.22; ctx.fillStyle = "#000"; ctx.beginPath(); ctx.ellipse(a.x, a.y + 6, 12, 5, 0, 0, Math.PI * 2); ctx.fill(); ctx.restore()
+    if (SPECIES[a.kind]?.hostile && !a.tame) { ctx.strokeStyle = "rgba(255,80,80,0.6)"; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(a.x, a.y, 15, 0, Math.PI * 2); ctx.stroke() }
+    else if (a.tame) { ctx.strokeStyle = "rgba(110,227,154,0.55)"; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(a.x, a.y, 14, 0, Math.PI * 2); ctx.stroke() }
+    ctx.font = "20px serif"; ctx.textAlign = "center"; ctx.fillText(emojiOf(a.kind), a.x, a.y + 7); ctx.textAlign = "left"
   }
 
   // food
