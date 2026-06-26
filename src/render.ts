@@ -264,7 +264,12 @@ export function drawWorld(
   // creatures
   // DEPTH: draw people sorted front-to-back by their feet (y), so those in front overlap those behind
   const folk = world.creatures.filter((c) => !c.isAvatar).sort((a, b) => a.y - b.y)
-  for (const c of folk) drawCreature(ctx, c, world.era)
+  for (const c of folk) {
+    // if they've reached the spot they claimed, they're at their station → a working / seated pose
+    let atSpot: string | null = null
+    if (c.poi !== undefined && c.poi >= 0) { const p = world.pois[c.poi]; if (p && p.by === c.id && (c.x - p.x) ** 2 + (c.y - p.y) ** 2 < 26 * 26) atSpot = p.kind }
+    drawCreature(ctx, c, world.era, atSpot)
+  }
 
   if (chatTarget) {
     ctx.strokeStyle = "rgba(120,200,255,0.18)"; ctx.lineWidth = 1
@@ -387,23 +392,26 @@ function appear(c: Creature, era = 5) {
 
 // draw a person built up from the feet (y=0). proportions shift across life: babies are tiny + big-headed,
 // children small, teens lanky, adults full, elders a touch stooped — so you SEE someone grow + grow old.
-function drawVillager(ctx: CanvasRenderingContext2D, c: Creature, w: number, moving: boolean, phase: number, era = 5) {
+function drawVillager(ctx: CanvasRenderingContext2D, c: Creature, w: number, moving: boolean, phase: number, era = 5, atSpot: string | null = null) {
   const ap = appear(c, era), ay = ap.ay
   const stage = ay < 2 ? 0 : ay < 13 ? 1 : ay < 19 ? 2 : ay < 55 ? 3 : 4 // baby child teen adult elder
   const hr = w * [0.5, 0.43, 0.37, 0.36, 0.35][stage]
   const H = w * [0.85, 1.12, 1.4, 1.5, 1.44][stage] * ap.bh
   const bw = ap.bw // individual girth
+  const working = !moving && (atSpot === "market" || atSpot === "work"), seated = !moving && atSpot === "social"
+  const workArm = working ? Math.max(0, Math.sin(wT * 0.5 + c.id)) * H * 0.28 : 0 // a hammering / handing-goods motion
+  const sit = seated ? H * 0.22 : 0 // sink down onto the bench
   const swing = moving ? Math.sin(phase) * w * 0.13 : 0
-  const legH = H * (stage <= 1 ? 0.24 : 0.3), hipY = -legH, shoY = -H * (stage === 0 ? 0.7 : 0.82), hcy = shoY - hr * 0.72
+  const legH = H * (stage <= 1 ? 0.24 : 0.3) - sit, hipY = -legH, shoY = -H * (stage === 0 ? 0.7 : 0.82) + sit, hcy = shoY - hr * 0.72
   const cloth = ap.cloth, clothSh = c.isAvatar ? "#e0b020" : `hsl(${c.genome.hue}, 40%, 40%)`
-  // legs (step in opposition while walking)
+  // legs (step in opposition while walking; folded forward when seated)
   ctx.fillStyle = "#473828"
-  ctx.fillRect(-w * 0.21, hipY - swing * 0.4, w * 0.16, legH + swing * 0.4)
-  ctx.fillRect(w * 0.05, hipY + swing * 0.4, w * 0.16, legH - swing * 0.4)
-  // arms swing opposite the legs
+  if (seated) { ctx.fillRect(-w * 0.21, hipY, w * 0.16, Math.max(3, legH)); ctx.fillRect(-w * 0.05, hipY + legH - w * 0.14, w * 0.28, w * 0.14) }
+  else { ctx.fillRect(-w * 0.21, hipY - swing * 0.4, w * 0.16, legH + swing * 0.4); ctx.fillRect(w * 0.05, hipY + swing * 0.4, w * 0.16, legH - swing * 0.4) }
+  // arms swing opposite the legs (one arm lifts to work)
   ctx.fillStyle = cloth
   ctx.fillRect(-w * 0.38 * bw, shoY + w * 0.06 + swing * 0.4, w * 0.12, H * 0.42)
-  ctx.fillRect((w * 0.26 * bw + w * 0.02), shoY + w * 0.06 - swing * 0.4, w * 0.12, H * 0.42)
+  ctx.fillRect((w * 0.26 * bw + w * 0.02), shoY + w * 0.06 - swing * 0.4 - workArm, w * 0.12, H * 0.42 - workArm * 0.3)
   // torso (individual girth)
   ctx.fillStyle = cloth; ctx.beginPath(); ctx.roundRect(-w * 0.3 * bw, shoY, w * 0.6 * bw, hipY - shoY + 3, w * 0.16); ctx.fill()
   ctx.fillStyle = clothSh; ctx.beginPath(); ctx.roundRect(w * 0.06 * bw, shoY, w * 0.24 * bw, hipY - shoY + 3, w * 0.12); ctx.fill()
@@ -466,7 +474,7 @@ function drawVillager(ctx: CanvasRenderingContext2D, c: Creature, w: number, mov
   else if (ap.prop === "basket") { ctx.fillStyle = "#a07840"; ctx.beginPath(); ctx.arc(px + w * 0.05, py + w * 0.12, w * 0.12, 0, Math.PI); ctx.fill(); ctx.fillStyle = "#7fb05a"; ctx.fillRect(px - w * 0.04, py + w * 0.1, w * 0.18, w * 0.04) }
 }
 
-function drawCreature(ctx: CanvasRenderingContext2D, c: Creature, era: number) {
+function drawCreature(ctx: CanvasRenderingContext2D, c: Creature, era: number, atSpot: string | null = null) {
   const ageScale = c.isAvatar || isMature(c) ? 1 : 0.5 + 0.5 * Math.min(1, ageYears(c) / 16)
   const w = (24 + c.genome.size * 16) * ageScale
   // inside their own house → drawn faint (they "went in"; the lit windows represent them)
@@ -500,7 +508,7 @@ function drawCreature(ctx: CanvasRenderingContext2D, c: Creature, era: number) {
   ctx.translate(c.x, c.y - bob)
   ctx.rotate(sway)
   if (c.facing < 0) ctx.scale(-1, 1)
-  drawVillager(ctx, c, w, moving, phase, era)
+  drawVillager(ctx, c, w, moving, phase, era, atSpot)
   ctx.restore()
 
   // profession-category arc at the feet (see the social fabric at a glance)
