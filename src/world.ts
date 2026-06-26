@@ -124,6 +124,11 @@ export interface Creature {
   sigs?: string[]    // recent compact chatter codes (transient — the binary they "speak" when unobserved)
   heard?: string     // the last thing they overheard, DECODED into words (transient, for the click card)
   poi?: number       // the Point of Interest (market stall / work station / bench) they've claimed, or -1
+  targetX?: number   // where the SIM wants them to go (single source of truth); the view interpolates toward it
+  targetY?: number
+  away?: number       // days remaining on a journey to ANOTHER town (0 = home); while >0 they're off the map
+  awayTo?: string     // the name of the town they're visiting
+  langs?: string[]    // languages picked up from travels (their own + any learned abroad)
 }
 
 // a notable act, logged so we can later rank the most INFLUENTIAL people per generation
@@ -887,25 +892,29 @@ export class World {
 
       if (!c.isAvatar && !c.controlled) {
         let tx: number, ty: number
-        if (!isMature(c)) {
+        const hour = (this.clockMinutes % 1440) / 60
+        if ((c.away || 0) > 0) { tx = this.airport.x + this.airport.w / 2; ty = this.airport.y + this.airport.h + 10 } // off travelling — wait near the gate (drawn faint)
+        else if (!isMature(c)) {
           // CHILDREN live with their family — they never roam the world alone. Toddlers stay home;
-          // school-age kids go to the school. Adults (16+) leave to forage. (Family feeds the kids.)
-          if (ageYears(c) < 6) { tx = c.home.x + c.home.w / 2; ty = c.home.y + c.home.h + 14 }
+          // school-age kids go to the school by day, home by night.
+          if (ageYears(c) < 6 || hour >= 21 || hour < 7) { tx = c.home.x + c.home.w / 2; ty = c.home.y + c.home.h + 14 }
           else { const s = this.nearestSchool(c); tx = s.x + s.w / 2; ty = s.y + s.h / 2 }
+        } else if (hour >= 22 || hour < 6) { // NIGHT: everyone goes home to sleep (unless starving)
+          if (c.energy < 40) { const f = this.nearestFood(c, c.genome.vision * 3); const gd = this.nearestGarden(c); tx = f ? f.x : gd.x; ty = f ? f.y : gd.y }
+          else { tx = c.home.x + c.home.w / 2; ty = c.home.y + c.home.h + 14; c.goingHome = true }
         } else {
-          // AUTONOMY: each adult decides for themselves. hunger always overrides; otherwise they act on
-          // their OWN intent (work, seek company, rest, leisure, court) — two people choose differently.
+          // AUTONOMY: each adult decides for themselves. hunger overrides; otherwise they act on their OWN intent
+          // (work, company, rest, court, a stroll, exploring the wilds) — two people choose differently.
           if (c.energy < GO_FORAGE_AT) c.goingHome = false
           else if (c.energy > GO_HOME_AT) c.goingHome = true
           if (c.life && (this.clockDays + c.id) % 3 === 0) c.life.intent = decideIntent(c)
-          // higher education: a studious young adult enrols at the university to keep learning a trade
           const ay = ageYears(c)
           if (c.life && this.universities[0] && ay >= 18 && ay <= 27 && c.psyche.five.c + c.psyche.five.o > 1.05 && c.energy > GO_FORAGE_AT && rand() < 0.5) c.life.intent = "estudiar"
           const intent = c.life?.intent || "comer"
-          // hunger only commands them when they're genuinely hungry; the rest of the time they live their OWN life
           if (c.energy < 62 || intent === "comer") { const f = this.nearestFood(c, c.genome.vision * 3); const gd = this.nearestGarden(c); tx = f ? f.x : gd.x; ty = f ? f.y : gd.y }
           else { const t = this.intentTarget(c, intent); tx = t.x; ty = t.y }
         }
+        c.targetX = tx; c.targetY = ty // SINGLE SOURCE OF TRUTH: the view interpolates toward this; the sim moves toward it too (headless/background)
         const [vx, vy] = this.roadSteer(c, tx, ty)
         c.vx = vx; c.vy = vy
       }
