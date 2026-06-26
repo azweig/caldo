@@ -3,7 +3,6 @@
 // possessed character in third person. The simulation stays in the 2D engine; this only renders.
 
 import * as THREE from "three"
-import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js"
 import { World, Creature, House, WORLD_W, WORLD_H, BLOCK } from "./world"
 
 const S = 0.045 // world px → 3D units
@@ -153,38 +152,39 @@ function personName(c: Creature, era: number): string {
   return `${eraTier(era)}_${roleOf(c)}_${sex}_${v}`
 }
 // the 3D MODEL is shared across both variants (only era×role×sex were converted to GLB)
-function modelName(c: Creature, era: number): string {
-  // era-appropriate anime model: a stone-age peasant looks prehistoric, a future scholar futuristic, etc.
-  return `anime_${eraTier(era)}_${roleOf(c)}` // 28 models: 7 eras × 4 roles
-}
 
 // ── real 3D character meshes (TripoSR GLBs) with a billboard fallback while a model loads ──
-const gltf = new GLTFLoader()
-const modelCache = new Map<string, THREE.Object3D>()
-const modelLoading = new Set<string>()
 const modelPool: THREE.Group[] = []
-function loadBase(name: string) {
-  if (modelCache.has(name) || modelLoading.has(name)) return
-  modelLoading.add(name)
-  gltf.load(`/glb_anime/${name}.glb`, (g) => {
-    const root = g.scene
-    root.updateMatrixWorld(true) // TRELLIS meshes already come upright (Y-up)
-    const box = new THREE.Box3().setFromObject(root)
-    const size = new THREE.Vector3(); box.getSize(size)
-    const s = 1 / (size.y || 1) // normalise to unit height (now that it's upright)
-    const c = box.getCenter(new THREE.Vector3())
-    root.scale.setScalar(s)
-    root.position.set(-c.x * s, -box.min.y * s, -c.z * s) // feet at y=0, centred on x/z
-    root.traverse((o) => { // unlit so they're always clearly visible; use the baked TEXTURE (TRELLIS) not vertex colours
-      if (o instanceof THREE.Mesh) {
-        const old = o.material as THREE.MeshStandardMaterial
-        if (old.map) { old.map.colorSpace = THREE.SRGBColorSpace; o.material = new THREE.MeshBasicMaterial({ map: old.map }) }
-        else o.material = new THREE.MeshBasicMaterial({ vertexColors: true, color: 0xffffff })
-      }
-    })
-    const wrap = new THREE.Group(); wrap.add(root)
-    modelCache.set(name, wrap)
-  }, undefined, () => modelLoading.delete(name))
+
+// procedural low-poly villagers that MATCH the 2D look (same skin/hair palettes + hue-based cloth + age scale),
+// so 2D and 3D show the same person. Built once per pool slot, recoloured + animated per creature each frame.
+const SKIN3D = [0xf8d5b4, 0xf4cba6, 0xeebf96, 0xe0ac82, 0xd79e6f, 0xc68a52, 0xb07a48, 0x9c6b43, 0x84572f, 0x6b4524]
+const HAIR3D = [0x15110c, 0x2a1d12, 0x3d2a18, 0x4a3220, 0x6b4a2e, 0x8a6a3a, 0xb89048, 0xd8b25a, 0xb0461f, 0x7a3a1a]
+function appear3D(c: Creature) {
+  const g = c.genome as { hue: number; sprite?: number; size: number }
+  const seed = Math.abs(g.hue * 7.13 + (g.sprite || 0) * 31.7) + 1
+  const r = (n: number) => { const x = Math.sin(seed * 12.9898 + n * 78.233) * 43758.5; return x - Math.floor(x) }
+  const ay = c.ageDays / 360
+  const greyT = Math.max(0, Math.min(1, (ay - 46) / 32))
+  const hair = greyT > 0.62 ? 0xd6cfc4 : greyT > 0.28 ? 0x9a948a : HAIR3D[Math.floor(r(2) * HAIR3D.length)]
+  return { skin: SKIN3D[Math.floor(r(1) * SKIN3D.length)], hair, clothH: ((g.hue % 360) + 360) % 360 / 360, ay }
+}
+function buildRig(grp: THREE.Group) {
+  const legMat = new THREE.MeshLambertMaterial({ color: 0x473828 })
+  const clothMat = new THREE.MeshLambertMaterial({ color: 0x5a7da0 })
+  const skinMat = new THREE.MeshLambertMaterial({ color: 0xe0ac82 })
+  const hairMat = new THREE.MeshLambertMaterial({ color: 0x2a1d12 })
+  const legGeo = new THREE.BoxGeometry(0.14, 0.34, 0.14)
+  const ll = new THREE.Mesh(legGeo, legMat); ll.position.set(-0.1, 0.17, 0)
+  const rl = new THREE.Mesh(legGeo, legMat); rl.position.set(0.1, 0.17, 0)
+  const torso = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.5, 0.26), clothMat); torso.position.set(0, 0.62, 0)
+  const armGeo = new THREE.BoxGeometry(0.1, 0.42, 0.12)
+  const la = new THREE.Mesh(armGeo, clothMat); la.position.set(-0.28, 0.62, 0)
+  const ra = new THREE.Mesh(armGeo, clothMat); ra.position.set(0.28, 0.62, 0)
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.22, 12, 10), skinMat); head.position.set(0, 1.02, 0)
+  const hair = new THREE.Mesh(new THREE.SphereGeometry(0.235, 12, 10, 0, Math.PI * 2, 0, Math.PI * 0.62), hairMat); hair.position.set(0, 1.05, 0)
+  grp.add(ll, rl, torso, la, ra, head, hair)
+  grp.userData.rig = { legMat, clothMat, skinMat, hairMat, ll, rl, la, ra }
 }
 
 function boxBuilding(x: number, y: number, w: number, h: number, height: number, mat: THREE.Material): THREE.Mesh {
@@ -390,24 +390,20 @@ export function render3D(world: World, me: Creature, yaw: number, pitch = 0) {
     const r = rings[i]; r.visible = true; (r.material as THREE.MeshBasicMaterial).color.setHex(ringCol)
     r.position.set(c.x * S, 0.06, c.y * S); r.scale.setScalar(scale * 0.5)
     const sh = shadows[i]; sh.visible = true; sh.position.set(c.x * S, 0.04, c.y * S); sh.scale.setScalar(scale * 0.42)
-    const mn = modelName(c, world.era); loadBase(mn)
-    const base = modelCache.get(mn); const slot = modelPool[i]
-    if (base) { // real 3D mesh
-      pool[i].visible = false; slot.visible = true
-      if (slot.userData.name !== mn) { slot.clear(); slot.add(base.clone()); slot.userData.name = mn }
-      const moving = Math.abs(c.vx) + Math.abs(c.vy) > 0.12
-      const ph = walkT * 9 + c.id
-      const bob = moving ? Math.abs(Math.sin(ph)) * 0.14 : Math.sin(walkT * 1.6 + c.id) * 0.02 // walk bounce, or a faint breathing when still
-      slot.position.set(c.x * S, bob, c.y * S); slot.scale.setScalar(scale)
-      if (moving) { slot.rotation.y = -Math.atan2(c.vy, c.vx) - Math.PI / 2; slot.rotation.z = Math.sin(ph) * 0.08; slot.rotation.x = 0.06 } // a step-sway + a slight forward lean
-      else { slot.rotation.z = 0; slot.rotation.x = 0 }
-    } else { // billboard fallback while the model loads
-      slot.visible = false
-      const sp = pool[i]; sp.visible = true; const pn = personName(c, world.era)
-      sp.material.map = loadPerson(pn); sp.material.needsUpdate = true
-      const asp = peopleAspect.get(pn) ?? 0.5
-      sp.position.set(c.x * S, scale / 2 + 0.05, c.y * S); sp.scale.set(scale * asp, scale, 1)
-    }
+    const slot = modelPool[i]
+    if (!slot.userData.rig) buildRig(slot)
+    const rig = slot.userData.rig as { legMat: THREE.MeshLambertMaterial; clothMat: THREE.MeshLambertMaterial; skinMat: THREE.MeshLambertMaterial; hairMat: THREE.MeshLambertMaterial; ll: THREE.Mesh; rl: THREE.Mesh; la: THREE.Mesh; ra: THREE.Mesh }
+    const ap = appear3D(c)
+    rig.skinMat.color.setHex(ap.skin); rig.hairMat.color.setHex(ap.hair); rig.clothMat.color.setHSL(ap.clothH, 0.42, 0.54)
+    pool[i].visible = false; slot.visible = true
+    const moving = Math.abs(c.vx) + Math.abs(c.vy) > 0.12
+    const ph = walkT * 9 + c.id
+    const bob = moving ? Math.abs(Math.sin(ph)) * 0.06 : Math.sin(walkT * 1.6 + c.id) * 0.015
+    const ageScale = ap.ay < 2 ? 0.42 : ap.ay < 13 ? 0.62 : ap.ay < 19 ? 0.84 : ap.ay > 60 ? 0.94 : 1
+    slot.position.set(c.x * S, bob, c.y * S); slot.scale.setScalar(scale * ageScale)
+    if (moving) slot.rotation.y = -Math.atan2(c.vy, c.vx) - Math.PI / 2
+    const swing = moving ? Math.sin(ph) * 0.35 : 0 // legs + arms swing in opposition, a real walk
+    rig.ll.rotation.x = swing; rig.rl.rotation.x = -swing; rig.la.rotation.x = -swing * 0.7; rig.ra.rotation.x = swing * 0.7
     i++
   }
   place(me, 2.0, 0x46c8ff) // you — cyan ring
