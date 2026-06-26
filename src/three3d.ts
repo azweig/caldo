@@ -146,11 +146,9 @@ function personName(c: Creature, era: number): string {
   return `${eraTier(era)}_${roleOf(c)}_${sex}_${v}`
 }
 // the 3D MODEL is shared across both variants (only era×role×sex were converted to GLB)
-function modelName(c: Creature, _era: number): string {
-  // TEST: only 4 anime models exist for now → map every creature to one of them by role
-  const role = roleOf(c) // commoner | merchant | scholar | warrior
-  const sex = role === "merchant" || role === "scholar" ? "f" : "m"
-  return `anime_${role}_${sex}`
+function modelName(c: Creature, era: number): string {
+  // era-appropriate anime model: a stone-age peasant looks prehistoric, a future scholar futuristic, etc.
+  return `anime_${eraTier(era)}_${roleOf(c)}` // 28 models: 7 eras × 4 roles
 }
 
 // ── real 3D character meshes (TripoSR GLBs) with a billboard fallback while a model loads ──
