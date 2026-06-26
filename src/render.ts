@@ -149,6 +149,12 @@ export function drawWorld(
       ctx.beginPath(); ctx.ellipse(h.x + h.w / 2 + 6, h.y + h.h - 2, hw * 0.42, h.h * 0.3, 0, 0, Math.PI * 2); ctx.fill(); ctx.restore()
       ctx.imageSmoothingEnabled = false; ctx.globalAlpha = n > 0 ? 1 : 0.82
       ctx.drawImage(hImg, h.x + h.w / 2 - hw / 2, h.y + h.h - hh, hw, hh); ctx.globalAlpha = 1
+      if (n > 0 && world.era < 12) { // smoke curls from the chimney of a lived-in home (a hearth burning)
+        ctx.save(); ctx.fillStyle = "rgba(210,210,215,0.35)"
+        const cxh = h.x + h.w * 0.66, ry = h.y + h.h - hh * 0.72
+        for (let s = 0; s < 3; s++) { const t = (wT * 0.4 + s * 9 + h.x) % 27; ctx.globalAlpha = 0.3 * (1 - t / 27); ctx.beginPath(); ctx.arc(cxh + Math.sin(t * 0.3 + s) * 5, ry - t, 3 + t * 0.12, 0, Math.PI * 2); ctx.fill() }
+        ctx.restore()
+      }
       if (nightNow && n > 0) { // warm light spills from an occupied home at night
         ctx.save(); ctx.globalCompositeOperation = "lighter"; ctx.globalAlpha = 0.5
         const gg = ctx.createRadialGradient(h.x + h.w / 2, h.y + h.h - hh * 0.45, 2, h.x + h.w / 2, h.y + h.h - hh * 0.45, hw * 0.5)
@@ -206,6 +212,19 @@ export function drawWorld(
 
   vehT += 1.3; wT += 1
   drawVehicles(ctx, world, vehT)
+
+  // AMBIENT drift: pale pollen motes by day, glimmering fireflies by night
+  for (let i = 0; i < 44; i++) {
+    const bx = (seedR(i * 1.7) * WORLD_W + wT * 0.3) % WORLD_W
+    const by = seedR(i * 2.3 + 1) * WORLD_H + Math.sin(wT * 0.05 + i) * 12
+    ctx.fillStyle = nightNow ? `rgba(255,232,150,${0.3 + 0.4 * (0.5 + 0.5 * Math.sin(wT * 0.12 + i))})` : "rgba(255,255,255,0.16)"
+    ctx.beginPath(); ctx.arc(bx, by, nightNow ? 1.8 : 1.2, 0, Math.PI * 2); ctx.fill()
+  }
+  if (!nightNow) for (let b = 0; b < 3; b++) { // a few birds drift across the sky by day
+    const bx = (wT * 1.1 + b * 360 + seedR(b * 9) * WORLD_W) % WORLD_W, by = 70 + b * 80 + Math.sin(wT * 0.04 + b) * 18
+    ctx.strokeStyle = "rgba(40,45,55,0.5)"; ctx.lineWidth = 1.4
+    ctx.beginPath(); ctx.moveTo(bx - 6, by); ctx.lineTo(bx, by - 4); ctx.lineTo(bx + 6, by); ctx.stroke()
+  }
 
   // food
   const foodOk = assets.food.naturalWidth > 0
