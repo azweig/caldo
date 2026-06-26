@@ -889,6 +889,12 @@ export class World {
     for (const c of this.creatures) byId.set(c.id, c)
     const homeCount = new Map<House, number>() // cheap household size, for the social need
     for (const c of this.creatures) if (!c.isAvatar) homeCount.set(c.home, (homeCount.get(c.home) || 0) + 1)
+    // PERF: a spatial grid of food, built once, so each creature checks only its cell + neighbours instead of
+    // scanning all ~2200 food items (was O(creatures × food)). Eaten food is marked + filtered out at the end.
+    const FCELL = 40, fkey = (x: number, y: number) => (Math.floor(x / FCELL) & 8191) | ((Math.floor(y / FCELL) & 8191) << 13)
+    const foodGrid = new Map<number, { x: number; y: number }[]>()
+    for (const f of this.food) { const k = fkey(f.x, f.y); const b = foodGrid.get(k); if (b) b.push(f); else foodGrid.set(k, [f]) }
+    const eaten = new Set<{ x: number; y: number }>()
 
     for (const c of this.creatures) {
       c.ageDays++
@@ -959,15 +965,16 @@ export class World {
         if ((c.x - (c.home.x + c.home.w / 2)) ** 2 + (c.y - (c.home.y + c.home.h + 14)) ** 2 < 80 * 80) c.energy = Math.min(MAX_ENERGY, c.energy + 6) // the household's stored harvest
       }
 
-      const mouth = 16 + g.size * 9
-      for (let i = this.food.length - 1; i >= 0; i--) {
-        const f = this.food[i]
-        if ((f.x - c.x) ** 2 + (f.y - c.y) ** 2 < mouth * mouth) {
-          this.food.splice(i, 1)
-          // smarter + better-schooled creatures extract more from the same food (selection pressure)
+      const mouth = 16 + g.size * 9, m2 = mouth * mouth
+      const gx0 = Math.floor(c.x / FCELL), gy0 = Math.floor(c.y / FCELL)
+      eat: for (let gx = -1; gx <= 1; gx++) for (let gy = -1; gy <= 1; gy++) {
+        const cell = foodGrid.get(((gx0 + gx) & 8191) | (((gy0 + gy) & 8191) << 13)); if (!cell) continue
+        for (const f of cell) {
+          if (eaten.has(f) || (f.x - c.x) ** 2 + (f.y - c.y) ** 2 >= m2) continue
+          eaten.add(f) // smarter + better-schooled creatures extract more from the same food (selection pressure)
           const smart = 1 + 0.3 * (g.intellect - 0.5) + 0.002 * c.knowledge
           c.energy = Math.min(MAX_ENERGY, c.energy + FOOD_ENERGY * smart)
-          break
+          break eat
         }
       }
 
@@ -1066,6 +1073,7 @@ export class World {
       }
       if (heirs.length && dead.money > 0) { const share = dead.money / heirs.length; for (const h of heirs) h.money += share }
     }
+    if (eaten.size) this.food = this.food.filter((f) => !eaten.has(f)) // remove the food eaten this tick (one pass)
     this.creatures = survivors.concat(newborns)
 
     // a thriving, advanced civilisation founds a SECOND university as it grows
