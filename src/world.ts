@@ -343,6 +343,7 @@ export class World {
     if (c.profBase !== prev) { feel(c, "esperanzado", 0.5); this.logEvent(`${c.name} ${c.surname} dejó de ser ${prev} y aprendió ${c.profBase}`) }
   }
 
+  viewControlled = false // true while this world is on screen → the view (main.ts) owns creature positions
   pois: { x: number; y: number; kind: string; by: number }[] = [] // claimable spots: market stalls, work stations, benches
   animals: Animal[] = [] // wild + domestic beasts roaming the land
   raiders: Enemy[] = [] // an active raid from beyond the map (savages / nomads / pirates / terrorists)
@@ -894,7 +895,10 @@ export class World {
         c.vx = vx; c.vy = vy
       }
 
-      if (!c.isAvatar && !c.controlled) { // the avatar/possessed move in REAL TIME (per frame, in main), not at the clock rate
+      // MOVEMENT OWNERSHIP: the sim is the single source of position. When this world is the one on screen,
+      // the view (main.ts) moves creatures smoothly every frame toward the sim's chosen velocity, so the sim
+      // skips its own per-tick position write to avoid the two fighting. Headless + background worlds: sim moves.
+      if (!c.isAvatar && !c.controlled && !this.viewControlled) {
         c.x += c.vx; c.y += c.vy
         if (c.vx > 0.05) c.facing = 1; else if (c.vx < -0.05) c.facing = -1
         c.x = clampn(c.x, MARGIN, WORLD_W - MARGIN)

@@ -10,10 +10,11 @@ import { drawWorld, drawChart } from "./render"
 import { respond, greeting, remember, ambientDialogue } from "./chat"
 import { Msg, setLlm, pingLLM, autoDetect, llmConfigured, llmUrl, llmModel } from "./llm"
 import { seedRng, rngState, setRngState } from "./rng"
+import { worldAffairs, relationScore, relationLabel } from "./affairs"
 import { eraName, professionSpace, ERAS, eraProgress } from "./civ"
 import { ENNEAGRAM } from "./psyche"
 import { LangCode, WRITE_LANG, langName, heard } from "./i18n"
-import { CivConfig, RELIGIONS, buildCountries, foodSystem, transportOf, transportLevel, climateOf } from "./civconfig"
+import { CivConfig, RELIGIONS, buildCountries, foodSystem, transportOf, climateOf } from "./civconfig"
 import { ethosOf, cultureReligions } from "./cultures"
 import { innerLine, EMO } from "./life"
 import { init3D, resize3D, render3D, renderInterior, ROOM, pick3D, project3D } from "./three3d"
@@ -127,7 +128,6 @@ const SCALES = [
 interface Country { world: World; name: string; flag: string; lang: LangCode }
 let countries: Country[] = []
 let active = 0
-let migrateAcc = 0
 let frame = 0
 let gameSeed = 1          // the run's RNG seed (reproducible); persisted in the save
 let pendingCatchUp = 0    // offline-progression ticks still to process, chunked across frames
@@ -714,77 +714,10 @@ function buildTabs() {
 function switchCountry(i: number) {
   if (i === active || !countries[i]) return
   if (avatar) { const k = world.creatures.indexOf(avatar); if (k >= 0) world.creatures.splice(k, 1) }
-  active = i; world = countries[i].world
+  active = i; world = countries[i].world; countries.forEach((cn) => (cn.world.viewControlled = cn.world === world))
   if (avatar) { avatar.x = world.airport.x + world.airport.w / 2; avatar.y = world.airport.y + world.airport.h; avatar.vx = avatar.vy = 0; world.creatures.push(avatar) }
   closeChat(); inspect.classList.add("hidden")
   ;[...tabsEl.children].forEach((el, j) => (el as HTMLElement).classList.toggle("active", j === i))
-}
-// ── inter-country relations: peace / alliance / war computed from compatibility ──
-function topReligion(w: World): string {
-  const r: Record<string, number> = {}
-  for (const c of w.creatures) if (!c.isAvatar && c.religion) r[c.religion] = (r[c.religion] || 0) + 1
-  return Object.entries(r).sort((a, b) => b[1] - a[1])[0]?.[0] || ""
-}
-function relationScore(A: Country, B: Country): number {
-  let s = 1
-  const ra = topReligion(A.world), rb = topReligion(B.world)
-  if (ra && ra === rb) s += 2.5; else s -= 1                       // shared faith bonds; different divides
-  if (A.world.gov === B.world.gov) s += 1; else s -= 0.5           // like governments get along
-  s -= Math.abs(A.world.era - B.world.era) * 0.25                  // a big tech gap breeds resentment
-  s -= (A.world.violence + B.world.violence) * 1.8                 // violent peoples clash
-  s -= (A.world.psychopathy + B.world.psychopathy) * 2.5
-  if (A.world.monarch?.powerHungry || B.world.monarch?.powerHungry) s -= 1.5 // a despot wants conquest
-  return s
-}
-function relationLabel(s: number): string { return s > 3 ? "aliados 🤝" : s > 1 ? "paz" : s > -1 ? "neutral" : s > -3 ? "tensión" : "guerra ⚔" }
-
-function warDeaths(w: World, n: number) {
-  const adults = w.creatures.filter((c) => !c.isAvatar && isMature(c))
-  for (let k = 0; k < n && adults.length > 6; k++) {
-    const v = adults.splice(Math.floor(Math.random() * adults.length), 1)[0]
-    const idx = w.creatures.indexOf(v); if (idx >= 0) { w.creatures.splice(idx, 1); w.deaths++ }
-  }
-}
-function migrateBetween(from: Country, to: Country) {
-  if (from === to) return
-  const pool = from.world.creatures.filter((c) => !c.isAvatar && isMature(c))
-  if (pool.length < 16) return
-  const c = pool[Math.floor(Math.random() * pool.length)]
-  from.world.creatures.splice(from.world.creatures.indexOf(c), 1)
-  c.x = to.world.airport.x + Math.random() * 80; c.y = to.world.airport.y + Math.random() * 50
-  c.home = to.world.houses[Math.floor(Math.random() * to.world.houses.length)]; c.goingHome = false; c.partner = 0; c.pregnant = 0
-  to.world.creatures.push(c)
-  from.world.chronicle.push({ day: from.world.clockDays, text: `${c.name} ${c.surname} partió a ${to.name} ✈` })
-  to.world.chronicle.push({ day: to.world.clockDays, text: `llegó ${c.name} ${c.surname} desde ${from.name} ✈` })
-}
-// runs periodically: transport gates contact, the relation decides migration / alliance / war
-function worldAffairs(steps: number) {
-  migrateAcc += steps
-  if (migrateAcc < 450 || countries.length < 2) return
-  migrateAcc = 0
-  const i = Math.floor(Math.random() * countries.length)
-  const j = (i + 1 + Math.floor(Math.random() * (countries.length - 1))) % countries.length
-  const A = countries[i], B = countries[j]
-  if (Math.min(transportLevel(A.world.era), transportLevel(B.world.era)) < 1) return // isolated until carts/boats (~era 3)
-  const label = relationLabel(relationScore(A, B))
-  if (label.startsWith("guerra")) {
-    // a real war: the stronger military prevails, the weaker side bleeds, and spoils flow to the victor
-    const sa = A.world.militaryStrength(), sb = B.world.militaryStrength(), total = sa + sb || 1
-    const aLoss = 1 + Math.floor(5 * sb / total), bLoss = 1 + Math.floor(5 * sa / total)
-    warDeaths(A.world, aLoss); warDeaths(B.world, bLoss)
-    const aWins = sa >= sb, winner = aWins ? A : B, loser = aWins ? B : A
-    winner.world.research += 1800 // spoils of war: plunder + captured knowledge
-    A.world.chronicle.push({ day: A.world.clockDays, text: `⚔ guerra con ${B.name} — ${aWins ? "victoria" : "derrota"}, ${aLoss} caídos` })
-    B.world.chronicle.push({ day: B.world.clockDays, text: `⚔ guerra con ${A.name} — ${aWins ? "derrota" : "victoria"}, ${bLoss} caídos` })
-    if (Math.random() < 0.6) migrateBetween(loser, winner) // refugees flee the losing side to the victor
-  } else if (label === "aliados 🤝") {
-    migrateBetween(A, B); migrateBetween(B, A)                       // open borders — the peoples mix
-    const lag = A.world.era <= B.world.era ? A : B; lag.world.research += 5000 // shared technology
-  } else if (label === "paz") {
-    if (Math.random() < 0.5) migrateBetween(A, B); else migrateBetween(B, A)
-  } else if (Math.random() < 0.4) {
-    migrateBetween(A, B)                                            // neutral/tense — the rare traveller
-  }
 }
 
 // overheard AI-to-AI chatter near the avatar (you can listen, not intervene)
@@ -874,7 +807,7 @@ function loop() {
       while (cn.world.clockDays < want && s < cap) { cn.world.step(); s++ }
       steps += s
     }
-    if (steps) worldAffairs(steps)
+    if (steps) worldAffairs(countries, steps)
     if (possessBusy && world.clockMinutes >= possessBusy.until) finishBusy()
   }
   // DAILY RHYTHM: everyone walks to work/school by day, visits/strolls in the evening, and only goes still
@@ -1008,7 +941,7 @@ function newGame(cfg: CivConfig) {
       }),
     }
   })
-  active = 0; world = countries[0].world; avatar = world.addAvatar()
+  active = 0; world = countries[0].world; avatar = world.addAvatar(); countries.forEach((cn) => (cn.world.viewControlled = cn.world === world))
   startRunning(); saveGame()
 }
 function continueGame(save: { active: number; savedAt: number; rng?: number; seed?: number; countries: { name: string; flag: string; lang: LangCode; state: unknown }[] }) {
@@ -1016,7 +949,7 @@ function continueGame(save: { active: number; savedAt: number; rng?: number; see
   setRngState(save.rng || gameSeed || 1) // restore the exact RNG stream so the load is deterministic
   countries = save.countries.map((cc) => ({ name: cc.name, flag: cc.flag, lang: cc.lang, world: World.fromState(cc.state, spriteCount) }))
   active = Math.min(save.active || 0, countries.length - 1)
-  world = countries[active].world; avatar = world.addAvatar()
+  world = countries[active].world; avatar = world.addAvatar(); countries.forEach((cn) => (cn.world.viewControlled = cn.world === world))
   // offline progression — kept advancing while you were away. Chunked across frames so the load never freezes.
   pendingCatchUp = Math.min(1500, Math.floor(Math.max(0, (Date.now() - (save.savedAt || Date.now())) / 1000)) * 20)
   startRunning()
