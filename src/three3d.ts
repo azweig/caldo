@@ -4,6 +4,7 @@
 
 import * as THREE from "three"
 import { World, Creature, House, WORLD_W, WORLD_H, BLOCK } from "./world"
+import { SPECIES } from "./animals"
 
 const S = 0.045 // world px → 3D units
 
@@ -156,6 +157,17 @@ function personName(c: Creature, era: number): string {
 // ── real 3D character meshes (TripoSR GLBs) with a billboard fallback while a model loads ──
 const modelPool: THREE.Group[] = []
 
+// pools for the DYNAMIC props (they move/spawn) so 3D shows the same wild animals + harvestable crops as 2D
+const animPool: THREE.Mesh[] = []
+const foodPool: THREE.Mesh[] = []
+function ensureProps() {
+  if (animPool.length) return
+  const animGeo = new THREE.SphereGeometry(0.34, 8, 6)
+  for (let i = 0; i < 16; i++) { const m = new THREE.Mesh(animGeo, new THREE.MeshLambertMaterial({ color: 0xcaa869 })); m.visible = false; scene.add(m); animPool.push(m) }
+  const foodGeo = new THREE.SphereGeometry(0.24, 6, 5), foodMat = new THREE.MeshLambertMaterial({ color: 0xd8472f })
+  for (let i = 0; i < 56; i++) { const m = new THREE.Mesh(foodGeo, foodMat); m.visible = false; scene.add(m); foodPool.push(m) }
+}
+
 // procedural low-poly villagers that MATCH the 2D look (same skin/hair palettes + hue-based cloth + age scale),
 // so 2D and 3D show the same person. Built once per pool slot, recoloured + animated per creature each frame.
 const SKIN3D = [0xf8d5b4, 0xf4cba6, 0xeebf96, 0xe0ac82, 0xd79e6f, 0xc68a52, 0xb07a48, 0x9c6b43, 0x84572f, 0x6b4524]
@@ -211,31 +223,51 @@ function buildTown(world: World) {
     const gg = new THREE.BufferGeometry(); gg.setAttribute("position", new THREE.Float32BufferAttribute(pts, 3))
     town.add(new THREE.LineSegments(gg, new THREE.LineBasicMaterial({ color: 0x3a9bff, transparent: true, opacity: 0.5 })))
   }
+  // GARDENS: tilled soil with orderly ROWS of crop tufts you can actually see growing
+  const soilMat = new THREE.MeshLambertMaterial({ color: 0x6a4a2f })
+  const cropMat = new THREE.MeshLambertMaterial({ color: world.era >= 15 ? 0x4ab0a0 : 0x569a3c })
+  const cropGeo = new THREE.ConeGeometry(0.34, 0.8, 5)
   for (const gd of world.gardens) {
-    const disc = new THREE.Mesh(new THREE.CircleGeometry(95 * S, 18), new THREE.MeshBasicMaterial({ color: 0x2c5a38, transparent: true, opacity: 0.4 }))
-    disc.rotation.x = -Math.PI / 2; disc.position.set(gd.x * S, 0.05, gd.y * S); town.add(disc)
+    const disc = new THREE.Mesh(new THREE.CircleGeometry(95 * S, 20), soilMat)
+    disc.rotation.x = -Math.PI / 2; disc.position.set(gd.x * S, 0.04, gd.y * S); town.add(disc)
+    for (let rr = -4; rr <= 4; rr++) for (let cc = -4; cc <= 4; cc++) { // round patch of rows
+      if (rr * rr + cc * cc > 17) continue
+      const t = new THREE.Mesh(cropGeo, cropMat); t.position.set(gd.x * S + cc * 1.5, 0.4, gd.y * S + rr * 1.5); town.add(t)
+    }
   }
-  // textured houses with per-house VARIETY in height + roof style (deterministic by position → stable)
+  // HOUSES: legible huts — taller than a person (was barely person-height), with a DOOR on the south face
+  // (where houseAtDoor expects you to stand) + flanking windows, and clear per-house variety.
   const walls = eraWalls(world.era), roofs = eraRoofs(world.era)
   const winMat = new THREE.MeshBasicMaterial({ color: 0x9fc0e0 })
+  const doorMat = new THREE.MeshLambertMaterial({ color: 0x3a2716 })
+  const frameMat = new THREE.MeshLambertMaterial({ color: 0x2a1c10 })
   for (const h of world.houses) {
     const r = hashf(h.x + h.y * 0.7), tier = h.tier || 0
     const wallMat = matFor(walls[Math.floor(hashf(h.x * 1.7 + 3) * 997) % walls.length])
     const roofMat = matFor(roofs[Math.floor(hashf(h.y * 2.3 + 7) * 997) % roofs.length])
-    // the HOUSE TYPE shows in its scale: choza low, casa/casona/mansión bigger + taller, edificio towers
-    const bh = tier === 4 ? 9 + r * 4 : 2.0 + tier * 1.1 + r * 1.2
-    const w = h.w * S * (1.0 + hashf(h.x) * 0.3), d = h.h * S * (1.0 + hashf(h.y) * 0.3)
-    const cx = (h.x + h.w / 2) * S, cz = (h.y + h.h / 2) * S
+    // TYPE shows in scale: choza modest, casa/casona/mansión bigger, edificio towers — all clearly above head height
+    const bh = tier === 4 ? 12 + r * 5 : 4.2 + tier * 1.7 + r * 1.6
+    const w = h.w * S * (1.2 + hashf(h.x) * 0.4), d = h.h * S * (1.2 + hashf(h.y) * 0.4)
+    const cx = (h.x + h.w / 2) * S, cz = (h.y + h.h / 2) * S, fz = cz + d / 2 // south face = the front (door side)
     const body = new THREE.Mesh(new THREE.BoxGeometry(w, bh, d), wallMat)
     body.position.set(cx, bh / 2, cz); town.add(body)
-    if (tier === 4) { // APARTMENT BUILDING — flat roof + rows of lit windows up the facade
+    // DOOR — a framed dark opening on the front, so it's obvious where to walk in
+    const dw = Math.min(w * 0.34, 2.6), dh = Math.min(bh * 0.6, tier === 4 ? 3.4 : bh - 1)
+    const frame = new THREE.Mesh(new THREE.BoxGeometry(dw + 0.5, dh + 0.5, 0.18), frameMat); frame.position.set(cx, dh / 2, fz + 0.05); town.add(frame)
+    const door = new THREE.Mesh(new THREE.BoxGeometry(dw, dh, 0.22), doorMat); door.position.set(cx, dh / 2, fz + 0.09); town.add(door)
+    if (tier === 4) { // APARTMENT — flat roof + rows of lit windows up the facade
       const slab = new THREE.Mesh(new THREE.BoxGeometry(w * 1.04, 0.3, d * 1.04), roofMat); slab.position.set(cx, bh + 0.15, cz); town.add(slab)
       const floors = Math.floor(bh / 2.3)
-      for (let fl = 0; fl < floors; fl++) for (const wx of [-0.3, 0, 0.3]) { const win = new THREE.Mesh(new THREE.PlaneGeometry(w * 0.18, 1.0), winMat); win.position.set(cx + wx * w, 1.6 + fl * 2.3, cz + d / 2 + 0.02); town.add(win) }
-    } else if (world.era < 12 || r < 0.5) { // pitched roof (old eras + some moderns)
-      const roof = new THREE.Mesh(new THREE.ConeGeometry(Math.max(w, d) * 0.78, 1.4 + tier * 0.4 + r, 4), roofMat)
-      roof.position.set(cx, bh + (0.7 + r * 0.5), cz); roof.rotation.y = Math.PI / 4; town.add(roof)
-    } else { const slab = new THREE.Mesh(new THREE.BoxGeometry(w * 1.02, 0.3, d * 1.02), roofMat); slab.position.set(cx, bh + 0.15, cz); town.add(slab) }
+      for (let fl = 1; fl < floors; fl++) for (const wx of [-0.3, 0, 0.3]) { const win = new THREE.Mesh(new THREE.PlaneGeometry(w * 0.18, 1.0), winMat); win.position.set(cx + wx * w, 1.6 + fl * 2.3, fz + 0.02); town.add(win) }
+    } else {
+      for (const wx of [-0.34, 0.34]) { // a window either side of the door
+        const win = new THREE.Mesh(new THREE.BoxGeometry(w * 0.18, Math.min(bh * 0.22, 1.2), 0.14), winMat); win.position.set(cx + wx * w, bh * 0.55, fz + 0.05); town.add(win)
+      }
+      if (world.era < 12 || r < 0.5) { // pitched roof
+        const roof = new THREE.Mesh(new THREE.ConeGeometry(Math.max(w, d) * 0.82, 2.0 + tier * 0.5 + r * 1.2, 4), roofMat)
+        roof.position.set(cx, bh + (1.0 + r * 0.6), cz); roof.rotation.y = Math.PI / 4; town.add(roof)
+      } else { const slab = new THREE.Mesh(new THREE.BoxGeometry(w * 1.02, 0.3, d * 1.02), roofMat); slab.position.set(cx, bh + 0.15, cz); town.add(slab) }
+    }
   }
   // civic buildings (distinct material, taller)
   const civicMat = new THREE.MeshLambertMaterial({ map: tex(world.era >= 12 ? "wall_glass" : "wall_stone", 2) })
@@ -409,6 +441,25 @@ export function render3D(world: World, me: Creature, yaw: number, pitch = 0) {
   place(me, 2.0, 0x46c8ff) // you — cyan ring
   for (const { c } of near) { if (i >= pool.length) break; place(c, 1.3 + c.genome.size * 0.45, relColor(me, c)) }
   for (; i < pool.length; i++) { pool[i].visible = false; rings[i].visible = false; shadows[i].visible = false; modelPool[i].visible = false }
+
+  // DYNAMIC PROPS — the same wild animals + harvestable crops you see in 2D, now in 3D (nearby only, no per-frame sort)
+  ensureProps()
+  let ai = 0
+  for (const a of world.animals) {
+    if (ai >= animPool.length) break
+    const dx = a.x - me.x, dy = a.y - me.y; if (dx * dx + dy * dy > 620 * 620) continue
+    const sp = SPECIES[a.kind], m = animPool[ai++]; m.visible = true
+    ;(m.material as THREE.MeshLambertMaterial).color.setHex(a.tame ? 0xbfe3a0 : sp?.hostile ? 0xcc5533 : 0xcaa869)
+    const sc = 0.7 + (sp?.danger || 0) * 0.5; m.scale.setScalar(sc); m.position.set(a.x * S, 0.34 * sc, a.y * S)
+  }
+  for (; ai < animPool.length; ai++) animPool[ai].visible = false
+  let fi = 0
+  for (const f of world.food) {
+    if (fi >= foodPool.length) break
+    const dx = f.x - me.x, dy = f.y - me.y; if (dx * dx + dy * dy > 520 * 520) continue
+    const m = foodPool[fi++]; m.visible = true; m.position.set(f.x * S, 0.5, f.y * S)
+  }
+  for (; fi < foodPool.length; fi++) foodPool[fi].visible = false
 
   // GROUND-LEVEL over-the-shoulder camera — yaw from A/D + mouse, pitch from dragging the mouse up/down
   const mx = me.x * S, mz = me.y * S
