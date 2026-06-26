@@ -52,8 +52,8 @@ const REGION_GROUND = [
   ["#5ea65a", "#56a052", "#86994e", "#8fb086"], // selvático
 ]
 const PATH_COL = ["#cbb083", "#cbb083", "#c2a875", "#c4bca8"] // warm dirt path, paler in winter
-const SKIN = ["#f4cba6", "#ecbd92", "#d79e6f", "#bd8350", "#9c6b43", "#7a4f31"]
-const HAIR = ["#2a1d12", "#4a3220", "#6b4a2e", "#a07b44", "#1a1a1a", "#7a3a1a", "#c9c2b8"]
+const SKIN = ["#f8d5b4", "#f4cba6", "#eebf96", "#e0ac82", "#d79e6f", "#c68a52", "#b07a48", "#9c6b43", "#84572f", "#6b4524"]
+const HAIR = ["#15110c", "#2a1d12", "#3d2a18", "#4a3220", "#6b4a2e", "#8a6a3a", "#b89048", "#d8b25a", "#b0461f", "#7a3a1a", "#d6cfc4"] // black→brown→blonde→ginger; grey last (for ageing)
 const CAT_COLOR: Record<string, string> = {
   comida: "#9cff7b", salud: "#ff8c8c", saber: "#9bb8ff", enseñanza: "#7bd0ff", construcción: "#c9a06a",
   oficio: "#d9b25a", arte: "#ff9bdd", liderazgo: "#ffd166", comercio: "#7be0c0", exploración: "#8fd6ff",
@@ -362,7 +362,8 @@ function appear(c: Creature, era = 5) {
   // individual build: some stocky, some slim; some tall, some short — so no two share a silhouette
   const bw = 0.8 + r(10) * 0.4, bh = 0.9 + r(11) * 0.2
   const preg = ((c as any).pregnant || 0) > 0 // an expecting mother carries a belly
-  return { ay, female, skin, hair, hairStyle, beard, cloth, garb, wealth, hat, prop, bw, bh, preg, r }
+  const freckles = r(12) < 0.24, rosy = ay < 12 || r(13) < 0.3 // freckles + rosy cheeks add little human touches
+  return { ay, female, skin, hair, hairStyle, beard, cloth, garb, wealth, hat, prop, bw, bh, preg, freckles, rosy, r }
 }
 
 // draw a person built up from the feet (y=0). proportions shift across life: babies are tiny + big-headed,
@@ -422,6 +423,8 @@ function drawVillager(ctx: CanvasRenderingContext2D, c: Creature, w: number, mov
     else { ctx.moveTo(mx - hr * 0.14, my); ctx.lineTo(mx + hr * 0.14, my) }
     ctx.stroke()
     if (emo === "enojado" && ei > 0.3) { ctx.beginPath(); ctx.moveTo(hr * 0.14, hcy - hr * 0.16); ctx.lineTo(hr * 0.52, hcy - hr * 0.02); ctx.stroke() } // furrowed brow
+    if (ap.rosy) { ctx.fillStyle = "rgba(220,120,110,0.28)"; ctx.beginPath(); ctx.arc(hr * 0.5, hcy + hr * 0.34, hr * 0.18, 0, Math.PI * 2); ctx.fill() } // a rosy cheek
+    if (ap.freckles && ap.beard === "none") { ctx.fillStyle = "rgba(120,75,45,0.5)"; for (let f = 0; f < 4; f++) ctx.fillRect(hr * (0.32 + (f % 2) * 0.22), hcy + hr * (0.2 + Math.floor(f / 2) * 0.16), hr * 0.07, hr * 0.07) } // freckles
   }
   if (c.sick) { ctx.fillStyle = "rgba(150,200,160,0.28)"; ctx.beginPath(); ctx.arc(0, hcy, hr, 0, Math.PI * 2); ctx.fill() } // a sickly pallor
   // HEADWEAR
