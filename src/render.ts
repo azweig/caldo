@@ -125,6 +125,7 @@ export function drawWorld(
 
   // houses
   const hImg = pix(`/pix_houses/${eraTier2D(world.era)}.png`)
+  const nightNow = (() => { const h = (world.clockMinutes % 1440) / 60; return h < 6 || h >= 19 })()
   for (const h of world.houses) {
     const n = present.get(h) || 0
     if (hImg.naturalWidth > 0) { // pixel-art house sprite, sized to the lot (roof rises above)
@@ -133,6 +134,12 @@ export function drawWorld(
       ctx.beginPath(); ctx.ellipse(h.x + h.w / 2 + 6, h.y + h.h - 2, hw * 0.42, h.h * 0.3, 0, 0, Math.PI * 2); ctx.fill(); ctx.restore()
       ctx.imageSmoothingEnabled = false; ctx.globalAlpha = n > 0 ? 1 : 0.82
       ctx.drawImage(hImg, h.x + h.w / 2 - hw / 2, h.y + h.h - hh, hw, hh); ctx.globalAlpha = 1
+      if (nightNow && n > 0) { // warm light spills from an occupied home at night
+        ctx.save(); ctx.globalCompositeOperation = "lighter"; ctx.globalAlpha = 0.5
+        const gg = ctx.createRadialGradient(h.x + h.w / 2, h.y + h.h - hh * 0.45, 2, h.x + h.w / 2, h.y + h.h - hh * 0.45, hw * 0.5)
+        gg.addColorStop(0, "rgba(255,205,120,0.9)"); gg.addColorStop(1, "rgba(255,205,120,0)")
+        ctx.fillStyle = gg; ctx.fillRect(h.x - hw, h.y - hh, hw * 3, hh * 2); ctx.restore()
+      }
     } else { // fallback rectangle until the sprite loads
       ctx.fillStyle = `hsl(${h.hue}, 30%, ${n > 0 ? 43 : 35}%)`; ctx.fillRect(h.x, h.y, h.w, h.h)
     }
@@ -241,6 +248,16 @@ export function drawWorld(
   }
 
   ctx.restore()
+
+  // DAY/NIGHT: a colour wash over the whole scene follows the in-world hour (dawn glow → bright day → dusk → night)
+  const hr = (world.clockMinutes % 1440) / 60
+  let tint = ""
+  if (hr < 5 || hr >= 21) tint = "rgba(20,28,66,0.46)"            // deep night, cool blue
+  else if (hr < 7) tint = "rgba(255,150,90,0.20)"                 // dawn, warm
+  else if (hr < 17) tint = ""                                     // bright day
+  else if (hr < 19) tint = "rgba(255,150,70,0.18)"                // late afternoon, golden
+  else tint = "rgba(90,70,130,0.34)"                              // dusk, violet
+  if (tint) { ctx.fillStyle = tint; ctx.fillRect(0, 0, cw, ch) }
 
   // a soft vignette darkens the screen edges → focus + depth (screen space, after the world transform)
   const vg = ctx.createRadialGradient(cw / 2, ch / 2, Math.min(cw, ch) * 0.4, cw / 2, ch / 2, Math.max(cw, ch) * 0.72)
