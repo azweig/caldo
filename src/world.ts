@@ -272,7 +272,7 @@ export class World {
       c.religion = famReligion[f] // a household shares its faith
       c.powerHungry = rand() < this.psychopathy
       c.x = home.x + rand() * 30; c.y = home.y + rand() * 30
-      this.assignProfession(c)
+      if (isMature(c)) this.assignProfession(c) // children get a trade when they grow up (step), not as babies
       this.creatures.push(c)
     }
     for (let i = 0; i < this.foodTarget; i++) this.scatterFood()
