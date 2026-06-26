@@ -817,6 +817,19 @@ function loop() {
       c.x += mvx; c.y += mvy; c.vx = mvx; c.vy = mvy
       if (mvx > 0.05) c.facing = 1; else if (mvx < -0.05) c.facing = -1 // face where they walk, in real time
     }
+    // CROWD FLOW: gently push people apart so they don't stack into one blob — a coarse grid keeps it O(n)
+    const CELL = 42, grid = new Map<number, Creature[]>()
+    const key = (x: number, y: number) => (Math.floor(x / CELL) & 4095) | ((Math.floor(y / CELL) & 4095) << 12)
+    for (const c of world.creatures) { if (c.isAvatar) continue; const k = key(c.x, c.y); const b = grid.get(k); if (b) b.push(c); else grid.set(k, [c]) }
+    for (const c of world.creatures) {
+      if (c.isAvatar || c.controlled) continue
+      let sx = 0, sy = 0, gx0 = Math.floor(c.x / CELL), gy0 = Math.floor(c.y / CELL)
+      for (let gx = -1; gx <= 1; gx++) for (let gy = -1; gy <= 1; gy++) {
+        const cell = grid.get(((gx0 + gx) & 4095) | (((gy0 + gy) & 4095) << 12)); if (!cell) continue
+        for (const o of cell) { const ddx = c.x - o.x, ddy = c.y - o.y, d2 = ddx * ddx + ddy * ddy; if (d2 > 0.01 && d2 < 26 * 26) { const d = Math.sqrt(d2), f = (26 - d) / 26 * 0.55; sx += (ddx / d) * f; sy += (ddy / d) * f } }
+      }
+      c.x += sx; c.y += sy
+    }
   }
   if (avatar && !possessed) avatar.energy = Math.max(60, Math.min(150, avatar.energy)) // immortal observer
   if (possessed) possessed.energy = Math.max(0, possessed.energy) // possessed: real hunger you manage (won't die)

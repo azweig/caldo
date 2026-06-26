@@ -490,17 +490,19 @@ export class World {
   }
   // where an aldeano goes to ACT ON their own intent — work at their trade's place, mingle at the plaza, etc.
   private intentTarget(c: Creature, intent: string): { x: number; y: number } {
+    // a per-person offset so a crowd SPREADS around a spot instead of piling onto one pixel
+    const ox = Math.cos(c.id * 2.4) * 70, oy = Math.sin(c.id * 1.7) * 60
     const home = { x: c.home.x + c.home.w / 2, y: c.home.y + c.home.h + 14 }
-    const plaza = { x: WORLD_W / 2, y: WORLD_H / 2 } // the town centre, where people gather
-    if (intent === "estudiar" && this.universities[0]) { const u = this.universities[0]; return { x: u.x + u.w / 2, y: u.y + u.h / 2 } }
+    const plaza = { x: WORLD_W / 2 + ox, y: WORLD_H / 2 + oy } // the town centre, where people gather
+    if (intent === "estudiar" && this.universities[0]) { const u = this.universities[0]; return { x: u.x + u.w / 2 + ox, y: u.y + u.h / 2 + oy } }
     if (intent === "descansar") return home
     if (intent === "socializar" || intent === "cortejar") return plaza
-    if (intent === "disfrutar") { const g = this.nearestGarden(c); return { x: g.x, y: g.y } } // hobbies happen out in the open
+    if (intent === "disfrutar") { const g = this.nearestGarden(c); return { x: g.x + ox, y: g.y + oy } } // hobbies happen out in the open
     if (intent === "trabajar") {
       const cat = c.profCat
-      if (cat === "enseñanza") { const s = this.nearestSchool(c); return { x: s.x + s.w / 2, y: s.y + s.h / 2 } }
-      if ((cat === "saber" || cat === "ingeniería" || cat === "salud") && this.universities[0]) { const u = this.universities[0]; return { x: u.x + u.w / 2, y: u.y + u.h / 2 } }
-      if (cat === "comida" || cat === "cuidado") { const g = this.nearestGarden(c); return { x: g.x, y: g.y } }
+      if (cat === "enseñanza") { const s = this.nearestSchool(c); return { x: s.x + s.w / 2 + ox, y: s.y + s.h / 2 + oy } }
+      if ((cat === "saber" || cat === "ingeniería" || cat === "salud") && this.universities[0]) { const u = this.universities[0]; return { x: u.x + u.w / 2 + ox, y: u.y + u.h / 2 + oy } }
+      if (cat === "comida" || cat === "cuidado") { const g = this.nearestGarden(c); return { x: g.x + ox, y: g.y + oy } }
       return plaza // merchants, leaders, crafters work the market/town centre
     }
     return home
