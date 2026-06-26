@@ -25,6 +25,19 @@ const canvas = document.getElementById("world") as HTMLCanvasElement
 const ctx = canvas.getContext("2d")!
 const canvas3d = document.getElementById("world3d") as HTMLCanvasElement
 const speech3d = document.getElementById("speech3d") as HTMLDivElement
+const chatterfeed = document.getElementById("chatterfeed") as HTMLDivElement
+let chatterLines: string[] = []
+function updateChatter() { // a live murmur of what people NEAR you are gossiping about (decoded from the codes)
+  const me = possessed || avatar
+  if (!me) { chatterfeed.classList.add("hidden"); return }
+  for (const c of world.creatures) {
+    if (c === me || c.isAvatar || !c.heard) continue
+    const dx = c.x - me.x, dy = c.y - me.y; if (dx * dx + dy * dy > 300 * 300) continue
+    const line = `${c.name}: ${c.heard}`
+    if (chatterLines[chatterLines.length - 1] !== line) { chatterLines.push(line); if (chatterLines.length > 5) chatterLines.shift() }
+  }
+  if (chatterLines.length) { chatterfeed.innerHTML = "📻 <b>se murmura cerca</b><br>" + chatterLines.map((l) => "· " + l).join("<br>"); chatterfeed.classList.remove("hidden") }
+}
 const npccard = document.getElementById("npccard") as HTMLDivElement
 // click a person in 3D → show their card (info + actions) on the left, like you asked
 function showNpcCard(c: Creature | null) {
@@ -903,6 +916,7 @@ function loop() {
   }
 
   if (++saveAt >= 900) { saveAt = 0; saveGame() } // autosave ~every 15s
+  if (frame % 45 === 0) updateChatter() // refresh the nearby-gossip feed
   updateHud()
   requestAnimationFrame(loop)
 }
