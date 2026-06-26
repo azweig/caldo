@@ -380,27 +380,31 @@ function nearestPt(arr: { x: number; y: number; w?: number; h?: number }[], c: C
   return best
 }
 function workplaceOf(c: Creature): { x: number; y: number; name: string } | null {
-  if (!c.profCat) return null
-  if (c.profCat === "enseñanza") { const s = nearestPt(world.schools, c); return s && { ...s, name: "la escuela" } }
-  if (c.profCat === "saber" || c.profCat === "ingeniería" || c.profCat === "salud") { const u = nearestPt(world.universities, c); return u ? { ...u, name: "la universidad" } : { x: WORLD_W / 2, y: WORLD_H / 2, name: "la plaza" } }
-  if (c.profCat === "comida" || c.profCat === "cuidado") { const g = nearestPt(world.gardens, c); return g && { ...g, name: "los campos" } }
-  return { x: WORLD_W / 2, y: WORLD_H / 2, name: "la plaza / mercado" }
+  if (!c.profCat) { world.releaseSlot(c); return null }
+  if (c.profCat === "enseñanza") { world.releaseSlot(c); const s = nearestPt(world.schools, c); return s && { ...s, name: "la escuela" } }
+  if (c.profCat === "saber" || c.profCat === "ingeniería" || c.profCat === "salud") { world.releaseSlot(c); const u = nearestPt(world.universities, c); return u ? { ...u, name: "la universidad" } : { x: WORLD_W / 2, y: WORLD_H / 2, name: "la plaza" } }
+  if (c.profCat === "comida" || c.profCat === "cuidado") { world.releaseSlot(c); const g = nearestPt(world.gardens, c); return g && { ...g, name: "los campos" } }
+  // merchants, leaders + crafters claim a market stall / work station + stand at it (no more piling on the centre)
+  const s = world.claimSlot(c, c.profCat === "comercio" || c.profCat === "liderazgo" ? "market" : "work", WORLD_W / 2, WORLD_H / 2)
+  return s ? { ...s, name: "el mercado" } : { x: WORLD_W / 2, y: WORLD_H / 2, name: "la plaza / mercado" }
 }
 // where a person SHOULD be right now — drives their daily rhythm so the town is never frozen
 let routinePhase = 0
 function routineDest(c: Creature, hour: number): { x: number; y: number; sleep: boolean } {
   const age = ageYears(c)
   const home = { x: c.home.x + c.home.w / 2, y: c.home.y + c.home.h + 18 }
-  if (hour >= 22 || hour < 7) return { ...home, sleep: true } // night → home, asleep (still)
+  if (hour >= 22 || hour < 7) { world.releaseSlot(c); return { ...home, sleep: true } } // night → home, asleep (still)
   if (hour >= 8 && hour < 17) { // work / school by day
-    if (age >= 6 && age < 18) { const s = nearestPt(world.schools, c); if (s) return { x: s.x, y: s.y + 26, sleep: false } }
+    if (age >= 6 && age < 18) { world.releaseSlot(c); const s = nearestPt(world.schools, c); if (s) return { x: s.x, y: s.y + 26, sleep: false } }
     else if (age >= 18) {
       if (world.era < 2) { const g = nearestPt(world.gardens, c); if (g) return { x: g.x, y: g.y, sleep: false } } // forage in early eras
       const wp = workplaceOf(c); if (wp) return { x: wp.x, y: wp.y, sleep: false }
     }
     return { ...home, sleep: false }
   }
-  // morning / evening → leisure: visit a "friend's" house, drifting by the hour
+  // morning / evening → leisure: claim a bench in the square, or visit a "friend's" house
+  if (age >= 16 && (c.id + Math.floor(hour)) % 2 === 0) { const b = world.claimSlot(c, "social", WORLD_W / 2, WORLD_H / 2); if (b) return { x: b.x, y: b.y, sleep: false } }
+  world.releaseSlot(c)
   const hs = world.houses
   const f = hs.length ? hs[(c.id * 13 + Math.floor(hour)) % hs.length] : null
   return f ? { x: f.x + f.w / 2, y: f.y + f.h + 18, sleep: false } : { ...home, sleep: false }

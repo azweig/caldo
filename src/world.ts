@@ -112,6 +112,7 @@ export interface Creature {
   life?: Life        // the inner life: needs, emotion, goal, vocation, hobby, quirk, relationships, reputation
   sigs?: string[]    // recent compact chatter codes (transient — the binary they "speak" when unobserved)
   heard?: string     // the last thing they overheard, DECODED into words (transient, for the click card)
+  poi?: number       // the Point of Interest (market stall / work station / bench) they've claimed, or -1
 }
 
 // a notable act, logged so we can later rank the most INFLUENTIAL people per generation
@@ -253,6 +254,7 @@ export class World {
       this.creatures.push(c)
     }
     for (let i = 0; i < this.foodTarget; i++) this.scatterFood()
+    this.buildPois() // lay out the market square + benches
   }
 
   // discover every tech up to `era`, accumulating its boosts + building the university if reached
@@ -327,6 +329,7 @@ export class World {
     if (c.profBase !== prev) { feel(c, "esperanzado", 0.5); this.logEvent(`${c.name} ${c.surname} dejó de ser ${prev} y aprendió ${c.profBase}`) }
   }
 
+  pois: { x: number; y: number; kind: string; by: number }[] = [] // claimable spots: market stalls, work stations, benches
   animals: Animal[] = [] // wild + domestic beasts roaming the land
   raiders: Enemy[] = [] // an active raid from beyond the map (savages / nomads / pirates / terrorists)
   news: { txt: string; sent: number; reach: number; day: number }[] = [] // recent events that spread as gossip
@@ -383,6 +386,7 @@ export class World {
     w.violence = s.violence; w.psychopathy = s.psychopathy; w.religionsCfg = s.religionsCfg
     w.chronicle = s.chronicle || []; w.houses = s.houses; w.gardens = s.gardens; w.schools = s.schools
     for (const h of w.houses) if (h.tier === undefined) { h.tier = 0; h.value = 30; h.rent = 0; h.landlord = 0 }
+    w.buildPois() // rebuild the market square (claims reset on load)
     w.animals = s.animals || []
     w.raiders = s.raiders || []
     w.graves = s.graves || []
@@ -696,23 +700,44 @@ export class World {
     return best
   }
   // where an aldeano goes to ACT ON their own intent — work at their trade's place, mingle at the plaza, etc.
+  // POINTS OF INTEREST — a tidy market square + benches around the plaza that people CLAIM + stand at, so the
+  // crowd lines up at stalls + work stations instead of piling onto one pixel (much more orderly + alive).
+  buildPois() {
+    this.pois = []
+    const cx = WORLD_W / 2, cy = WORLD_H / 2
+    for (let i = 0; i < 6; i++) for (let j = 0; j < 5; j++) {
+      const x = cx + (i - 2.5) * 46, y = cy - 74 + j * 42
+      if (Math.hypot(x - cx, y - cy) < 34) continue // keep the very centre open
+      this.pois.push({ x, y, kind: (i + j) % 3 === 0 ? "market" : "work", by: 0 })
+    }
+    for (let a = 0; a < 10; a++) this.pois.push({ x: cx + Math.cos((a / 10) * Math.PI * 2) * 178, y: cy + Math.sin((a / 10) * Math.PI * 2) * 152, kind: "social", by: 0 })
+  }
+  claimSlot(c: Creature, kind: string, ax: number, ay: number): { x: number; y: number } | null {
+    if (c.poi !== undefined && c.poi >= 0) { const p = this.pois[c.poi]; if (p && p.by === c.id && p.kind === kind) return { x: p.x, y: p.y }; this.releaseSlot(c) }
+    let best = -1, bd = 1e9
+    for (let i = 0; i < this.pois.length; i++) { const p = this.pois[i]; if (p.kind !== kind || p.by) continue; const d = (p.x - ax) ** 2 + (p.y - ay) ** 2; if (d < bd) { bd = d; best = i } }
+    if (best < 0) return null
+    this.pois[best].by = c.id; c.poi = best; return { x: this.pois[best].x, y: this.pois[best].y }
+  }
+  releaseSlot(c: Creature) { if (c.poi !== undefined && c.poi >= 0 && this.pois[c.poi] && this.pois[c.poi].by === c.id) this.pois[c.poi].by = 0; c.poi = -1 }
   private intentTarget(c: Creature, intent: string): { x: number; y: number } {
     // a per-person offset so a crowd SPREADS around a spot instead of piling onto one pixel
     const ox = Math.cos(c.id * 2.4) * 70, oy = Math.sin(c.id * 1.7) * 60
     const home = { x: c.home.x + c.home.w / 2, y: c.home.y + c.home.h + 14 }
-    const plaza = { x: WORLD_W / 2 + ox, y: WORLD_H / 2 + oy } // the town centre, where people gather
-    if (intent === "estudiar" && this.universities[0]) { const u = this.universities[0]; return { x: u.x + u.w / 2 + ox, y: u.y + u.h / 2 + oy } }
-    if (intent === "descansar") return home
-    if (intent === "socializar" || intent === "cortejar") return plaza
-    if (intent === "disfrutar") { const g = this.nearestGarden(c); return { x: g.x + ox, y: g.y + oy } } // hobbies happen out in the open
+    const cx = WORLD_W / 2, cy = WORLD_H / 2
+    if (intent === "estudiar" && this.universities[0]) { this.releaseSlot(c); const u = this.universities[0]; return { x: u.x + u.w / 2 + ox, y: u.y + u.h / 2 + oy } }
+    if (intent === "descansar") { this.releaseSlot(c); return home }
+    if (intent === "socializar" || intent === "cortejar") return this.claimSlot(c, "social", cx, cy) || { x: cx + ox, y: cy + oy } // claim a bench
+    if (intent === "disfrutar") { this.releaseSlot(c); const g = this.nearestGarden(c); return { x: g.x + ox, y: g.y + oy } }
     if (intent === "trabajar") {
       const cat = c.profCat
-      if (cat === "enseñanza") { const s = this.nearestSchool(c); return { x: s.x + s.w / 2 + ox, y: s.y + s.h / 2 + oy } }
-      if ((cat === "saber" || cat === "ingeniería" || cat === "salud") && this.universities[0]) { const u = this.universities[0]; return { x: u.x + u.w / 2 + ox, y: u.y + u.h / 2 + oy } }
-      if (cat === "comida" || cat === "cuidado") { const g = this.nearestGarden(c); return { x: g.x + ox, y: g.y + oy } }
-      return plaza // merchants, leaders, crafters work the market/town centre
+      if (cat === "enseñanza") { this.releaseSlot(c); const s = this.nearestSchool(c); return { x: s.x + s.w / 2 + ox, y: s.y + s.h / 2 + oy } }
+      if ((cat === "saber" || cat === "ingeniería" || cat === "salud") && this.universities[0]) { this.releaseSlot(c); const u = this.universities[0]; return { x: u.x + u.w / 2 + ox, y: u.y + u.h / 2 + oy } }
+      if (cat === "comida" || cat === "cuidado") { this.releaseSlot(c); const g = this.nearestGarden(c); return { x: g.x + ox, y: g.y + oy } }
+      // merchants, leaders + crafters claim a stall (commerce) or a work station in the market square
+      return this.claimSlot(c, cat === "comercio" || cat === "liderazgo" ? "market" : "work", cx, cy) || { x: cx + ox, y: cy + oy }
     }
-    return home
+    this.releaseSlot(c); return home
   }
   nearestCreature(c: Creature, radius: number, filter?: (o: Creature) => boolean): Creature | null {
     let best: Creature | null = null, bd = radius * radius
@@ -1104,6 +1129,7 @@ export class World {
       this.housingMarket(wild, byId) // landlords buy + rent out property; tenants pay rent
       this.poverty(wild) // the destitute fall into homelessness; the recovered find shelter
       this.runMarket(wild) // goods trade at a floating price; merchants profit; the rich buy luxuries
+      for (const p of this.pois) if (p.by && !byId.has(p.by)) p.by = 0 // free spots held by the departed/dead
       this.runAnimals(wild) // wild beasts roam, raid, get hunted or tamed
       this.runRaids(wild) // raids from beyond the map — savages, nomads, pirates, terrorists by era
       for (const n of this.news) n.reach = Math.max(1, n.reach - 0.6) // yesterday's news fades from the talk

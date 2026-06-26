@@ -219,6 +219,21 @@ export function drawWorld(
     ctx.beginPath(); ctx.moveTo(bx - 6, by); ctx.lineTo(bx, by - 4); ctx.lineTo(bx + 6, by); ctx.stroke()
   }
 
+  // market square — stalls, work stations + benches the townsfolk claim + stand at (brighter when in use)
+  for (const p of world.pois) {
+    const occ = p.by !== 0
+    ctx.save(); ctx.globalAlpha = 0.15; ctx.fillStyle = "#2a2010"; ctx.beginPath(); ctx.ellipse(p.x, p.y + 6, 12, 4, 0, 0, Math.PI * 2); ctx.fill(); ctx.restore()
+    if (p.kind === "market") {
+      ctx.fillStyle = "#8a5a3a"; ctx.fillRect(p.x - 12, p.y - 2, 24, 8)
+      ctx.fillStyle = occ ? "#d96a4a" : "#bb8460"; ctx.beginPath(); ctx.moveTo(p.x - 15, p.y - 13); ctx.lineTo(p.x + 15, p.y - 13); ctx.lineTo(p.x + 12, p.y - 3); ctx.lineTo(p.x - 12, p.y - 3); ctx.closePath(); ctx.fill()
+      ctx.fillStyle = "rgba(255,255,255,0.5)"; for (let s = -1; s <= 1; s++) ctx.fillRect(p.x + s * 9 - 1, p.y - 13, 2, 10)
+    } else if (p.kind === "work") {
+      ctx.fillStyle = occ ? "#9a7a4a" : "#7a6038"; ctx.fillRect(p.x - 9, p.y - 3, 18, 7); ctx.fillStyle = "#5a4528"; ctx.fillRect(p.x - 9, p.y + 3, 3, 5); ctx.fillRect(p.x + 6, p.y + 3, 3, 5)
+    } else {
+      ctx.fillStyle = occ ? "#a07848" : "#86663c"; ctx.fillRect(p.x - 11, p.y - 1, 22, 4); ctx.fillRect(p.x - 9, p.y + 3, 2, 5); ctx.fillRect(p.x + 7, p.y + 3, 2, 5)
+    }
+  }
+
   // graves — where respected elders are remembered (small headstones, name shown up close)
   for (const gr of world.graves) {
     ctx.fillStyle = "#8a8a7a"; ctx.fillRect(gr.x - 3, gr.y - 8, 6, 9); ctx.fillRect(gr.x - 5, gr.y - 5, 10, 3)
