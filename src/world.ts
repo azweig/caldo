@@ -492,6 +492,26 @@ export class World {
       }
     }
   }
+  // RENTAL MARKET: the wealthy buy spare houses + rent them out; tenants pay rent → passive income widens the gap
+  private housingMarket(wild: Creature[], byId: Map<number, Creature>) {
+    const occupants = new Map<House, Creature[]>()
+    for (const c of wild) { const a = occupants.get(c.home) || []; a.push(c); occupants.set(c.home, a) }
+    // a rich aldeano invests spare coin in a vacant house → becomes a landlord
+    for (const c of wild) {
+      if (c.money < 600 || ageYears(c) < 22 || Math.random() > 0.03) continue
+      const vacant = this.houses.find((h) => !occupants.has(h) && h.landlord === 0 && h.surname !== c.surname)
+      if (vacant) { vacant.landlord = c.id; vacant.rent = Math.max(2, Math.round(vacant.value * 0.05)); c.money -= vacant.value * 0.5; if (c.life) feel(c, "orgulloso", 0.4); this.logEvent(`${c.name} ${c.surname} compró una casa para alquilar`) }
+    }
+    // tenants pay their landlord; the destitute fall behind (→ pressure toward homelessness)
+    for (const c of wild) {
+      const h = c.home
+      if (!h.landlord || h.landlord === c.id || h.surname === c.surname) continue
+      const ll = byId.get(h.landlord); if (!ll) { h.landlord = 0; continue } // landlord died → house reverts
+      const pay = Math.min(c.money, h.rent)
+      c.money -= pay; ll.money += pay
+      if (pay < h.rent) c.mental = Math.max(0, c.mental - 3) // can't make rent → stress
+    }
+  }
   // a family line: how many living members share the surname + their collective standing (dynasty reputation)
   dynasty(surname: string): { size: number; rep: number } {
     let size = 0, rep = 0
@@ -815,11 +835,15 @@ export class World {
         if (c.life && c.life.intent === "trabajar") c.life.mastery = Math.min(1, c.life.mastery + 0.0025) // deliberate practice hones the craft
         this.maybeRetrain(c) // the deeply unhappy may switch trades
       }
-      // INDEPENDENCE: a restless, independent young adult leaves the family home to make their own way
+      // INDEPENDENCE: a restless young adult leaves home — they RENT a landlord's spare house if there is one
+      // (becoming a tenant), otherwise they build their own. Either way the family tree branches outward.
+      const occHomes = new Set(wild.map((c) => c.home))
       for (const c of wild) {
-        if (c.partner || !c.life || c.psyche.five.o < 0.62 || c.money < 18 || this.houses.length >= 130) continue
-        const ay = ageYears(c); if (ay < 18 || ay > 30) continue
-        if (Math.random() < 0.012) { const nh = this.addHouse(c.surname); if (nh) { c.home = nh; c.money -= 12; feel(c, "esperanzado", 0.6); c.mental = Math.min(100, c.mental + 6); this.logEvent(`${c.name} ${c.surname} dejó la casa familiar para hacer su propia vida`) } }
+        if (c.partner || !c.life || c.psyche.five.o < 0.62 || c.money < 18) continue
+        const ay = ageYears(c); if (ay < 18 || ay > 30 || Math.random() > 0.012) continue
+        const rental = this.houses.find((h) => h.landlord && h.landlord !== c.id && h.surname !== c.surname && !occHomes.has(h))
+        if (rental) { c.home = rental; occHomes.add(rental); feel(c, "esperanzado", 0.5); this.logEvent(`${c.name} ${c.surname} alquiló su primera casa`) }
+        else if (this.houses.length < 130) { const nh = this.addHouse(c.surname); if (nh) { c.home = nh; occHomes.add(nh); c.money -= 12; feel(c, "esperanzado", 0.6); c.mental = Math.min(100, c.mental + 6); this.logEvent(`${c.name} ${c.surname} dejó la casa familiar para hacer su propia vida`) } }
       }
       // FRIENDS HELP each other: someone with means quietly lends a hand to a poor close friend
       for (const c of wild) {
@@ -889,6 +913,7 @@ export class World {
 
       runSociety(this, wild) // economy, crime + courts, and culture (books/art)
       this.upgradeHomes() // prosperous families move up to a finer home
+      this.housingMarket(wild, byId) // landlords buy + rent out property; tenants pay rent
     }
 
     if (this.creatures.filter((c) => !c.isAvatar).length < 8) { // keep a struggling village from going extinct
