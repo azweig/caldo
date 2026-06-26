@@ -403,8 +403,22 @@ function drawVillager(ctx: CanvasRenderingContext2D, c: Creature, w: number, mov
   else if (ap.hairStyle === "bun") { ctx.beginPath(); ctx.arc(0, hcy - hr * 0.95, hr * 0.45, 0, Math.PI * 2); ctx.fill(); ctx.beginPath(); ctx.arc(0, hcy - hr * 0.1, hr * 1.02, Math.PI * 1.02, Math.PI * 2.02); ctx.fill() }
   else if (ap.hairStyle === "bald") { ctx.beginPath(); ctx.arc(0, hcy + hr * 0.05, hr * 1.0, Math.PI * 1.15, Math.PI * 1.85); ctx.fill() } // just a fringe
   else if (ap.hairStyle !== "none") { ctx.beginPath(); ctx.arc(0, hcy - hr * (ap.hairStyle === "crop" ? 0.18 : 0.12), hr * 1.02, Math.PI * 1.0, Math.PI * 2.04); ctx.fill() }
-  // an eye, when facing the camera
-  if (c.facing >= 0) { ctx.fillStyle = "rgba(30,20,15,0.75)"; ctx.beginPath(); ctx.arc(hr * 0.34, hcy + hr * 0.04, hr * 0.13, 0, Math.PI * 2); ctx.fill() }
+  // an eye, when facing the camera — plus a mouth + brow that read their current MOOD
+  if (c.facing >= 0) {
+    const mad = c.life?.condition === "locura"
+    ctx.fillStyle = "rgba(30,20,15,0.78)"; ctx.beginPath(); ctx.arc(hr * 0.34, hcy + hr * 0.04, hr * (mad ? 0.18 : 0.13), 0, Math.PI * 2); ctx.fill()
+    if (mad) { ctx.fillStyle = "#fff"; ctx.beginPath(); ctx.arc(hr * 0.34, hcy + hr * 0.04, hr * 0.26, 0, Math.PI * 2); ctx.fill(); ctx.fillStyle = "rgba(20,10,5,0.85)"; ctx.beginPath(); ctx.arc(hr * 0.34, hcy + hr * 0.04, hr * 0.1, 0, Math.PI * 2); ctx.fill() } // wild eye
+    const emo = c.life?.emotion, ei = c.life?.emoInt || 0, mx = hr * 0.22, my = hcy + hr * 0.46
+    const happy = emo === "alegre" || emo === "enamorado" || emo === "orgulloso" || emo === "esperanzado"
+    const sad = emo === "triste" || emo === "afligido" || emo === "asustado" || emo === "solo"
+    ctx.strokeStyle = "rgba(45,28,20,0.6)"; ctx.lineWidth = Math.max(0.8, hr * 0.08); ctx.beginPath()
+    if (happy && ei > 0.2) ctx.arc(mx, my - hr * 0.12, hr * 0.22, 0.12 * Math.PI, 0.88 * Math.PI)
+    else if (sad && ei > 0.2) ctx.arc(mx, my + hr * 0.22, hr * 0.22, 1.12 * Math.PI, 1.88 * Math.PI)
+    else { ctx.moveTo(mx - hr * 0.14, my); ctx.lineTo(mx + hr * 0.14, my) }
+    ctx.stroke()
+    if (emo === "enojado" && ei > 0.3) { ctx.beginPath(); ctx.moveTo(hr * 0.14, hcy - hr * 0.16); ctx.lineTo(hr * 0.52, hcy - hr * 0.02); ctx.stroke() } // furrowed brow
+  }
+  if (c.sick) { ctx.fillStyle = "rgba(150,200,160,0.28)"; ctx.beginPath(); ctx.arc(0, hcy, hr, 0, Math.PI * 2); ctx.fill() } // a sickly pallor
   // HEADWEAR
   if (ap.hat === "helmet") { ctx.fillStyle = "#9098a4"; ctx.beginPath(); ctx.arc(0, hcy, hr * 1.05, Math.PI, 2 * Math.PI); ctx.fill(); ctx.fillRect(-hr * 1.05, hcy - 1, hr * 2.1, hr * 0.18); ctx.fillStyle = "#c2c8d2"; ctx.fillRect(-hr * 0.1, hcy - hr * 1.45, hr * 0.2, hr * 0.5) }
   else if (ap.hat === "straw") { ctx.fillStyle = "#c9a850"; ctx.beginPath(); ctx.arc(0, hcy - hr * 0.55, hr * 0.72, Math.PI, 2 * Math.PI); ctx.fill(); ctx.fillStyle = "#d8b86a"; ctx.beginPath(); ctx.ellipse(0, hcy - hr * 0.5, hr * 1.5, hr * 0.4, 0, 0, Math.PI * 2); ctx.fill() }
@@ -459,10 +473,10 @@ function drawCreature(ctx: CanvasRenderingContext2D, c: Creature, era: number) {
     ctx.fillStyle = "rgba(0,0,0,0.5)"; ctx.fillText("✚", c.x + 1, c.y - w - 3)
     ctx.fillStyle = "#8fe39a"; ctx.fillText("✚", c.x, c.y - w - 4); ctx.textAlign = "left"
   }
-  // a felt emotion floats over the head (only when strong, so it reads as a living reaction not clutter)
-  if (!c.isAvatar && c.life && c.life.emoInt > 0.4 && c.life.emotion !== "neutral") {
+  // a felt emotion floats well ABOVE the head when very strong (the face already carries the everyday mood)
+  if (!c.isAvatar && c.life && c.life.emoInt > 0.62 && c.life.emotion !== "neutral") {
     const e = (EMO as Record<string, string>)[c.life.emotion]
-    if (e) { ctx.font = "16px serif"; ctx.textAlign = "center"; ctx.fillText(e, c.x, c.y - w - (c.sick ? 18 : 6)); ctx.textAlign = "left" }
+    if (e) { ctx.font = "15px serif"; ctx.textAlign = "center"; ctx.fillText(e, c.x, c.y - w * 1.9 - 8); ctx.textAlign = "left" }
   }
   // the machine-chatter they trade floats up as faint 0s and 1s when they pause to talk (idle = conversing)
   if (!c.isAvatar && !moving && c.sigs && c.sigs.length) {
