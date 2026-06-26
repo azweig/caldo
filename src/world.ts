@@ -517,6 +517,19 @@ export class World {
       if (pay < h.rent) c.mental = Math.max(0, c.mental - 3) // can't make rent → stress
     }
   }
+  // POVERTY → HOMELESSNESS: the destitute lose their footing and end up on the street, where life wears them
+  // down further; if they claw back some coin they find shelter again.
+  private poverty(wild: Creature[]) {
+    for (const c of wild) {
+      if (!c.life || !isMature(c)) continue
+      if (c.life.condition === "sin techo") {
+        c.health = Math.max(0, c.health - 0.6); c.mental = Math.max(0, c.mental - 0.5) // sleeping rough wears you down
+        if (c.money > 28) { c.life.condition = ""; c.life.condDays = 0; feel(c, "esperanzado", 0.6); this.logEvent(`${c.name} ${c.surname} consiguió techo de nuevo`) }
+      } else if (c.money < 1 && c.mental < 38 && !c.life.condition && Math.random() < 0.025) {
+        c.life.condition = "sin techo"; c.life.condDays = 9999; feel(c, "afligido", 0.65); c.life.rep = Math.max(-1, c.life.rep - 0.15); this.logEvent(`${c.name} ${c.surname} quedó en la calle`)
+      }
+    }
+  }
   // a family line: how many living members share the surname + their collective standing (dynasty reputation)
   dynasty(surname: string): { size: number; rep: number } {
     let size = 0, rep = 0
@@ -696,7 +709,7 @@ export class World {
       if (!c.isAvatar && !isMature(c)) c.energy = Math.min(MAX_ENERGY, c.energy + 0.6) // the family feeds the children (well above their upkeep, so they don't starve before growing up)
       // A MEAL AT HOME: settled adults eat stored/bought food when home — so they don't forage all day and
       // actually have time to LIVE (work, socialise, study). In later eras the meal costs a little coin.
-      if (!c.isAvatar && isMature(c) && c.energy < MAX_ENERGY) {
+      if (!c.isAvatar && isMature(c) && c.energy < MAX_ENERGY && c.life?.condition !== "sin techo") { // the homeless have no hearth
         if ((c.x - (c.home.x + c.home.w / 2)) ** 2 + (c.y - (c.home.y + c.home.h + 14)) ** 2 < 80 * 80) c.energy = Math.min(MAX_ENERGY, c.energy + 6) // the household's stored harvest
       }
 
@@ -920,6 +933,7 @@ export class World {
       runSociety(this, wild) // economy, crime + courts, and culture (books/art)
       this.upgradeHomes() // prosperous families move up to a finer home
       this.housingMarket(wild, byId) // landlords buy + rent out property; tenants pay rent
+      this.poverty(wild) // the destitute fall into homelessness; the recovered find shelter
     }
 
     if (this.creatures.filter((c) => !c.isAvatar).length < 8) { // keep a struggling village from going extinct
