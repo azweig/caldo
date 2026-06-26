@@ -853,6 +853,13 @@ export class World {
         if (c.life && c.life.intent === "trabajar") c.life.mastery = Math.min(1, c.life.mastery + 0.0025) // deliberate practice hones the craft
         this.maybeRetrain(c) // the deeply unhappy may switch trades
       }
+      // COST OF LIVING: food + upkeep drains coin so wealth is SCARCE — the skilled + propertied pull ahead,
+      // the unlucky slide toward poverty. this is what makes class, rent + homelessness real.
+      for (const c of wild) {
+        if (!isMature(c)) continue
+        c.money -= (1.3 + this.era * 0.35) * (1 + c.home.tier * 0.22)
+        if (c.money < 0) { c.money = 0; c.mental = Math.max(0, c.mental - 2.2); c.health = Math.max(0, c.health - 0.5) } // can't make ends meet
+      }
       // INDEPENDENCE: a restless young adult leaves home — they RENT a landlord's spare house if there is one
       // (becoming a tenant), otherwise they build their own. Either way the family tree branches outward.
       const homeCt = new Map<House, number>(); for (const c of wild) homeCt.set(c.home, (homeCt.get(c.home) || 0) + 1)
