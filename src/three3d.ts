@@ -124,34 +124,6 @@ function eraRoofs(era: number): string[] {
   return ["roof_metal", "roof_slate"]
 }
 
-// ── people sprites (SDXL-generated, rembg cut-outs) chosen by era + role + sex + a heritable variant ──
-const peopleTex = new Map<string, THREE.Texture>()
-const peopleAspect = new Map<string, number>()
-function loadPerson(name: string): THREE.Texture {
-  let t = peopleTex.get(name)
-  if (!t) {
-    t = loader.load(`/people/${name}.png`, (tx) => { const im = tx.image; if (im && im.width) peopleAspect.set(name, im.width / im.height) })
-    t.colorSpace = THREE.SRGBColorSpace
-    peopleTex.set(name, t)
-  }
-  return t
-}
-function eraTier(era: number): string {
-  if (era <= 1) return "prehist"; if (era <= 4) return "ancient"; if (era <= 7) return "medieval"
-  if (era <= 9) return "renais"; if (era <= 11) return "industrial"; if (era <= 14) return "modern"; return "future"
-}
-function roleOf(c: Creature): string {
-  const cat = c.profCat
-  if (cat === "comercio" || cat === "liderazgo") return "merchant"
-  if (cat === "defensa") return "warrior"
-  if (cat === "saber" || cat === "enseñanza" || cat === "ingeniería" || cat === "arte" || cat === "espíritu" || cat === "salud") return "scholar"
-  return "commoner"
-}
-function personName(c: Creature, era: number): string {
-  const sex = c.id % 2 ? "m" : "f"
-  const v = (c.genome.sprite + c.id) % 2 // heritable (genome) + a touch of individual variation
-  return `${eraTier(era)}_${roleOf(c)}_${sex}_${v}`
-}
 // the 3D MODEL is shared across both variants (only era×role×sex were converted to GLB)
 
 // ── real 3D character meshes (TripoSR GLBs) with a billboard fallback while a model loads ──
@@ -354,21 +326,25 @@ export function renderInterior(world: World, me: Creature, h: House, rx: number,
   if (builtFor !== world || builtEra !== world.era) buildTown(world)
   if (intFor !== h || !intGroup) buildInterior(world, h)
   if (town) town.visible = false; intGroup!.visible = true
-  for (const mg of modelPool) mg.visible = false // interior uses billboards
   let i = 0
   const put = (c: Creature, x: number, z: number, scale: number, ringCol: number) => {
-    const sp = pool[i]; sp.visible = true; const name = personName(c, world.era)
-    sp.material.map = loadPerson(name); sp.material.needsUpdate = true
-    const asp = peopleAspect.get(name) ?? 0.5
-    sp.position.set(x, scale / 2 + 0.05, z); sp.scale.set(scale * asp, scale, 1)
-    const r = rings[i]; r.visible = true; (r.material as THREE.MeshBasicMaterial).color.setHex(ringCol); r.position.set(x, 0.05, z); r.scale.setScalar(scale * asp * 0.95)
-    const sh = shadows[i]; sh.visible = true; sh.position.set(x, 0.03, z); sh.scale.setScalar(scale * asp * 0.8)
+    const slot = modelPool[i] // interior uses the SAME procedural villagers as outside (no more billboards)
+    if (!slot.userData.rig) buildRig(slot)
+    const rig = slot.userData.rig as { skinMat: THREE.MeshLambertMaterial; hairMat: THREE.MeshLambertMaterial; clothMat: THREE.MeshLambertMaterial; ll: THREE.Mesh; rl: THREE.Mesh; la: THREE.Mesh; ra: THREE.Mesh }
+    const ap = appear3D(c)
+    rig.skinMat.color.setHex(ap.skin); rig.hairMat.color.setHex(ap.hair); rig.clothMat.color.setHSL(ap.clothH, 0.42, 0.54)
+    rig.ll.rotation.x = 0; rig.rl.rotation.x = 0; rig.la.rotation.x = 0; rig.ra.rotation.x = 0 // standing indoors
+    pool[i].visible = false; slot.visible = true
+    const ageScale = ap.ay < 2 ? 0.42 : ap.ay < 13 ? 0.62 : ap.ay < 19 ? 0.84 : 1
+    slot.position.set(x, 0, z); slot.scale.setScalar(scale * ageScale); slot.rotation.y = yaw + Math.PI
+    const r = rings[i]; r.visible = true; (r.material as THREE.MeshBasicMaterial).color.setHex(ringCol); r.position.set(x, 0.05, z); r.scale.setScalar(scale * 0.5)
+    const sh = shadows[i]; sh.visible = true; sh.position.set(x, 0.03, z); sh.scale.setScalar(scale * 0.42)
     i++
   }
   put(me, rx, rz, 2.0, 0x46c8ff)
   const occ = world.creatures.filter((c) => c.home === h && c !== me && !c.isAvatar).slice(0, 6)
   occ.forEach((c, k) => put(c, -RW / 2 + 2 + (k % 3) * 2.5, -RD / 2 + 2 + Math.floor(k / 3) * 2.5, 1.5, relColor(me, c)))
-  for (; i < pool.length; i++) { pool[i].visible = false; rings[i].visible = false; shadows[i].visible = false }
+  for (; i < pool.length; i++) { pool[i].visible = false; rings[i].visible = false; shadows[i].visible = false; modelPool[i].visible = false }
   const cp = Math.cos(pitch)
   const cx = rx - Math.cos(yaw) * 3.0, cy = 2.0, cz = rz - Math.sin(yaw) * 3.0
   camera.position.set(cx, cy, cz); camera.lookAt(cx + Math.cos(yaw) * 9 * cp, cy + Math.sin(pitch) * 9, cz + Math.sin(yaw) * 9 * cp)
