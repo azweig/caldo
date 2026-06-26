@@ -967,7 +967,7 @@ export class World {
         if (c.pregnant <= 0 && this.creatures.length + newborns.length < POP_CAP) {
           const mate = byId.get(c.partner)
           const mateG = mate ? mate.genome : randomGenome(this.spriteCount), mateP = mate ? mate.psyche : randomPsyche() // unknown father if out of wedlock
-          const boom = this.creatures.length < 40 ? 3.5 : this.creatures.length < 85 ? 1.9 : 1 // small tribe → big families
+          const boom = this.creatures.length < 22 ? 3 : this.creatures.length < 40 ? 1.5 : 1 // only a tiny tribe has big broods; normal villages = mostly single births
           const litter = litterSize(boom)
           for (let b = 0; b < litter; b++) {
             const child = this.spawn(recombine(g, mateG, this.spriteCount), c.generation + 1, c.home, c.home.x + (Math.random() * 24 - 12), c.home.y + (Math.random() * 18 - 9), inheritPsyche(c.psyche, mateP))
@@ -1087,18 +1087,22 @@ export class World {
           this.logDeed({ day: this.clockDays, gen: c.generation, who: c.id, name: `${c.name} ${c.surname}`, kind: "divorcio", text: `se divorció de ${p.name} ${p.surname}`, impact: -1 })
         }
       }
-      // COURTSHIP: people pair with someone they CLICK with (compatible values, existing warmth, near in age),
-      // not at random — and the union is a small joy (a wedding), not an instant fact
-      const singles = wild.filter((c) => isMature(c) && !c.partner && ageYears(c) <= FERTILE_MAX + 10)
+      // COURTSHIP: people pair with someone they CLICK with — but a WIDOW(ER) raising children seeks a new partner
+      // sooner + more widely (they need a co-parent), so a lone parent with a houseful of young children re-pairs.
+      const depKids = new Map<number, number>() // how many young children each adult is raising (their own household)
+      for (const k of wild) if (ageYears(k) < 14 && k.parents) for (const pid of k.parents) depKids.set(pid, (depKids.get(pid) || 0) + 1)
+      const singles = wild.filter((c) => isMature(c) && !c.partner && (ageYears(c) <= FERTILE_MAX + 10 || (depKids.get(c.id) || 0) > 0))
       const taken = new Set<number>()
       for (const a of singles) {
         if (taken.has(a.id)) continue
+        const aKids = depKids.get(a.id) || 0
         let best: Creature | null = null, bs = -2
         for (const b of singles) {
           if (b.id === a.id || taken.has(b.id) || (b.surname === a.surname && wild.length > 26)) continue // kin taboo (relaxed when the tribe is tiny + must repopulate)
           const compat = 1 - Math.abs(a.psyche.five.a - b.psyche.five.a) * 0.6 - (a.religion && a.religion !== b.religion ? 0.3 : 0)
           const warmth = (a.life?.rels[b.id] || 0) * 1.5, ageGap = Math.abs(ageYears(a) - ageYears(b)) / 22
-          const score = compat + warmth - ageGap + Math.random() * 0.5 // values + warmth + a spark of chemistry
+          const coParent = Math.min(0.9, (aKids + (depKids.get(b.id) || 0)) * 0.18) // children to raise → a partner is sorely needed
+          const score = compat + warmth - ageGap + coParent + Math.random() * 0.5 // values + warmth + a spark of chemistry
           if (score > bs) { bs = score; best = b }
         }
         if (!best) continue
@@ -1121,15 +1125,16 @@ export class World {
       const K = Math.min(POP_CAP, 120 + this.era * 8) // carrying capacity (above the ~100 founders so the long early eras SUSTAIN a stable tribe instead of decaying) — grows with technology
       // SMALL-TRIBE RESILIENCE: a struggling band breeds hard (high pre-modern fertility) so the long early eras
       // sustain themselves + a near-wiped tribe can claw back, instead of dwindling to extinction before tech helps.
-      const lowPop = wild.length < 60
-      const growth = Math.max(0.05, Math.min(lowPop ? 2.6 : 1, 1.35 * (1 - wild.length / K) + (lowPop ? (60 - wild.length) * 0.035 : 0)))
+      const lowPop = wild.length < 32 // only a near-wiped tribe breeds hard; normal villages stay at natural fertility
+      const growth = Math.max(0.05, Math.min(lowPop ? 2.2 : 1, 1.35 * (1 - wild.length / K) + (lowPop ? (32 - wild.length) * 0.04 : 0)))
       for (const c of wild) {
         const ay = ageYears(c)
         if (!c.partner || c.pregnant > 0 || ay < MATURITY_YEARS || ay > FERTILE_MAX || c.energy <= REPRO_MIN_ENERGY ||
             this.clockDays - c.lastRepro < REPRO_COOLDOWN || !byId.has(c.partner)) continue
         const mate = byId.get(c.partner)!, mAy = ageYears(mate)
         if (mAy >= MATURITY_YEARS && mAy <= FERTILE_MAX && c.id > c.partner) continue // both fertile → only lower-id bears
-        if (Math.random() < 0.85 * growth) c.pregnant = GESTATION_MIN + Math.floor(Math.random() * 60) // conceive (~7-9 months)
+        const parity = Math.max(0.2, 1 - c.children * 0.07) // fertility wanes after many children (age, fatigue) → families top out ~6-9, not 17
+        if (Math.random() < 0.85 * growth * parity) c.pregnant = GESTATION_MIN + Math.floor(Math.random() * 60) // conceive (~7-9 months)
       }
       // children out of wedlock: an unpartnered fertile adult may conceive with a passing fling
       for (const c of wild) {
