@@ -27,15 +27,20 @@ export function decideIntent(c: Creature): string {
   const f = c.psyche.five
   if (c.energy < 62) return "comer"                                   // only genuinely hungry → eat; otherwise live your life
   if (L.rest < 28) return "descansar"
+  // the restless + the curious WANDER: scouts/hunters explore the wilds, open minds roam, anyone may just stroll
+  if ((c.profCat === "exploración" || c.profCat === "defensa") && rand() < 0.32) return "explorar"
+  if (f.o > 0.62 && f.e > 0.4 && rand() < 0.16) return "explorar"     // a curious extravert ventures out of the village
   if (L.social < 30 + f.e * 22) return "socializar"                  // extraverts seek company much sooner
   if (L.fun < 26) return "disfrutar"
   if (!c.partner && L.goalKey === "amor" && rand() < 0.4) return "cortejar"
+  if (rand() < 0.13) return "pasear"                                  // sometimes you walk just to walk
   if (c.profCat && (f.c > 0.45 || L.goalKey === "rico" || L.goalKey === "obra" || L.goalKey === "poder")) return "trabajar"
-  return rand() < 0.45 ? "socializar" : "trabajar"           // the rest potter between people + work
+  return rand() < 0.4 ? "socializar" : rand() < 0.5 ? "pasear" : "trabajar" // the rest potter between people, strolls + work
 }
 export const INTENT_LABEL: Record<string, string> = {
   comer: "buscando comida", descansar: "yendo a descansar", socializar: "buscando compañía",
   disfrutar: "buscando un rato de ocio", cortejar: "buscando el amor", trabajar: "yendo a trabajar", vagar: "vagando",
+  pasear: "dando un paseo", explorar: "explorando los confines", estudiar: "estudiando", viajar: "de viaje a otro pueblo",
 }
 
 export const EMO = {
@@ -117,6 +122,7 @@ export function lifeTick(c: Creature, partnerAlive: boolean, householdSize: numb
   const company = (partnerAlive ? 2.4 : 0) + Math.min(3, householdSize - 1) * 0.8 + f.e * 1.4
   L.social = clamp(L.social - 3.6 + company)                                                // isolation drains it; introverts mind less
   L.fun = clamp(L.fun + 0.4 + (c.money < 3 ? -0.7 : 1.4) + (f.o + f.e) * 0.4)                // their hobby cheers them unless destitute
+  if (L.intent === "pasear" || L.intent === "explorar") { L.fun = clamp(L.fun + 1.6); c.mental = clamp(c.mental + 0.2); feel(c, "esperanzado", 0.12) } // fresh air + the open road lift the spirit
   // unmet needs weigh on mood + colour how they feel
   let drag = 0
   if (L.rest < 25) { drag += 0.5; feel(c, "aburrido", 0.3) }

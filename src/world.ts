@@ -769,6 +769,8 @@ export class World {
     const cx = WORLD_W / 2, cy = WORLD_H / 2
     if (intent === "estudiar" && this.universities[0]) { this.releaseSlot(c); const u = this.universities[0]; return { x: u.x + u.w / 2 + ox, y: u.y + u.h / 2 + oy } }
     if (intent === "descansar") { this.releaseSlot(c); return home }
+    if (intent === "pasear") { this.releaseSlot(c); const t = this.clockDays * 0.05 + c.id; return { x: clampn(cx + Math.cos(t) * (300 + (c.id % 5) * 90), MARGIN, WORLD_W - MARGIN), y: clampn(cy + Math.sin(t * 1.3) * (260 + (c.id % 4) * 80), MARGIN, WORLD_H - MARGIN) } } // a meandering walk, just to walk
+    if (intent === "explorar") { this.releaseSlot(c); const t = this.clockDays * 0.04 + c.id * 1.7, ed = 0.42; return { x: clampn(WORLD_W * (0.5 + Math.cos(t) * ed), MARGIN, WORLD_W - MARGIN), y: clampn(WORLD_H * (0.5 + Math.sin(t * 1.1) * ed), MARGIN, WORLD_H - MARGIN) } } // roam the wilds at the edges of the map, then drift home
     if (intent === "socializar" || intent === "cortejar") return this.claimSlot(c, "social", cx, cy) || { x: cx + ox, y: cy + oy } // claim a bench
     if (intent === "disfrutar") { this.releaseSlot(c); const g = this.nearestGarden(c); return { x: g.x + ox, y: g.y + oy } }
     if (intent === "trabajar") {
