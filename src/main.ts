@@ -379,6 +379,20 @@ function nearestPt(arr: { x: number; y: number; w?: number; h?: number }[], c: C
   for (const b of arr) { const x = b.x + (b.w ? b.w / 2 : 0), y = b.y + (b.h ? b.h / 2 : 0); const d = dist2(x, y, c.x, c.y); if (d < bd) { bd = d; best = { x, y } } }
   return best
 }
+// the 2D answer to NavMesh pathfinding: if a person ends a step inside a house that isn't their own home, slide
+// them out along the nearest wall — so they flow around buildings + down the streets instead of clipping through.
+function avoidBuildings(c: Creature) {
+  const pad = 6, push = 2.6
+  for (const h of world.houses) {
+    if (h === c.home) continue
+    if (c.x > h.x - pad && c.x < h.x + h.w + pad && c.y > h.y - pad && c.y < h.y + h.h + pad) {
+      const dl = c.x - (h.x - pad), dr = (h.x + h.w + pad) - c.x, dt = c.y - (h.y - pad), db = (h.y + h.h + pad) - c.y
+      const m = Math.min(dl, dr, dt, db)
+      if (m === dl) c.x -= push; else if (m === dr) c.x += push; else if (m === dt) c.y -= push; else c.y += push
+      return // one nudge per frame is enough; it'll keep sliding next frame
+    }
+  }
+}
 function workplaceOf(c: Creature): { x: number; y: number; name: string } | null {
   if (!c.profCat) { world.releaseSlot(c); return null }
   if (c.profCat === "enseñanza") { world.releaseSlot(c); const s = nearestPt(world.schools, c); return s && { ...s, name: "la escuela" } }
@@ -876,6 +890,7 @@ function loop() {
         }
       }
       c.x += sx; c.y += sy
+      avoidBuildings(c) // the 2D take on a NavMesh: slide gently around buildings instead of clipping through them
       // a small gathering: when someone stands close to another, they TURN to face them (a little conversation)
       if (nearD < 34 * 34 && Math.abs(c.vx) + Math.abs(c.vy) < 0.5) c.facing = nearX >= c.x ? 1 : -1
     }
