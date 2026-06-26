@@ -325,7 +325,15 @@ export class World {
     if (c.profBase !== prev) { feel(c, "esperanzado", 0.5); this.logEvent(`${c.name} ${c.surname} dejó de ser ${prev} y aprendió ${c.profBase}`) }
   }
 
-  private logEvent(text: string) { this.chronicle.push({ day: this.clockDays, text }); if (this.chronicle.length > 80) this.chronicle.shift() }
+  news: { txt: string; sent: number; reach: number; day: number }[] = [] // recent events that spread as gossip
+  private logEvent(text: string) {
+    this.chronicle.push({ day: this.clockDays, text }); if (this.chronicle.length > 80) this.chronicle.shift()
+    const neg = /murió|quiebra|crimen|asesin|robó|sin techo|cordura|calle|divorció|guerra|represión|peste/.test(text)
+    const pos = /prosper|inventó|ideó|graduó|boda|se unió|amanece|fiesta|fortuna|alquiló|construyó/.test(text)
+    this.news.push({ txt: text, sent: pos ? 1 : neg ? -1 : 0, reach: 1, day: this.clockDays }); if (this.news.length > 14) this.news.shift()
+  }
+  // what the town is buzzing about — the events that spread widest through the gossip network
+  talkOfTown(): { txt: string; reach: number; sent: number }[] { return [...this.news].sort((a, b) => b.reach - a.reach).slice(0, 5) }
   researchProgress(): { name: string; frac: number } {
     const avail = availableTechs(this.discovered, this.era)
     if (!avail.length) return { name: "—", frac: 1 }
@@ -467,6 +475,12 @@ export class World {
     if (a.profCat && a.profCat === b.profCat && a.life && b.life) { const jr = a.life.mastery < b.life.mastery ? a : b, sr = jr === a ? b : a; if ((sr.life!.mastery - jr.life!.mastery) > 0.2) jr.life!.mastery = Math.min(1, jr.life!.mastery + 0.012) }
     // EMOTE — feelings rub off (mood contagion)
     if (a.life && a.life.emoInt > 0.35 && b.life) { const good = a.life.emotion === "alegre" || a.life.emotion === "enamorado" || a.life.emotion === "orgulloso"; feel(b, good ? "alegre" : "triste", 0.25); sigs.push({ k: KIND.EMOTE, s: a.id, v: good ? 4 : -4 }) }
+    // NEWS spreads: they pass along a recent event, which travels the network + stirs a reaction
+    if (this.news.length && Math.random() < 0.3) {
+      const n = this.news[this.news.length - 1 - Math.floor(Math.random() * Math.min(4, this.news.length))]
+      n.reach++; b.heard = n.txt; sigs.push({ k: KIND.NEWS, s: 0, v: n.sent * 4 })
+      if (n.sent < 0 && b.life) feel(b, "asustado", 0.2); else if (n.sent > 0 && b.life) feel(b, "alegre", 0.15)
+    }
     if (sigs.length) { const codes = sigs.map(codeOf); a.sigs = [...(a.sigs || []), ...codes].slice(-6); b.sigs = [...(b.sigs || []), ...codes].slice(-6) }
   }
 

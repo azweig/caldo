@@ -629,6 +629,7 @@ function updateHud() {
     <div class="stat"><span>saber 📚</span> ${Math.round(world.wisdom)} · <span>oficios</span> ${professionSpace().toLocaleString()} · <span>univ.</span> ${world.universities.length}</div>
     <div class="stat"><span>investigando</span> ${rp.name} <span class="rbar"><i style="width:${Math.round(rp.frac * 100)}%"></i></span></div>
     <div class="stat"><span>hitos era</span> ${ep.got}/${ep.total} · 🔑 ${ep.keysGot}/${ep.keys} para avanzar</div>
+    ${world.talkOfTown()[0] ? `<div class="stat"><span>se habla de</span> <i style="color:#bcd9ff">${world.talkOfTown()[0].txt}</i></div>` : ""}
     ${world.recentTech ? `<div class="stat"><span>💡 último</span> ${world.recentTech}</div>` : ""}
     <div class="stat energy"><span>vos</span> ${aAge}a · ${bar} ${Math.round(e)}</div>
     <div class="hint">${possessed ? `🎭 poseés a <b>${possessed.name}</b> · P para soltar` : (!chatting && chatTarget) ? `▸ <b>E</b> hablar · <b>P</b> poseer a ${chatTarget.name}` : "WASD moverte · E hablar · P poseer · espacio pausa"}</div>
