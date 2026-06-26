@@ -31,6 +31,7 @@ function personImg(c: Creature, era: number): HTMLImageElement {
 }
 
 let vehT = 0 // real-time animation clock for vehicles (so they move even when the world is slow)
+let wT = 0   // walk-cycle clock for the people's bob + sway
 const seedR = (s: number) => { const x = Math.sin(s) * 43758.5453; return x - Math.floor(x) }
 // vehicles appear with the era: carts (3+), trains (9+), cars (10+), planes (11+). Decorative, on roads.
 function drawVehicles(ctx: CanvasRenderingContext2D, world: World, t: number) {
@@ -179,7 +180,7 @@ export function drawWorld(
     label(ctx, "✈ aeropuerto", a.x + a.w / 2, a.y - 12, "#cfe0ee")
   }
 
-  vehT += 1.3
+  vehT += 1.3; wT += 1
   drawVehicles(ctx, world, vehT)
 
   // food
@@ -268,15 +269,23 @@ function drawCreature(ctx: CanvasRenderingContext2D, c: Creature, era: number) {
   const indoors = !c.isAvatar && c.x > hh.x - 2 && c.x < hh.x + hh.w + 2 && c.y > hh.y - 8 && c.y < hh.y + hh.h + 2
   const dim = indoors ? 0.34 : 1
 
+  // a natural walk: bob up + sway gently while moving (a still person stands quiet)
+  const moving = !indoors && Math.abs(c.vx) + Math.abs(c.vy) > 0.15
+  const phase = wT * 0.45 + c.id
+  const bob = moving ? Math.abs(Math.sin(phase)) * w * 0.07 : 0
+  const sway = moving ? Math.sin(phase) * 0.05 : 0
+
+  // soft ground shadow — grounds the figure + gives the scene depth
   ctx.save()
-  ctx.globalAlpha = (c.isAvatar ? 0.5 : Math.max(0.12, Math.min(0.4, c.energy / 120))) * dim
-  ctx.fillStyle = `hsl(${c.genome.hue}, 70%, 55%)`
-  ctx.beginPath(); ctx.arc(c.x, c.y - w * 0.35, w * 0.7, 0, Math.PI * 2); ctx.fill()
+  ctx.globalAlpha = 0.2 * dim
+  ctx.fillStyle = "#000"
+  ctx.beginPath(); ctx.ellipse(c.x, c.y, w * 0.4, w * 0.15, 0, 0, Math.PI * 2); ctx.fill()
   ctx.restore()
 
   ctx.save()
-  ctx.globalAlpha = (c.isAvatar ? 1 : Math.max(0.45, Math.min(1, c.energy / 70))) * dim
-  ctx.translate(c.x, c.y)
+  ctx.globalAlpha = (c.isAvatar ? 1 : Math.max(0.5, Math.min(1, c.energy / 70))) * dim
+  ctx.translate(c.x, c.y - bob)
+  ctx.rotate(sway)
   if (c.facing < 0) ctx.scale(-1, 1)
   if (img && img.naturalWidth > 0) { ctx.imageSmoothingEnabled = true; const ph = w * 1.7; ctx.drawImage(img, -w / 2, -ph, w, ph) } // full-body, feet on the ground
   else { ctx.fillStyle = `hsl(${c.genome.hue}, 60%, 60%)`; ctx.beginPath(); ctx.arc(0, -w / 2, w / 2, 0, Math.PI * 2); ctx.fill() }

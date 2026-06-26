@@ -815,6 +815,7 @@ function loop() {
       else { const a = routinePhase * 2 + c.id; mvx = Math.cos(a) * 0.7; mvy = Math.sin(a * 1.4) * 0.7 } // mill about
       if (possessed) { const px = c.x - possessed.x, py = c.y - possessed.y; if (px * px + py * py < 95 * 95) { mvx *= 0.1; mvy *= 0.1 } } // pause near you so you can talk
       c.x += mvx; c.y += mvy; c.vx = mvx; c.vy = mvy
+      if (mvx > 0.05) c.facing = 1; else if (mvx < -0.05) c.facing = -1 // face where they walk, in real time
     }
   }
   if (avatar && !possessed) avatar.energy = Math.max(60, Math.min(150, avatar.energy)) // immortal observer
