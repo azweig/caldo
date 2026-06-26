@@ -77,11 +77,21 @@ function showNpcCard(c: Creature | null) {
     ${relsRow}
     <div class="nc-row">💰 ${Math.round(c.money)} · ${c.money > 800 ? "🎩 rico/a" : c.money > 200 ? "acomodado/a" : c.money > 15 ? "clase media" : "pobre"}${c.home.landlord && c.home.landlord !== c.id && c.home.surname !== c.surname ? " · 🔑 inquilino/a" : ""}${world.houses.some((h) => h.landlord === c.id) ? " · 🏘 propietario/a" : ""}</div>
     <div class="nc-row">🧠 ${Math.round(c.mental)} · 😤 ${Math.round(c.irritability * 100)}% · 🍔 ${Math.round(c.energy)}${L && L.condition ? ` · <b style="color:#d68">${L.condition}</b>` : ""}</div>
-    <div class="nc-acts"><button id="nc-talk">💬 Hablar</button>${canCourt ? '<button id="nc-court">💘 Cortejar</button>' : ""}<button id="nc-x">✕</button></div>`
+    <div class="nc-acts"><button id="nc-talk">💬 Hablar</button>${possessed.items?.length ? `<button id="nc-gift">🎁 Regalar ${itemEmoji(possessed.items[0])}</button>` : ""}${canCourt ? '<button id="nc-court">💘 Cortejar</button>' : ""}<button id="nc-x">✕</button></div>`
   npccard.classList.remove("hidden")
   document.getElementById("nc-talk")!.onclick = () => { showNpcCard(null); openChat(c) }
   document.getElementById("nc-x")!.onclick = () => showNpcCard(null)
   const cb = document.getElementById("nc-court"); if (cb) cb.onclick = () => { showNpcCard(null); chatTarget = c; doAction("court") }
+  const gb = document.getElementById("nc-gift")
+  if (gb) gb.onclick = () => { // give them your first item — a gift warms the friendship + their spirit
+    if (!possessed || !possessed.items?.length) return
+    const k = possessed.items[0]; possessed.items = possessed.items.slice(1)
+    c.items = [...(c.items || []), k].slice(-12)
+    if (c.life) { c.life.rels[possessed.id] = Math.min(8, (c.life.rels[possessed.id] || 0) + 2); c.life.emotion = "alegre"; c.life.emoInt = 0.85 }
+    c.mental = Math.min(100, c.mental + 6)
+    world.chronicle.push({ day: world.clockDays, text: `${possessed.name} le regaló ${itemEmoji(k)} a ${c.name} 🎁` })
+    flash(`le regalaste ${itemEmoji(k)} a ${c.name} 🎁`); showNpcCard(c)
+  }
 }
 // drag the 3D view to look around (yaw + pitch); a CLICK (no drag) on a person talks to them
 let dragging = false, dragX = 0, dragY = 0, dragDist = 0
@@ -422,11 +432,26 @@ function studyPlaceOf(c: Creature): { x: number; y: number; name: string } | nul
 }
 function courtTargetNear(c: Creature) { return world.nearestCreature(c, 95, (o) => !o.isAvatar && isMature(o) && !o.partner && o !== c && ageYears(o) <= 52) }
 type ActState = { ok: boolean; reason: string; walkTo?: { x: number; y: number } }
+// things you can find, carry, USE (an effect) or GIFT to someone (a token of friendship)
+const ITEMS: Record<string, { emoji: string; use: (c: Creature) => void; msg: string }> = {
+  flor: { emoji: "🌸", use: (c) => { c.mental = Math.min(100, c.mental + 10) }, msg: "la flor te alegró 🌸" },
+  fruta: { emoji: "🍎", use: (c) => { c.energy = Math.min(150, c.energy + 30) }, msg: "comiste la fruta 🍎" },
+  baya: { emoji: "🫐", use: (c) => { c.energy = Math.min(150, c.energy + 18) }, msg: "comiste unas bayas 🫐" },
+  hierba: { emoji: "🌿", use: (c) => { c.health = Math.min(100, c.health + 12) }, msg: "la hierba medicinal te curó 🌿" },
+  concha: { emoji: "🐚", use: (c) => { c.mental = Math.min(100, c.mental + 6) }, msg: "admiraste la concha 🐚" },
+  amuleto: { emoji: "🪬", use: (c) => { c.mental = Math.min(100, c.mental + 9) }, msg: "el amuleto te dio ánimo 🪬" },
+  piedra: { emoji: "🪨", use: (c) => { c.mental = Math.min(100, c.mental + 3) }, msg: "una piedra curiosa 🪨" },
+}
+const itemEmoji = (k: string) => ITEMS[k]?.emoji || "❔"
+function nearGarden(c: Creature): boolean { return world.gardens.some((g) => dist2(g.x, g.y, c.x, c.y) < 120 * 120) }
+
 function actionState(act: string): ActState {
   const c = possessed
   if (!c) return { ok: false, reason: "" }
   if (possessBusy) return { ok: false, reason: "ocupado…" }
   const h = hourOf(), AT = 130 * 130
+  if (act === "gather") return (c.items?.length || 0) >= 12 ? { ok: false, reason: "no podés cargar más" } : { ok: true, reason: "buscar algo por los alrededores 🔎" }
+  if (act === "use") return c.items?.length ? { ok: true, reason: `usar ${itemEmoji(c.items[0])} ${c.items[0]}` } : { ok: false, reason: "no tenés nada que usar" }
   if (act === "eat") return { ok: true, reason: "comer (recupera energía)" }
   if (act === "home") return { ok: true, reason: "caminar a tu casa" }
   if (act === "talk") return chatTarget ? { ok: true, reason: `hablar con ${chatTarget.name}` } : { ok: false, reason: "no hay nadie cerca" }
@@ -491,6 +516,7 @@ function renderPossess() {
     <div class="prow2">❤️ salud ${Math.round(c.health)} · 🧠 ánimo ${Math.round(c.mental)} · 😤 irrit. ${Math.round(c.irritability * 100)}%</div>
     <div class="prow2">${partner ? "❤️ " + esc(partner.name) : "💔 sin pareja"} · 👶 ${c.children} · 🧠 ${Math.round(c.knowledge)}</div>
     <div class="prow2">${esc(c.religion || "sin credo")}${c.sick ? " · <b style='color:#8fe39a'>enfermo ✚</b>" : ""}</div>
+    ${c.items?.length ? `<div class="prow2">🎒 ${c.items.map((k) => itemEmoji(k)).join(" ")}</div>` : ""}
     <div class="plegend">⚪ vos · 💗 pareja · 💚 familia · 💛 conocido · ❤️ rival</div>
     ${toast}`
   possessEl.querySelectorAll("button[data-act]").forEach((b) => {
@@ -507,6 +533,11 @@ function doAction(act: string) {
   const st = actionState(act)
   if (!st.ok) { if (st.walkTo) { possessTarget = st.walkTo; flash("caminando… 🚶") } else if (st.reason) flash(st.reason); renderPossess(); return }
   if (act === "eat") { c.energy = Math.min(150, c.energy + 50); c.money = Math.max(0, c.money - 4); flash("comiste 🍎") }
+  else if (act === "gather") { // search the surroundings — gardens yield food/herbs, the wilds trinkets
+    if (rand() < 0.18) { flash("buscaste pero no encontraste nada 🤷") }
+    else { const pool = nearGarden(c) ? ["fruta", "baya", "hierba", "flor"] : ["flor", "concha", "piedra", "amuleto", "hierba"]; const k = pool[Math.floor(rand() * pool.length)]; c.items = [...(c.items || []), k].slice(-12); flash(`encontraste ${itemEmoji(k)} ${k}`) }
+  }
+  else if (act === "use") { if (c.items?.length) { const k = c.items[0]; ITEMS[k]?.use(c); c.items = c.items.slice(1); flash(ITEMS[k]?.msg || "lo usaste") } }
   else if (act === "home") { possessTarget = { x: c.home.x + c.home.w / 2, y: c.home.y + c.home.h }; flash("yendo a casa 🏠") }
   else if (act === "talk") openChat()
   else if (act === "work") startBusy("work", 480, "trabajando 💼")
