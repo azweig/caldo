@@ -45,12 +45,30 @@ function migrateBetween(from: AffairCountry, to: AffairCountry) {
   to.world.chronicle.push({ day: to.world.clockDays, text: `llegó ${c.name} ${c.surname} desde ${from.name} ✈` })
 }
 
+// TRADE JOURNEYS: a merchant or scout sets off to visit ANOTHER town — to trade, learn, pick up its language —
+// and returns days later the richer for it. They're off the map while away (handled in world.step).
+function sendTravelers(countries: AffairCountry[]) {
+  for (const A of countries) {
+    if (A.world.era < 2) continue // no roads/travel until carts (~era 2)
+    const wanderers = A.world.creatures.filter((c) => !c.isAvatar && isMature(c) && !(c.away && c.away > 0) && (c.profCat === "comercio" || c.profCat === "exploración"))
+    if (!wanderers.length || rand() > 0.5) continue
+    const c = wanderers[Math.floor(rand() * wanderers.length)]
+    const others = countries.filter((b) => b !== A)
+    const B = others[Math.floor(rand() * others.length)]
+    if (!B) continue
+    c.away = 18 + Math.floor(rand() * 50) // ~3-10 weeks on the road
+    c.awayTo = B.world.cultureName || B.name
+    A.world.chronicle.push({ day: A.world.clockDays, text: `${c.name} ${c.surname} partió de viaje a ${c.awayTo} 🧳` })
+  }
+}
+
 let migrateAcc = 0
 // runs periodically: transport gates contact, the relation decides migration / alliance / war
 export function worldAffairs(countries: AffairCountry[], steps: number) {
   migrateAcc += steps
   if (migrateAcc < 450 || countries.length < 2) return
   migrateAcc = 0
+  sendTravelers(countries)
   const i = Math.floor(rand() * countries.length)
   const j = (i + 1 + Math.floor(rand() * (countries.length - 1))) % countries.length
   const A = countries[i], B = countries[j]

@@ -68,6 +68,8 @@ function showNpcCard(c: Creature | null) {
     <div class="nc-row">🏛 casa ${esc(c.surname)} · ${dyn.size} ${dyn.size === 1 ? "miembro" : "miembros"}${dyn.rep > 0.3 ? " · linaje admirado" : dyn.rep < -0.3 ? " · linaje en desgracia" : ""}</div>
     ${parLine}
     ${L ? `<div class="nc-inner">${emo ? emo + " · " : ""}${innerLine(c)}</div>` : ""}
+    ${(c.away || 0) > 0 ? `<div class="nc-row">🧳 de viaje a ${esc(c.awayTo || "otro pueblo")}</div>` : ""}
+    ${c.langs && c.langs.length ? `<div class="nc-row">🗣 lenguas: ${esc([countries[active]?.name || "su pueblo", ...c.langs].join(", "))}</div>` : ""}
     ${c.heard ? `<div class="nc-row">💬 escuchó: «${esc(c.heard)}»</div>` : ""}
     ${c.social?.length ? `<div class="nc-feed">${c.social.slice(-3).map((s) => "· " + esc(s)).join("<br>")}</div>` : ""}
     ${c.sigs?.length ? `<div class="nc-code">📡 hablando en código: ${esc(c.sigs.slice(-4).join(" "))}</div>` : ""}

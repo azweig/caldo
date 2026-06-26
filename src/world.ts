@@ -400,7 +400,7 @@ export class World {
   // ── persistence: a civilisation survives reloads until you start a new one ──
   toState() {
     const hi = new Map<House, number>(); this.houses.forEach((h, i) => hi.set(h, i))
-    const C = (c: Creature) => ({ id: c.id, x: c.x, y: c.y, e: c.energy, ad: c.ageDays, ls: c.lifespanDays, gen: c.generation, nm: c.name, sn: c.surname, h: hi.get(c.home) ?? 0, k: c.knowledge, pf: c.profession, pb: c.profBase, pc: c.profCat, hp: c.heritProf, sick: c.sick, ch: c.children, par: c.parents, rel: c.religion, pw: c.powerHungry, g: c.genome, ps: c.psyche, mem: c.memory, soc: c.social, gh: c.goingHome, pt: c.partner, pg: c.pregnant, mny: c.money, dk: c.dark, arc: c.archetype, crm: c.crimes, biz: c.business, hl: c.health, mt: c.mental, ir: c.irritability, lf: c.life })
+    const C = (c: Creature) => ({ id: c.id, x: c.x, y: c.y, e: c.energy, ad: c.ageDays, ls: c.lifespanDays, gen: c.generation, nm: c.name, sn: c.surname, h: hi.get(c.home) ?? 0, k: c.knowledge, pf: c.profession, pb: c.profBase, pc: c.profCat, hp: c.heritProf, sick: c.sick, ch: c.children, par: c.parents, rel: c.religion, pw: c.powerHungry, g: c.genome, ps: c.psyche, mem: c.memory, soc: c.social, gh: c.goingHome, pt: c.partner, pg: c.pregnant, mny: c.money, dk: c.dark, arc: c.archetype, crm: c.crimes, biz: c.business, hl: c.health, mt: c.mental, ir: c.irritability, lf: c.life, aw: c.away, at: c.awayTo, lg: c.langs })
     return { region: this.region, gov: this.gov, system: this.system, era: this.era, cultureName: this.cultureName, cultureEthos: this.cultureEthos, cultureBias: this.cultureBias, clockDays: this.clockDays, clockMinutes: this.clockMinutes, tick: this.tick, research: this.research, discovered: [...this.discovered], techBoost: this.techBoost, wisdom: this.wisdom, births: this.births, deaths: this.deaths, peakGen: this.peakGen, plagueUntil: this.plagueUntil, violence: this.violence, psychopathy: this.psychopathy, religionsCfg: this.religionsCfg, chronicle: this.chronicle.slice(-60), houses: this.houses, gardens: this.gardens, schools: this.schools, universities: this.universities, airport: this.airport, monarch: this.monarch?.id ?? null, animals: this.animals, raiders: this.raiders, graves: this.graves, techProgress: [...this.techProgress], news: this.news, deeds: this.deeds.slice(-300), creatures: this.creatures.filter((c) => !c.isAvatar).map(C) }
   }
   static fromState(s: any, spriteCount: number): World {
@@ -430,6 +430,7 @@ export class World {
       maxId = Math.max(maxId, num(c.id, 0))
       const cr: Creature = { id: num(c.id, 0), x: num(c.x, 0), y: num(c.y, 0), vx: 0, vy: 0, energy: num(c.e, 80), ageDays: num(c.ad, 0), lifespanDays: num(c.ls, 60 * DAYS_PER_YEAR), genome: c.g, generation: num(c.gen, 1), name: san(c.nm, 40), surname: san(c.sn, 40), home: w.houses[c.h] || w.houses[0], goingHome: !!c.gh, parents: c.par, children: num(c.ch, 0), sick: !!c.sick, sickDays: 0, lastRepro: -99999, partner: num(c.pt, 0), pregnant: num(c.pg, 0), isAvatar: false, facing: 1, psyche: c.ps, memory: sanArr(c.mem, 8, 400), social: sanArr(c.soc, 6, 200), knowledge: num(c.k, 16), profession: san(c.pf, 40), profBase: san(c.pb, 40), profCat: c.pc, heritProf: san(c.hp, 40), religion: san(c.rel, 40), powerHungry: !!c.pw, money: num(c.mny, 0), controlled: false, dark: c.dk || { mach: 0.2, narc: 0.2, psycho: 0.1 }, archetype: c.arc || "promedio", crimes: num(c.crm, 0), business: !!c.biz, health: num(c.hl, 88), mental: num(c.mt, 78), irritability: num(c.ir, 0.3), life: c.lf }
       if (cr.psyche?.beliefs) cr.psyche.beliefs = cr.psyche.beliefs.slice(0, 12).map((b: string) => san(b, 120))
+      cr.away = num(c.aw, 0); cr.awayTo = san(c.at, 40); cr.langs = sanArr(c.lg, 6, 40)
       if (!cr.life) cr.life = newLife(cr)
       byId.set(cr.id, cr); return cr
     })
@@ -891,6 +892,19 @@ export class World {
 
     for (const c of this.creatures) {
       c.ageDays++
+
+      // TRAVELLERS: someone off on a journey to another town is off the map — they don't forage, fall ill or die
+      // here; they just age. When they return they bring coin (trade), learning, + the other town's language.
+      if (!c.isAvatar && (c.away || 0) > 0) {
+        c.away!--
+        if (c.away === 0) {
+          c.money += 40 + Math.floor(rand() * 90) // profits from trade abroad
+          c.knowledge = Math.min(c.knowledge + 7, this.wisdom + 40) // ideas + skills picked up
+          if (c.awayTo) { if (!c.langs) c.langs = []; if (!c.langs.includes(c.awayTo)) c.langs.push(c.awayTo); this.logEvent(`${c.name} ${c.surname} volvió de ${c.awayTo} con mercancías y relatos`); if (c.life) feel(c, "orgulloso", 0.7) }
+          c.awayTo = ""
+        }
+        survivors.push(c); continue
+      }
 
       if (!c.isAvatar && !c.controlled) {
         let tx: number, ty: number

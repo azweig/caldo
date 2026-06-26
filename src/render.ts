@@ -494,7 +494,8 @@ function drawCreature(ctx: CanvasRenderingContext2D, c: Creature, era: number, a
   // inside their own house → drawn faint (they "went in"; the lit windows represent them)
   const hh = c.home
   const indoors = !c.isAvatar && c.x > hh.x - 2 && c.x < hh.x + hh.w + 2 && c.y > hh.y - 8 && c.y < hh.y + hh.h + 2
-  const dim = indoors ? 0.34 : 1
+  const away = !c.isAvatar && (c.away || 0) > 0 // off on a journey to another town → drawn as a faint traveller
+  const dim = away ? 0.22 : indoors ? 0.34 : 1
 
   // a natural walk: bob up + sway gently while moving (a still person stands quiet)
   const moving = !indoors && Math.abs(c.vx) + Math.abs(c.vy) > 0.15
