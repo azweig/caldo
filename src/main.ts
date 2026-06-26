@@ -969,13 +969,15 @@ window.addEventListener("beforeunload", saveGame)
 const menuEl = document.getElementById("menu")!
 const newcivEl = document.getElementById("newciv")!
 function showMenu() {
-  const save = loadSave()
   const cont = document.getElementById("menu-continue") as HTMLButtonElement
-  if (save?.countries?.length) {
-    cont.classList.remove("hidden")
-    cont.innerHTML = `▶ Continuar — ${save.countries.length} ${save.countries.length === 1 ? "país" : "países"} · ${eraName(save.countries[0].state.era)}`
-    cont.onclick = () => { const s = loadSave(); if (s) continueGame(s) }
-  } else cont.classList.add("hidden")
+  try {
+    const save = loadSave()
+    if (save?.countries?.length) {
+      cont.classList.remove("hidden")
+      cont.innerHTML = `▶ Continuar — ${save.countries.length} ${save.countries.length === 1 ? "país" : "países"} · ${esc(eraName(save.countries[0]?.state?.era ?? 0))}`
+      cont.onclick = () => { try { const s = loadSave(); if (s) continueGame(s) } catch (e) { console.error("save corrupto", e); localStorage.removeItem(SAVE_KEY); cont.classList.add("hidden") } }
+    } else cont.classList.add("hidden")
+  } catch (e) { console.error("no se pudo leer el guardado", e); cont.classList.add("hidden") } // a corrupt save must never brick the menu
   newcivEl.classList.add("hidden")
   menuEl.classList.remove("hidden")
 }
@@ -1000,4 +1002,5 @@ document.getElementById("nc-create")!.addEventListener("click", () => newGame(re
 document.getElementById("nc-back")!.addEventListener("click", () => { newcivEl.classList.add("hidden"); showMenu() })
 
 let assets: Awaited<ReturnType<typeof loadAssets>>
-loadAssets().then((a) => { assets = a; spriteCount = a.creatures.length; autoDetect(); showMenu() })
+// boot — never let a failure here leave the page "initializing"; always reach the menu
+loadAssets().then((a) => { assets = a; spriteCount = a.creatures.length; autoDetect().catch(() => {}); showMenu() }).catch((e) => { console.error("boot", e); try { showMenu() } catch { /* last resort */ } })
