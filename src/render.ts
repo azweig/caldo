@@ -60,6 +60,47 @@ const CAT_COLOR: Record<string, string> = {
   defensa: "#ff7b7b", espíritu: "#c79bff", ingeniería: "#aebfff", cuidado: "#ffb3c9",
 }
 
+// PERF: the ground/trees/gardens/streets only change by (region, season, era cobble) — render them ONCE to an
+// offscreen canvas (full world size) and blit each frame, instead of redrawing ~80 trees + the grid every frame.
+let _staticCache: { key: string; canvas: CanvasImageSource } | null = null
+function makeOffscreen(w: number, h: number): { canvas: CanvasImageSource; ctx: CanvasRenderingContext2D } | null {
+  try {
+    if (typeof OffscreenCanvas !== "undefined") { const c = new OffscreenCanvas(w, h); return { canvas: c, ctx: c.getContext("2d") as unknown as CanvasRenderingContext2D } }
+    if (typeof document !== "undefined") { const c = document.createElement("canvas"); c.width = w; c.height = h; return { canvas: c, ctx: c.getContext("2d")! } }
+  } catch { /* headless / unsupported → no cache */ }
+  return null
+}
+function drawStaticLayer(ctx: CanvasRenderingContext2D, world: World) {
+  ctx.fillStyle = REGION_GROUND[world.region % REGION_GROUND.length][seasonOf(world.clockDays)]
+  ctx.fillRect(0, 0, WORLD_W, WORLD_H)
+  const sea = seasonOf(world.clockDays)
+  const leaf = sea === 3 ? "#9fb39a" : sea === 2 ? "#c79a3e" : "#4e9442", leafHi = sea === 3 ? "#b6c6b0" : sea === 2 ? "#dcb45a" : "#69ab52"
+  for (let i = 0; i < 80; i++) {
+    const px = seedR(i * 1.3) * WORLD_W, py = seedR(i * 2.7 + 5) * WORLD_H
+    const onRoad = Math.abs((px % BLOCK) - BLOCK / 2) > BLOCK / 2 - ROAD_HALF - 4 || Math.abs((py % BLOCK) - BLOCK / 2) > BLOCK / 2 - ROAD_HALF - 4
+    if (onRoad) continue
+    const r = 6 + seedR(i * 3.1) * 8
+    ctx.fillStyle = "rgba(40,60,30,0.16)"; ctx.beginPath(); ctx.ellipse(px + 3, py + r * 0.75, r * 1.05, r * 0.42, 0, 0, Math.PI * 2); ctx.fill()
+    ctx.fillStyle = "#6b4a2e"; ctx.fillRect(px - 1.5, py - 2, 3, r * 0.8)
+    ctx.fillStyle = leaf; ctx.beginPath(); ctx.arc(px, py - r * 0.5, r, 0, Math.PI * 2); ctx.fill()
+    ctx.fillStyle = leafHi; ctx.beginPath(); ctx.arc(px - r * 0.3, py - r * 0.8, r * 0.5, 0, Math.PI * 2); ctx.fill()
+  }
+  const season = sea, cropCol = season === 3 ? "rgba(150,160,120,0.5)" : season === 2 ? "rgba(170,150,70,0.55)" : "rgba(90,170,80,0.6)"
+  for (const g of world.gardens) {
+    ctx.fillStyle = season === 3 ? "rgba(120,135,120,0.12)" : "rgba(70,150,90,0.12)"
+    ctx.beginPath(); ctx.arc(g.x, g.y, 95, 0, Math.PI * 2); ctx.fill()
+    ctx.fillStyle = cropCol
+    for (let i = 0; i < 22; i++) { const a = i * 2.39996, r = 18 + (i % 6) * 13; const px = g.x + Math.cos(a) * r, py = g.y + Math.sin(a) * r * 0.8; ctx.fillRect(px - 1, py - 4, 2, 5) }
+  }
+  const path = world.era >= 9 ? "#b3ada3" : PATH_COL[sea]
+  ctx.fillStyle = path
+  for (let x = BLOCK; x < WORLD_W; x += BLOCK) ctx.fillRect(x - ROAD_HALF, 0, ROAD_HALF * 2, WORLD_H)
+  for (let y = BLOCK; y < WORLD_H; y += BLOCK) ctx.fillRect(0, y - ROAD_HALF, WORLD_W, ROAD_HALF * 2)
+  ctx.fillStyle = "rgba(90,70,40,0.13)"
+  for (let x = BLOCK; x < WORLD_W; x += BLOCK) ctx.fillRect(x - 1, 0, 2, WORLD_H)
+  for (let y = BLOCK; y < WORLD_H; y += BLOCK) ctx.fillRect(0, y - 1, WORLD_W, 2)
+}
+
 export function drawWorld(
   ctx: CanvasRenderingContext2D,
   world: World,
@@ -80,41 +121,16 @@ export function drawWorld(
   ctx.scale(cam.zoom, cam.zoom)
   ctx.translate(-cam.x, -cam.y)
 
-  // ground — tinted by the country's biome + the season
-  ctx.fillStyle = REGION_GROUND[world.region % REGION_GROUND.length][seasonOf(world.clockDays)]
-  ctx.fillRect(0, 0, WORLD_W, WORLD_H)
-  // scattered trees + bushes give the land texture (deterministic positions, seasonal colour)
-  const sea = seasonOf(world.clockDays)
-  const leaf = sea === 3 ? "#9fb39a" : sea === 2 ? "#c79a3e" : "#4e9442", leafHi = sea === 3 ? "#b6c6b0" : sea === 2 ? "#dcb45a" : "#69ab52"
-  for (let i = 0; i < 80; i++) {
-    const px = seedR(i * 1.3) * WORLD_W, py = seedR(i * 2.7 + 5) * WORLD_H
-    const onRoad = Math.abs((px % BLOCK) - BLOCK / 2) > BLOCK / 2 - ROAD_HALF - 4 || Math.abs((py % BLOCK) - BLOCK / 2) > BLOCK / 2 - ROAD_HALF - 4
-    if (onRoad) continue
-    const r = 6 + seedR(i * 3.1) * 8
-    ctx.fillStyle = "rgba(40,60,30,0.16)"; ctx.beginPath(); ctx.ellipse(px + 3, py + r * 0.75, r * 1.05, r * 0.42, 0, 0, Math.PI * 2); ctx.fill() // shadow
-    ctx.fillStyle = "#6b4a2e"; ctx.fillRect(px - 1.5, py - 2, 3, r * 0.8) // little trunk
-    ctx.fillStyle = leaf; ctx.beginPath(); ctx.arc(px, py - r * 0.5, r, 0, Math.PI * 2); ctx.fill()
-    ctx.fillStyle = leafHi; ctx.beginPath(); ctx.arc(px - r * 0.3, py - r * 0.8, r * 0.5, 0, Math.PI * 2); ctx.fill() // sun-lit top
+  // STATIC LAYER (ground + trees + gardens + streets) — rendered once to an offscreen + blitted; recomputed
+  // only when biome/season/cobble change. Falls back to drawing inline where offscreen canvas isn't available.
+  const sKey = `${world.region}|${seasonOf(world.clockDays)}|${world.era >= 9 ? 1 : 0}|${world.gardens.length}`
+  if (!_staticCache || _staticCache.key !== sKey) {
+    const off = makeOffscreen(WORLD_W, WORLD_H)
+    if (off) { drawStaticLayer(off.ctx, world); _staticCache = { key: sKey, canvas: off.canvas } }
+    else _staticCache = null
   }
-
-  // gardens (where food grows) — a tilled patch with rows of crops that green up in summer, fade in winter
-  const season = seasonOf(world.clockDays)
-  const cropCol = season === 3 ? "rgba(150,160,120,0.5)" : season === 2 ? "rgba(170,150,70,0.55)" : "rgba(90,170,80,0.6)" // winter pale, autumn gold, else green
-  for (const g of world.gardens) {
-    ctx.fillStyle = season === 3 ? "rgba(120,135,120,0.12)" : "rgba(70,150,90,0.12)"
-    ctx.beginPath(); ctx.arc(g.x, g.y, 95, 0, Math.PI * 2); ctx.fill()
-    ctx.fillStyle = cropCol // little crop tufts in rows (deterministic so they don't shimmer)
-    for (let i = 0; i < 22; i++) { const a = i * 2.39996, r = 18 + (i % 6) * 13; const px = g.x + Math.cos(a) * r, py = g.y + Math.sin(a) * r * 0.8; ctx.fillRect(px - 1, py - 4, 2, 5) }
-  }
-
-  // streets — warm dirt paths (cobbled in modern eras), with a worn centre line
-  const path = world.era >= 9 ? "#b3ada3" : PATH_COL[sea]
-  ctx.fillStyle = path
-  for (let x = BLOCK; x < WORLD_W; x += BLOCK) ctx.fillRect(x - ROAD_HALF, 0, ROAD_HALF * 2, WORLD_H)
-  for (let y = BLOCK; y < WORLD_H; y += BLOCK) ctx.fillRect(0, y - ROAD_HALF, WORLD_W, ROAD_HALF * 2)
-  ctx.fillStyle = "rgba(90,70,40,0.13)"
-  for (let x = BLOCK; x < WORLD_W; x += BLOCK) ctx.fillRect(x - 1, 0, 2, WORLD_H)
-  for (let y = BLOCK; y < WORLD_H; y += BLOCK) ctx.fillRect(0, y - 1, WORLD_W, 2)
+  if (_staticCache) ctx.drawImage(_staticCache.canvas, 0, 0)
+  else drawStaticLayer(ctx, world)
 
   // occupancy: who's currently home (near their own house) → drives the lit windows + the head-count
   const present = new Map<House, number>()
