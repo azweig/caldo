@@ -3,7 +3,7 @@
 // possessed character in third person. The simulation stays in the 2D engine; this only renders.
 
 import * as THREE from "three"
-import { World, Creature, House, WORLD_W, WORLD_H, BLOCK } from "./world"
+import { World, Creature, House, WORLD_W, WORLD_H, BLOCK, seasonOf } from "./world"
 import { SPECIES } from "./animals"
 
 const S = 0.045 // world px → 3D units
@@ -22,7 +22,7 @@ let builtEra = -1 // rebuild the town when the era (architecture) changes
 let walkT = 0 // real-time clock for the fake walk animation
 let ready = false
 let gfxHigh = false // high-graphics aesthetic: warmer/softer light + more atmospheric depth (Ghibli vibe)
-export function setGfx3D(high: boolean) { gfxHigh = high; if (ready && scene.fog) (scene.fog as THREE.Fog).far = high ? 480 : 360 }
+export function setGfx3D(high: boolean) { gfxHigh = high; builtFor = null; if (ready && scene.fog) (scene.fog as THREE.Fog).far = high ? 480 : 360 } // builtFor=null → town rebuilds with the new ground
 
 export function init3D(canvas: HTMLCanvasElement, _creatureImgs: HTMLImageElement[]) {
   if (ready) return
@@ -83,6 +83,27 @@ function tex(name: string, repeat = 1): THREE.Texture {
   }
   return t
 }
+// HIGH-GRAPHICS illustrated texture from /art/scene — falls back to the procedural /tex one if the file isn't there
+function artTex(artName: string, fallback: string, repeat: number): THREE.Texture {
+  const key = `art:${artName}@${repeat}`
+  let t = texCache.get(key)
+  if (!t) {
+    t = loader.load(`/art/scene/${artName}.png`, undefined, undefined, () => { const f = tex(fallback, repeat); t!.image = f.image; t!.needsUpdate = true }) // 404 → use the procedural texture
+    t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(repeat, repeat); t.colorSpace = THREE.SRGBColorSpace
+    texCache.set(key, t)
+  }
+  return t
+}
+// the ground texture for the world plane — seasonal illustrated grass in high mode, else the procedural one
+function groundMap(world: World): THREE.Texture {
+  const E = eraTex(world.era)
+  if (gfxHigh && E.ground === "ground_grass") {
+    const names = ["ground_grass", "ground_grass_summer", "ground_grass_autum", "ground_grass_winter"]
+    return artTex(names[seasonOf(world.clockDays)] || "ground_grass", "ground_grass", 16)
+  }
+  return tex(E.ground, 42)
+}
+
 // era → which wall / roof / ground material the architecture uses (mud huts → glass towers → neon)
 function eraTex(era: number) {
   if (era <= 1) return { wall: "wall_mud", roof: "roof_thatch", ground: "ground_grass" }
@@ -215,9 +236,9 @@ function boxBuilding(x: number, y: number, w: number, h: number, height: number,
 function buildTown(world: World) {
   if (town) { scene.remove(town); town.traverse((o) => { const m = o as THREE.Mesh; m.geometry?.dispose(); disposeMat(m.material) }) } // free geometry AND materials on rebuild (materials leaked before)
   town = new THREE.Group()
-  const E = eraTex(world.era)
-  // textured ground (tiled)
-  const ground = new THREE.Mesh(new THREE.PlaneGeometry(WORLD_W * S, WORLD_H * S), new THREE.MeshLambertMaterial({ map: tex(E.ground, 42) }))
+  // textured ground (tiled) — seasonal illustrated grass in high mode, procedural otherwise
+
+  const ground = new THREE.Mesh(new THREE.PlaneGeometry(WORLD_W * S, WORLD_H * S), new THREE.MeshLambertMaterial({ map: groundMap(world) }))
   ground.rotation.x = -Math.PI / 2; ground.position.set(WORLD_W * S / 2, 0, WORLD_H * S / 2); town.add(ground)
   // streets: actual road strips along the block grid (so they READ at ground level)
   const roadMat = new THREE.MeshBasicMaterial({ color: world.era >= 15 ? 0x18324e : 0x33291d })
