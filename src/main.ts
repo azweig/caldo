@@ -45,6 +45,18 @@ function updateChatter() { // a live murmur of what people NEAR you are gossipin
 }
 const npccard = document.getElementById("npccard") as HTMLDivElement
 // click a person in 3D → show their card (info + actions) on the left, like you asked
+// the PSYCHOLOGICAL dimensions of a person — their core drive/fear (enneagram) + Big-Five temperament + any dark streak
+function psycheDepth(c: Creature): string {
+  const p = c.psyche; if (!p) return ""
+  const t = ENNEAGRAM[p.type], f = p.five
+  const bar = (label: string, v: number, hi: string, lo: string) => `<span title="${v < 0.4 ? lo : v > 0.6 ? hi : "intermedio"}" style="display:inline-block;margin-right:7px">${label}<span class="rbar" style="width:34px;margin-left:3px"><i style="width:${Math.round(v * 100)}%"></i></span></span>`
+  const d = c.dark, dark = d ? [d.mach > 0.55 ? "🎭 calculador/a" : "", d.narc > 0.55 ? "🪞 ególatra" : "", d.psycho > 0.5 ? "🗡 frío/a" : ""].filter(Boolean).join(" · ") : ""
+  return `
+    <div class="nc-row" style="opacity:.9">🧬 anhela ${esc(t.desire)} · teme ${esc(t.fear)}</div>
+    <div class="nc-row" style="font-size:10px">${bar("🔭", f.o, "curioso/a, abierto/a", "tradicional")}${bar("📐", f.c, "metódico/a", "espontáneo/a")}${bar("🎉", f.e, "sociable", "reservado/a")}${bar("🤝", f.a, "cálido/a", "duro/a")}${bar("🌊", f.n, "ansioso/a", "sereno/a")}</div>
+    ${dark ? `<div class="nc-row" style="color:#e09ab0">${dark}</div>` : ""}`
+}
+
 function showNpcCard(c: Creature | null) {
   if (!c || !possessed) { npccard.classList.add("hidden"); return }
   const rel = c.partner === possessed.id ? "💗 tu pareja" : c.surname === possessed.surname ? "💚 familia" : "🤍 vecino/a"
@@ -68,6 +80,7 @@ function showNpcCard(c: Creature | null) {
     <div class="nc-row">🏛 casa ${esc(c.surname)} · ${dyn.size} ${dyn.size === 1 ? "miembro" : "miembros"}${dyn.rep > 0.3 ? " · linaje admirado" : dyn.rep < -0.3 ? " · linaje en desgracia" : ""}</div>
     ${parLine}
     ${L ? `<div class="nc-inner">${emo ? emo + " · " : ""}${innerLine(c)}</div>` : ""}
+    ${psycheDepth(c)}
     ${(c.away || 0) > 0 ? `<div class="nc-row">🧳 de viaje a ${esc(c.awayTo || "otro pueblo")}</div>` : ""}
     ${c.langs && c.langs.length ? `<div class="nc-row">🗣 lenguas: ${esc([countries[active]?.name || "su pueblo", ...c.langs].join(", "))}</div>` : ""}
     ${c.heard ? `<div class="nc-row">💬 escuchó: «${esc(c.heard)}»</div>` : ""}
