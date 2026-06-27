@@ -1,5 +1,14 @@
 * { margin: 0; padding: 0; box-sizing: border-box; }
 html, body { height: 100%; overflow: hidden; background: #0a0f14; }
+
+/* ALWAYS-VISIBLE scrollbars on the overlay panels (macOS hides overlay scrollbars by default → they looked "missing") */
+#chronicle, #legends, #chatterfeed, #possess, #npccard, #chat-log {
+  scrollbar-width: thin; scrollbar-color: rgba(255,210,128,0.4) rgba(255,255,255,0.05); /* Firefox */
+}
+#chronicle::-webkit-scrollbar, #legends::-webkit-scrollbar, #chatterfeed::-webkit-scrollbar, #possess::-webkit-scrollbar, #npccard::-webkit-scrollbar, #chat-log::-webkit-scrollbar { width: 10px; }
+#chronicle::-webkit-scrollbar-track, #legends::-webkit-scrollbar-track, #chatterfeed::-webkit-scrollbar-track, #possess::-webkit-scrollbar-track, #npccard::-webkit-scrollbar-track, #chat-log::-webkit-scrollbar-track { background: rgba(255,255,255,0.06); border-radius: 6px; }
+#chronicle::-webkit-scrollbar-thumb, #legends::-webkit-scrollbar-thumb, #chatterfeed::-webkit-scrollbar-thumb, #possess::-webkit-scrollbar-thumb, #npccard::-webkit-scrollbar-thumb, #chat-log::-webkit-scrollbar-thumb { background: rgba(255,210,128,0.38); border-radius: 6px; border: 2px solid transparent; background-clip: padding-box; }
+#chronicle::-webkit-scrollbar-thumb:hover, #legends::-webkit-scrollbar-thumb:hover, #chatterfeed::-webkit-scrollbar-thumb:hover, #possess::-webkit-scrollbar-thumb:hover, #npccard::-webkit-scrollbar-thumb:hover, #chat-log::-webkit-scrollbar-thumb:hover { background: rgba(255,214,128,0.6); }
 body { font-family: ui-monospace, "SF Mono", Menlo, monospace; color: #dfe7ee; }
 
 #world { position: fixed; inset: 0; display: block; }
@@ -128,7 +137,7 @@ body { font-family: ui-monospace, "SF Mono", Menlo, monospace; color: #dfe7ee; }
 .possess-actions button:disabled { cursor: not-allowed; opacity: 0.28; }
 .possess-hint { margin-top: 10px; font-size: 11px; color: #5f7384; text-align: center; }
 #speech3d { position: absolute; display: none; transform: translate(-50%, -100%); background: rgba(10,16,24,0.9); color: #eaf2ff; border: 1px solid rgba(150,180,220,0.35); border-radius: 10px; padding: 5px 10px; font-size: 13px; max-width: 280px; pointer-events: none; z-index: 7; box-shadow: 0 4px 16px rgba(0,0,0,0.4); }
-#npccard { position: absolute; right: 16px; bottom: 16px; width: 280px; z-index: 9; background: rgba(12,17,26,0.96); border: 1px solid rgba(255,210,128,0.35); border-radius: 12px; padding: 12px 14px; box-shadow: 0 6px 22px rgba(0,0,0,0.5); }
+#npccard { position: absolute; right: 16px; bottom: 16px; width: 280px; max-height: 82vh; overflow-y: auto; z-index: 9; background: rgba(12,17,26,0.96); border: 1px solid rgba(255,210,128,0.35); border-radius: 12px; padding: 12px 14px; box-shadow: 0 6px 22px rgba(0,0,0,0.5); }
 #npccard .nc-name { color: #ffe6a3; font-weight: bold; font-size: 15px; margin-bottom: 5px; }
 #npccard .nc-row { color: #aebccd; font-size: 12px; margin: 2px 0; }
 #npccard .nc-inner { color: #cdbf9a; font-size: 12px; font-style: italic; margin: 4px 0; }
@@ -141,7 +150,7 @@ body { font-family: ui-monospace, "SF Mono", Menlo, monospace; color: #dfe7ee; }
 #npccard .nc-acts button:hover { background: rgba(120,180,255,0.34); }
 #npccard .nc-acts #nc-x { flex: 0 0 32px; }
 #speech3d.foreign { color: #9fb0c4; font-style: italic; }
-#chatterfeed { position: absolute; right: 16px; top: 150px; width: 250px; z-index: 6; background: rgba(10,16,24,0.82); border: 1px solid rgba(110,227,154,0.25); border-radius: 10px; padding: 8px 11px; font-size: 11.5px; color: #aebccd; line-height: 1.5; pointer-events: none; }
+#chatterfeed { position: absolute; right: 16px; top: 150px; width: 250px; max-height: 56vh; overflow-y: auto; z-index: 6; background: rgba(10,16,24,0.82); border: 1px solid rgba(110,227,154,0.25); border-radius: 10px; padding: 8px 11px; font-size: 11.5px; color: #aebccd; line-height: 1.5; }
 #chatterfeed b { color: #6fe39a; font-size: 11px; }
 #tabs button.dead { opacity: 0.5; filter: grayscale(0.8); text-decoration: line-through; }
 #pspeed { background: rgba(120,180,255,0.18); border: 1px solid rgba(120,180,255,0.4); color: #cfe2ff; border-radius: 6px; padding: 1px 7px; font: inherit; font-size: 11px; cursor: pointer; }
