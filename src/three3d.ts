@@ -169,6 +169,8 @@ function eraRoofs(era: number): string[] {
 const modelPool: THREE.Group[] = []
 const _near: { c: Creature; d: number }[] = [] // reused scratch for the nearest-N selection (no per-frame allocation)
 const _sway: { s: THREE.Sprite; amp: number; ph: number }[] = [] // vegetation sprites that sway in the wind (high mode)
+const _clouds: { s: THREE.Sprite; v: number }[] = [] // cloud sprites drifting across the sky (high mode)
+const WWU = WORLD_W * 0.045 // world width in 3D units (for wrapping the clouds)
 // helper: a mesh with its position set — Object3D.position is READ-ONLY in three (must .set, never reassign)
 const meshAt = (geo: THREE.BufferGeometry, mat: THREE.Material, x: number, y: number, z: number): THREE.Mesh => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); return m }
 
@@ -388,12 +390,28 @@ function buildTown(world: World) {
       else { const r = new THREE.Mesh(new THREE.DodecahedronGeometry(0.6), new THREE.MeshLambertMaterial({ color: 0x8a857c })); r.position.set(px, 0.4, pz); r.scale.setScalar(0.7 + hashf(i * 4) * 0.8); town.add(r) }
     }
   }
-  // CLOUDS drifting high above (a few flattened white puffs) so the sky isn't an empty plane
-  const cloudMat = new THREE.MeshBasicMaterial({ color: 0xf2f4f8, transparent: true, opacity: 0.82, fog: false })
-  for (let i = 0; i < 12; i++) {
-    const c = new THREE.Group()
-    for (let p = 0; p < 4; p++) { const puff = new THREE.Mesh(new THREE.SphereGeometry(6 + hashf(i * 7 + p) * 5, 7, 6), cloudMat); puff.position.set((p - 1.5) * 7, hashf(i + p) * 3, hashf(i * 2 + p) * 5); c.add(puff) }
-    c.position.set(hashf(i * 3.3) * WW * 1.5 - WW * 0.25, 75 + hashf(i * 5) * 30, hashf(i * 8.1) * WH * 1.5 - WH * 0.25); c.scale.y = 0.5; town.add(c)
+  _clouds.length = 0
+  if (gfxHigh) {
+    // painted CLOUD sprites drifting high above + a warm SUN with soft light rays
+    const cnames = ["cloud_1", "cloud_2", "cloud_3"]
+    for (let i = 0; i < 14; i++) {
+      const name = cnames[i % 3], asp = artAspect.get(name) ?? 2
+      const cl = new THREE.Sprite(new THREE.SpriteMaterial({ map: artTexPlain(name), transparent: true, fog: false, opacity: 0.95 }))
+      const sc = 28 + hashf(i * 5) * 22; cl.scale.set(sc * asp, sc, 1)
+      cl.position.set(hashf(i * 3.3) * WW * 2 - WW * 0.5, 70 + hashf(i * 5) * 38, hashf(i * 8.1) * WH * 2 - WH * 0.5)
+      town.add(cl); _clouds.push({ s: cl, v: 0.04 + hashf(i) * 0.05 })
+    }
+    const sun = new THREE.Sprite(new THREE.SpriteMaterial({ map: artTexPlain("sun_glow"), transparent: true, fog: false, opacity: 0.9, blending: THREE.AdditiveBlending }))
+    sun.scale.set(70, 70, 1); sun.position.set(WW * 0.2, 120, -WH * 0.3); town.add(sun)
+    const rays = new THREE.Sprite(new THREE.SpriteMaterial({ map: artTexPlain("light_rays"), transparent: true, fog: false, opacity: 0.35, blending: THREE.AdditiveBlending }))
+    rays.scale.set(150, 150, 1); rays.position.set(WW * 0.3, 80, WH * 0.1); town.add(rays)
+  } else {
+    const cloudMat = new THREE.MeshBasicMaterial({ color: 0xf2f4f8, transparent: true, opacity: 0.82, fog: false })
+    for (let i = 0; i < 12; i++) {
+      const c = new THREE.Group()
+      for (let p = 0; p < 4; p++) { const puff = new THREE.Mesh(new THREE.SphereGeometry(6 + hashf(i * 7 + p) * 5, 7, 6), cloudMat); puff.position.set((p - 1.5) * 7, hashf(i + p) * 3, hashf(i * 2 + p) * 5); c.add(puff) }
+      c.position.set(hashf(i * 3.3) * WW * 1.5 - WW * 0.25, 75 + hashf(i * 5) * 30, hashf(i * 8.1) * WH * 1.5 - WH * 0.25); c.scale.y = 0.5; town.add(c)
+    }
   }
   // ── plaza props: a fountain at the heart of town, market stalls + lamp posts (it feels inhabited) ──
   const cX = WORLD_W * S / 2, cZ = WORLD_H * S / 2
@@ -522,6 +540,7 @@ export function render3D(world: World, me: Creature, yaw: number, pitch = 0, dis
       p.visible = true; p.material.rotation = u.ph; p.position.set(u.x + Math.sin(u.ph) * 1.3, u.y, u.z + Math.cos(u.ph * 0.7) * 0.9)
     }
   } else for (const p of petalPool) p.visible = false
+  for (const c of _clouds) { c.s.position.x += c.v; if (c.s.position.x > WWU * 1.5) c.s.position.x = -WWU * 0.5 } // clouds drift
   // DAY/NIGHT: light + haze follow the in-world hour so dusk darkens + night cools the whole 3D scene
   const hr = (world.clockMinutes % 1440) / 60
   const bright = hr < 5 || hr >= 21 ? 0.32 : hr < 7 ? 0.6 : hr < 18 ? 1 : hr < 20 ? 0.6 : 0.42
