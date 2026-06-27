@@ -390,6 +390,8 @@ function buildTown(world: World) {
     const px = hashf(i * 5.7 + 1) * WW, pz = hashf(i * 9.3 + 4) * WH
     const onRoad = Math.abs((px / S % BLOCK) - BLOCK / 2) > BLOCK / 2 - 40 || Math.abs((pz / S % BLOCK) - BLOCK / 2) > BLOCK / 2 - 40
     if (onRoad) continue // keep streets clear
+    const wx = px / S, wz = pz / S // don't plant scenery on top of a house
+    if (world.houses.some((h) => wx > h.x - 28 && wx < h.x + h.w + 28 && wz > h.y - 28 && wz < h.y + h.h + 28)) continue
     const k = hashf(i * 2.1)
     if (gfxHigh) {
       const isTree = k < 0.3, r2 = hashf(i * 4.4)
