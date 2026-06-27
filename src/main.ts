@@ -538,6 +538,7 @@ function renderPossess() {
     <div class="prow2">${partner ? "❤️ " + esc(partner.name) : "💔 sin pareja"} · 👶 ${c.children} · 🧠 ${Math.round(c.knowledge)}</div>
     <div class="prow2">${esc(c.religion || "sin credo")}${c.sick ? " · <b style='color:#8fe39a'>enfermo ✚</b>" : ""}</div>
     ${c.items?.length ? `<div class="prow2">🎒 ${c.items.map((k) => itemEmoji(k)).join(" ")}</div>` : ""}
+    ${psycheDepth(c)}
     <div class="plegend">⚪ vos · 💗 pareja · 💚 familia · 💛 conocido · ❤️ rival</div>
     ${toast}`
   possessEl.querySelectorAll("button[data-act]").forEach((b) => {
