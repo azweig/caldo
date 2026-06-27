@@ -252,7 +252,9 @@ export class World {
       }
     }
     // gardens (food grows here) — a few per quadrant, off the houses
-    for (let i = 0; i < 16; i++) this.gardens.push({ x: MARGIN + rand() * (WORLD_W - 2 * MARGIN), y: MARGIN + rand() * (WORLD_H - 2 * MARGIN) })
+    // gardens cluster in + around the town (farmland), not scattered across the whole big world
+    const gw = 4400, gh = 3200, gx0 = (WORLD_W - gw) / 2, gy0 = (WORLD_H - gh) / 2
+    for (let i = 0; i < 16; i++) this.gardens.push({ x: gx0 + rand() * gw, y: gy0 + rand() * gh })
 
     // schools — the two seats of learning; the cultural ratchet flows through here
     this.schools.push({ x: WORLD_W * 0.33 - 48, y: WORLD_H * 0.5 - 40, w: 96, h: 80 })

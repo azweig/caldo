@@ -385,8 +385,8 @@ function buildTown(world: World) {
     }
   }
   // INNER greenery so the town isn't bare grass — scattered trees, bushes + rocks between the houses
-  // INNER scatter between houses — illustrated sprites in high mode, procedural shapes in low
-  for (let i = 0; i < 46; i++) {
+  // SCATTER across the world — vegetation + props fill the open land around the town (denser for the big world)
+  for (let i = 0; i < 240; i++) {
     const px = hashf(i * 5.7 + 1) * WW, pz = hashf(i * 9.3 + 4) * WH
     const onRoad = Math.abs((px / S % BLOCK) - BLOCK / 2) > BLOCK / 2 - 40 || Math.abs((pz / S % BLOCK) - BLOCK / 2) > BLOCK / 2 - 40
     if (onRoad) continue // keep streets clear
