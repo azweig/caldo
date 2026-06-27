@@ -171,6 +171,7 @@ const _near: { c: Creature; d: number }[] = [] // reused scratch for the nearest
 const _sway: { s: THREE.Sprite; amp: number; ph: number }[] = [] // vegetation sprites that sway in the wind (high mode)
 const _clouds: { s: THREE.Sprite; v: number }[] = [] // cloud sprites drifting across the sky (high mode)
 const WWU = WORLD_W * 0.045 // world width in 3D units (for wrapping the clouds)
+let _water: THREE.Texture | null = null // lake surface — its UV drifts for a gentle shimmer
 // helper: a mesh with its position set — Object3D.position is READ-ONLY in three (must .set, never reassign)
 const meshAt = (geo: THREE.BufferGeometry, mat: THREE.Material, x: number, y: number, z: number): THREE.Mesh => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); return m }
 
@@ -359,6 +360,17 @@ function buildTown(world: World) {
     const R2 = Math.max(WW, WH) * 0.72 // closer treeline band → an extra depth layer between hills and town
     const mid = new THREE.Mesh(new THREE.CylinderGeometry(R2, R2, 26, 56, 1, true), new THREE.MeshBasicMaterial({ map: artTexPlain("midground_trees"), side: THREE.BackSide, transparent: true }))
     mid.position.set(WW / 2, 9, WH / 2); town.add(mid)
+    // a LAKE in the open land (natural zone) with a shimmering water texture + reeds around the shore
+    const lakeR = 620 * S, lkx = WW * 0.78, lkz = WH * 0.26
+    const wtex = artTex("water", "water", 4); const lakeMat = new THREE.MeshLambertMaterial({ map: wtex, transparent: true, opacity: 0.92 })
+    const lake = new THREE.Mesh(new THREE.CircleGeometry(lakeR, 36), lakeMat); lake.rotation.x = -Math.PI / 2; lake.position.set(lkx, 0.06, lkz); town.add(lake)
+    _water = wtex
+    for (let r = 0; r < 22; r++) { // reeds ring the shore
+      const a = (r / 22) * Math.PI * 2, rr = lakeR * (0.96 + hashf(r) * 0.1)
+      const name = "reeds", asp = artAspect.get(name) ?? 0.6, sc = 3 + hashf(r * 3) * 1.5
+      const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: artTexPlain(name), transparent: true }))
+      sp.scale.set(sc * asp, sc, 1); sp.position.set(lkx + Math.cos(a) * rr, sc / 2, lkz + Math.sin(a) * rr); town.add(sp); _sway.push({ s: sp, amp: 0.07, ph: a })
+    }
     const treeNames = ["tree_pine", "tree_blossom", "tree_broadleaf"]
     for (let i = 0; i < 90; i++) { // a ring of painted trees framing the town
       const a = hashf(i * 3.1) * Math.PI * 2, rad = WW * 0.5 + hashf(i * 7.7) * WW * 0.55
@@ -561,6 +573,7 @@ export function render3D(world: World, me: Creature, yaw: number, pitch = 0, dis
     }
   } else for (const p of petalPool) p.visible = false
   for (const c of _clouds) { c.s.position.x += c.v; if (c.s.position.x > WWU * 1.5) c.s.position.x = -WWU * 0.5 } // clouds drift
+  if (_water) { _water.offset.x = Math.sin(walkT * 0.25) * 0.03; _water.offset.y = walkT * 0.012 } // water shimmer
   if (gfxHigh) { // butterflies by day / fireflies by night + birds crossing
     ensureFly(); const hh = (world.clockMinutes % 1440) / 60, night = hh < 6 || hh >= 20, cx = me.x * S, cz = me.y * S
     for (let i = 0; i < flyPool.length; i++) {
