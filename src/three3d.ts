@@ -215,6 +215,15 @@ function ensurePetals() {
   }
 }
 
+// butterflies (day) / fireflies (night) flutter around you, + a few birds crossing the sky
+const flyPool: THREE.Sprite[] = []
+const birdPool: THREE.Sprite[] = []
+function ensureFly() {
+  if (flyPool.length) return
+  for (let i = 0; i < 16; i++) { const s = new THREE.Sprite(new THREE.SpriteMaterial({ transparent: true, fog: false })); s.visible = false; s.userData = { ph: Math.random() * 6 }; scene.add(s); flyPool.push(s) }
+  for (let i = 0; i < 6; i++) { const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: artTexPlain("bird"), transparent: true, fog: false })); s.visible = false; s.userData = { set: 0 }; scene.add(s); birdPool.push(s) }
+}
+
 // floating NAME labels above villagers (so you know who's who, like the 2D view)
 const labelPool: THREE.Sprite[] = []
 function makeLabel(text: string): THREE.CanvasTexture {
@@ -380,12 +389,15 @@ function buildTown(world: World) {
     if (onRoad) continue // keep streets clear
     const k = hashf(i * 2.1)
     if (gfxHigh) {
-      const isTree = k < 0.32
-      const name = isTree ? ["tree_broadleaf", "tree_blossom", "tree_pine"][i % 3] : k < 0.58 ? "bush" : k < 0.8 ? "grass_tuft" : "flowers"
-      const sc = isTree ? 6 + hashf(i * 3) * 4 : 1.5 + hashf(i * 3) * 1.1, asp = artAspect.get(name) ?? 1
+      const isTree = k < 0.3, r2 = hashf(i * 4.4)
+      const plant = r2 < 0.22 ? "bush" : r2 < 0.36 ? "grass_tuft" : r2 < 0.5 ? "flowers" : r2 < 0.62 ? "fern" : r2 < 0.72 ? "rock_big" : r2 < 0.8 ? "rock_small" : r2 < 0.88 ? "mushrooms" : r2 < 0.94 ? "log" : "stump"
+      const name = isTree ? ["tree_broadleaf", "tree_blossom", "tree_pine"][i % 3] : plant
+      const isSoft = !isTree && (plant === "bush" || plant === "grass_tuft" || plant === "flowers" || plant === "fern") // these bend; rocks/logs don't
+      const sc = isTree ? 6 + hashf(i * 3) * 4 : (plant === "rock_big" || plant === "log" || plant === "stump" ? 2.4 : 1.6) + hashf(i * 3) * 1.1
+      const asp = artAspect.get(name) ?? 1
       const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: artTexPlain(name), transparent: true }))
       sp.scale.set(sc * asp, sc, 1); sp.position.set(px, sc / 2, pz); town.add(sp)
-      _sway.push({ s: sp, amp: isTree ? 0.035 : 0.09, ph: px }) // grass/flowers bend more than trees
+      if (isTree || isSoft) _sway.push({ s: sp, amp: isTree ? 0.035 : 0.09, ph: px })
     } else {
       const tMat = new THREE.MeshLambertMaterial({ color: 0x5a4028 }), lMat = new THREE.MeshLambertMaterial({ color: 0x2f6a32 })
       if (k < 0.5) { const t = new THREE.Group(); t.add(meshAt(new THREE.CylinderGeometry(0.3, 0.45, 2, 6), tMat, 0, 1, 0), meshAt(new THREE.ConeGeometry(1.7, 3.6, 7), lMat, 0, 2.6, 0)); t.position.set(px, 0, pz); t.scale.setScalar(0.8 + hashf(i * 3) * 0.5); town.add(t) }
@@ -544,6 +556,22 @@ export function render3D(world: World, me: Creature, yaw: number, pitch = 0, dis
     }
   } else for (const p of petalPool) p.visible = false
   for (const c of _clouds) { c.s.position.x += c.v; if (c.s.position.x > WWU * 1.5) c.s.position.x = -WWU * 0.5 } // clouds drift
+  if (gfxHigh) { // butterflies by day / fireflies by night + birds crossing
+    ensureFly(); const hh = (world.clockMinutes % 1440) / 60, night = hh < 6 || hh >= 20, cx = me.x * S, cz = me.y * S
+    for (let i = 0; i < flyPool.length; i++) {
+      const f = flyPool[i], u = f.userData as { ph: number }; u.ph += 0.05; f.visible = true
+      f.material.map = artTexPlain(night ? "firefly" : "butterfly")
+      const sc = night ? 0.5 : 1.3; f.scale.set(sc, sc, 1)
+      const ang = u.ph + i, rad = 4 + (i % 5) * 2.5
+      f.position.set(cx + Math.cos(ang) * rad + Math.sin(u.ph * 2 + i) * 1.5, (night ? 1.6 : 1.1) + Math.sin(u.ph * 1.7) * 0.8, cz + Math.sin(ang) * rad + Math.cos(u.ph * 2 + i) * 1.5)
+      f.material.opacity = night ? 0.5 + 0.5 * Math.abs(Math.sin(u.ph * 3 + i)) : 0.95 // fireflies blink
+    }
+    for (let i = 0; i < birdPool.length; i++) {
+      const b = birdPool[i], u = b.userData as { set: number }
+      if (!u.set) { b.position.set(-WWU * 0.4 - i * 4, 52 + i * 5, (i / 6) * WWU); b.scale.set(2.6, 2.6, 1); u.set = 1 }
+      b.visible = true; b.position.x += 0.13; if (b.position.x > WWU * 1.6) b.position.x = -WWU * 0.5
+    }
+  } else { for (const f of flyPool) f.visible = false; for (const b of birdPool) b.visible = false }
   // DAY/NIGHT: light + haze follow the in-world hour so dusk darkens + night cools the whole 3D scene
   const hr = (world.clockMinutes % 1440) / 60
   const bright = hr < 5 || hr >= 21 ? 0.32 : hr < 7 ? 0.6 : hr < 18 ? 1 : hr < 20 ? 0.6 : 0.42
