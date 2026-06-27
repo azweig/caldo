@@ -168,6 +168,7 @@ function eraRoofs(era: number): string[] {
 // ── real 3D character meshes (TripoSR GLBs) with a billboard fallback while a model loads ──
 const modelPool: THREE.Group[] = []
 const _near: { c: Creature; d: number }[] = [] // reused scratch for the nearest-N selection (no per-frame allocation)
+const _sway: { s: THREE.Sprite; amp: number; ph: number }[] = [] // vegetation sprites that sway in the wind (high mode)
 // helper: a mesh with its position set — Object3D.position is READ-ONLY in three (must .set, never reassign)
 const meshAt = (geo: THREE.BufferGeometry, mat: THREE.Material, x: number, y: number, z: number): THREE.Mesh => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); return m }
 
@@ -251,6 +252,7 @@ function boxBuilding(x: number, y: number, w: number, h: number, height: number,
 function buildTown(world: World) {
   if (town) { scene.remove(town); town.traverse((o) => { const m = o as THREE.Mesh; m.geometry?.dispose(); disposeMat(m.material) }) } // free geometry AND materials on rebuild (materials leaked before)
   town = new THREE.Group()
+  _sway.length = 0 // reset the wind-sway list for this rebuild
   // textured ground (tiled) — seasonal illustrated grass in high mode, procedural otherwise
 
   const ground = new THREE.Mesh(new THREE.PlaneGeometry(WORLD_W * S, WORLD_H * S), new THREE.MeshLambertMaterial({ map: groundMap(world) }))
@@ -333,6 +335,7 @@ function buildTown(world: World) {
       const name = treeNames[i % 3], sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: artTexPlain(name), transparent: true }))
       const sc = 7 + hashf(i) * 5, asp = artAspect.get(name) ?? 1
       sp.scale.set(sc * asp, sc, 1); sp.position.set(x, sc / 2, z); town.add(sp)
+      _sway.push({ s: sp, amp: 0.035, ph: x }) // trees sway gently
     }
   } else {
     const wmat = matFor(walls[0]); const wallH = 7, wallT = 1.5
@@ -363,6 +366,7 @@ function buildTown(world: World) {
       const sc = isTree ? 6 + hashf(i * 3) * 4 : 1.5 + hashf(i * 3) * 1.1, asp = artAspect.get(name) ?? 1
       const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: artTexPlain(name), transparent: true }))
       sp.scale.set(sc * asp, sc, 1); sp.position.set(px, sc / 2, pz); town.add(sp)
+      _sway.push({ s: sp, amp: isTree ? 0.035 : 0.09, ph: px }) // grass/flowers bend more than trees
     } else {
       const tMat = new THREE.MeshLambertMaterial({ color: 0x5a4028 }), lMat = new THREE.MeshLambertMaterial({ color: 0x2f6a32 })
       if (k < 0.5) { const t = new THREE.Group(); t.add(meshAt(new THREE.CylinderGeometry(0.3, 0.45, 2, 6), tMat, 0, 1, 0), meshAt(new THREE.ConeGeometry(1.7, 3.6, 7), lMat, 0, 2.6, 0)); t.position.set(px, 0, pz); t.scale.setScalar(0.8 + hashf(i * 3) * 0.5); town.add(t) }
@@ -494,6 +498,7 @@ export function pick3D(world: World, me: Creature, sx: number, sy: number, w: nu
 export function render3D(world: World, me: Creature, yaw: number, pitch = 0, dist = 8.5) {
   if (!ready) return
   walkT += 0.016
+  for (const w of _sway) w.s.material.rotation = Math.sin(walkT * 1.25 + w.ph * 6) * w.amp // wind: gentle sway of the vegetation
   // DAY/NIGHT: light + haze follow the in-world hour so dusk darkens + night cools the whole 3D scene
   const hr = (world.clockMinutes % 1440) / 60
   const bright = hr < 5 || hr >= 21 ? 0.32 : hr < 7 ? 0.6 : hr < 18 ? 1 : hr < 20 ? 0.6 : 0.42
