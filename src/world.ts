@@ -19,8 +19,8 @@ export const SEASONS = ["primavera", "verano", "otoño", "invierno"] as const
 export function seasonOf(days: number): number { return Math.floor((Math.floor(days) % DAYS_PER_YEAR) / (DAYS_PER_YEAR / 4)) }
 
 export const DAYS_PER_YEAR = 360
-export const WORLD_W = 2800
-export const WORLD_H = 1900
+export const WORLD_W = 8400
+export const WORLD_H = 5700
 export const BLOCK = 300       // street grid spacing
 export const ROAD_HALF = 20    // half street width
 const MARGIN = 60
@@ -238,8 +238,11 @@ export class World {
 
     // ── lay out the town: a house in (most) blocks, one surname per house ──
     let si = 0
-    for (let bx = BLOCK; bx < WORLD_W - BLOCK / 2; bx += BLOCK) {
-      for (let by = BLOCK; by < WORLD_H - BLOCK / 2; by += BLOCK) {
+    // the BUILT-UP TOWN occupies a central region; the rest of the (much larger) world is open land to roam +
+    // for natural zones (forests, water). Keeps the town a sane size with room to walk around it.
+    const TOWN_W = 3300, TOWN_H = 2400, tx0 = Math.round((WORLD_W - TOWN_W) / 2), ty0 = Math.round((WORLD_H - TOWN_H) / 2)
+    for (let bx = tx0 + BLOCK; bx < tx0 + TOWN_W - BLOCK / 2; bx += BLOCK) {
+      for (let by = ty0 + BLOCK; by < ty0 + TOWN_H - BLOCK / 2; by += BLOCK) {
         if (rand() < 0.25) continue // some empty lots
         const w = 58, h = 50
         const cx = bx + BLOCK / 2 + (rand() * 40 - 20)

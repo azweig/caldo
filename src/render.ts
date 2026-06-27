@@ -127,11 +127,14 @@ export function drawWorld(
   // only when biome/season/cobble change. Falls back to drawing inline where offscreen canvas isn't available.
   const sKey = `${world.region}|${seasonOf(world.clockDays)}|${world.era >= 9 ? 1 : 0}|${world.gardens.length}`
   if (!_staticCache || _staticCache.key !== sKey) {
-    const off = makeOffscreen(WORLD_W, WORLD_H)
-    if (off) { drawStaticLayer(off.ctx, world); _staticCache = { key: sKey, canvas: off.canvas } }
+    // BIG WORLDS: cap the offscreen at 4096px (render the static layer scaled down, blit scaled up) so a huge
+    // world doesn't allocate a multi-GB canvas. Bounds memory regardless of WORLD size.
+    const MAXOFF = 4096, sc = Math.min(1, MAXOFF / WORLD_W, MAXOFF / WORLD_H)
+    const off = makeOffscreen(Math.round(WORLD_W * sc), Math.round(WORLD_H * sc))
+    if (off) { off.ctx.scale(sc, sc); drawStaticLayer(off.ctx, world); _staticCache = { key: sKey, canvas: off.canvas } }
     else _staticCache = null
   }
-  if (_staticCache) ctx.drawImage(_staticCache.canvas, 0, 0)
+  if (_staticCache) ctx.drawImage(_staticCache.canvas, 0, 0, WORLD_W, WORLD_H) // scale back up to world size
   else drawStaticLayer(ctx, world)
 
   // occupancy: who's currently home (near their own house) → drives the lit windows + the head-count
