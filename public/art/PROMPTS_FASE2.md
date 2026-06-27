@@ -40,28 +40,35 @@ Perfil de costado, parado, patas abajo. *(deer + rabbit ya están)*. ~512px.
 
 ---
 
-# B · CASAS → `public/art/buildings/`
-Vista 3/4 (frente + un lado), base centrada abajo. ~768px. Nombre: `{tier}_{tipo}.png`.
+# B · CASAS → `public/art/tex/`  (TEXTURAS, no sprites)
 
-**Plantilla:** estilo base + *…a [DESCRIPCIÓN DE CASA], 3/4 view, base centered at bottom, single building.*
+**Las casas NO son sprites** — son cajas 3D que rodeás. Así que en vez de 4 lados, generás **texturas pintadas
+de PARED y TECHO** (tileables) que yo aplico sobre la geometría 3D que ya existe. Funciona en 360°, igual que el
+pasto. Mucho menos trabajo, mejor resultado.
 
-Hay **7 tiers** (épocas). Para cada tier, generá 2-3 tamaños (choza/casa/grande). Reemplazá [DESCRIPCIÓN] según la tabla:
+**🟩 Tileables, SIN transparencia, sin costura** (como los suelos). ~512×512. Nombre: `{material}.png`.
 
-| Tier (archivo prefijo) | choza | casa | grande/mansión |
-|---|---|---|---|
-| **prehist_** | small thatch-and-hide hut on poles | larger timber dwelling with a fur roof | big longhut of hides and bone |
-| **bronze_** (neolítico/bronce) | small mud-and-thatch hut | wattle-and-daub house with thatched roof | larger stone-base house |
-| **iron_** (hierro/clásico) | small clay house | classical stone-and-plaster house with tiled roof | columned villa |
-| **medieval_** | small wattle hut | timber-frame medieval house | stone manor house |
-| **early_** (renacimiento/ilustración) | modest brick cottage | brick townhouse with shutters | ornate manor |
-| **industrial_** (industrial→info) | brick worker cottage | brick row house | townhouse, then small apartment block |
-| **future_** | small modular pod | sleek glass home | neon high-tech tower |
+**Plantilla pared:** estilo base + *seamless tileable [PARED] wall texture, top-down flat lighting, no shadows, no
+objects, no text, edges tile perfectly.*
+**Plantilla techo:** igual pero *…[TECHO] roof texture…*
 
-**Prioridad:** generá primero **`prehist_choza.png` + `prehist_casa.png`** (el juego empieza ahí). Después subís de tier.
+| Tier | PARED (archivo) | TECHO (archivo) |
+|---|---|---|
+| **prehist** | rough mud-and-wattle wall → `wall_mud.png` | thatch / straw roof → `roof_thatch.png` |
+| **bronze** | timber log wall → `wall_wood.png` | thatch roof → *(reusa roof_thatch)* |
+| **iron/clásico** | stone block wall → `wall_stone.png` | clay tile roof → `roof_clay.png` |
+| **medieval** | plaster-and-timber wall → `wall_plaster.png` | wooden shingle roof → `roof_shingle.png` |
+| **renacimiento** | brick wall → `wall_brick.png` | slate roof → `roof_slate.png` |
+| **industrial** | concrete wall → `wall_concrete.png` | metal roof → `roof_metal.png` |
+| **futuro** | glass-panel wall → `wall_glass.png` / neon → `wall_neon.png` | metal roof → *(reusa roof_metal)* |
 
-> Nota cultural: si querés que una familia cultural se vea distinta (japonesa, vikinga, etc.), agregale al prompt
-> "japanese village house with curved tiled roof and lanterns" / "norse longhouse with carved wood" etc. y nombralo
-> `{tier}_{familia}_{tipo}.png`. Pero para arrancar, con el tier genérico alcanza.
+**Prioridad:** generá primero **`wall_mud.png` + `roof_thatch.png`** (prehist). Con eso ya ves las casas ilustradas.
+
+> Estos nombres son los MISMOS que el motor ya usa (`/tex/wall_mud.png`, etc.) — los tuyos, pintados a mano,
+> **reemplazan** los actuales. Dejalos en `public/art/tex/` y yo hago que high mode los prefiera (fallback al actual).
+
+> (Opcional, más adelante) Si querés casas con FORMA distinta por cultura — techo japonés curvo, longhouse vikinga —
+> eso es geometría 3D nueva, lo vemos en otra fase. Por ahora la textura pintada ya da el salto Ghibli.
 
 ---
 
