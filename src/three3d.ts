@@ -196,6 +196,20 @@ function ensureProps() {
   }
 }
 
+// drifting cherry-blossom petals — procedural particles (no asset) that fall + sway around you (high mode)
+const petalPool: THREE.Sprite[] = []
+function ensurePetals() {
+  if (petalPool.length) return
+  const cv = document.createElement("canvas"); cv.width = cv.height = 32
+  const c = cv.getContext("2d")!; c.fillStyle = "rgba(255,191,212,0.95)"
+  c.beginPath(); c.ellipse(16, 16, 6, 11, 0.5, 0, Math.PI * 2); c.fill()
+  const t = new THREE.CanvasTexture(cv)
+  for (let i = 0; i < 80; i++) {
+    const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: t, transparent: true, fog: false, opacity: 0.9 }))
+    s.scale.set(0.45, 0.45, 1); s.userData = { x: 0, y: -1, z: 0, vy: 0.03, ph: Math.random() * 6 }; s.visible = false; scene.add(s); petalPool.push(s)
+  }
+}
+
 // floating NAME labels above villagers (so you know who's who, like the 2D view)
 const labelPool: THREE.Sprite[] = []
 function makeLabel(text: string): THREE.CanvasTexture {
@@ -499,6 +513,15 @@ export function render3D(world: World, me: Creature, yaw: number, pitch = 0, dis
   if (!ready) return
   walkT += 0.016
   for (const w of _sway) w.s.material.rotation = Math.sin(walkT * 1.25 + w.ph * 6) * w.amp // wind: gentle sway of the vegetation
+  if (gfxHigh) { // falling cherry-blossom petals drifting around you
+    ensurePetals(); const cx = me.x * S, cz = me.y * S
+    for (const p of petalPool) {
+      const u = p.userData as { x: number; y: number; z: number; vy: number; ph: number }
+      u.y -= u.vy; u.ph += 0.04
+      if (u.y < 0.2) { u.y = 11 + Math.random() * 9; u.x = cx + (Math.random() * 2 - 1) * 42; u.z = cz + (Math.random() * 2 - 1) * 42; u.vy = 0.022 + Math.random() * 0.03 }
+      p.visible = true; p.material.rotation = u.ph; p.position.set(u.x + Math.sin(u.ph) * 1.3, u.y, u.z + Math.cos(u.ph * 0.7) * 0.9)
+    }
+  } else for (const p of petalPool) p.visible = false
   // DAY/NIGHT: light + haze follow the in-world hour so dusk darkens + night cools the whole 3D scene
   const hr = (world.clockMinutes % 1440) / 60
   const bright = hr < 5 || hr >= 21 ? 0.32 : hr < 7 ? 0.6 : hr < 18 ? 1 : hr < 20 ? 0.6 : 0.42
