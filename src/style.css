@@ -1,6 +1,10 @@
 * { margin: 0; padding: 0; box-sizing: border-box; }
 html, body { height: 100%; overflow: hidden; background: #0a0f14; }
 
+/* HIGH-GRAPHICS color grade — warm, soft, slightly more saturated "illustrated" look over both canvases */
+body.gfx-high #world, body.gfx-high #world3d { filter: saturate(1.18) contrast(1.04) brightness(1.03) sepia(0.06); }
+#gfx-low.on, #gfx-high.on { outline: 2px solid #ffd76a; color: #ffe6a3; }
+
 /* ALWAYS-VISIBLE scrollbars on the overlay panels (macOS hides overlay scrollbars by default → they looked "missing") */
 #chronicle, #legends, #chatterfeed, #possess, #npccard, #chat-log {
   scrollbar-width: thin; scrollbar-color: rgba(255,210,128,0.4) rgba(255,255,255,0.05); /* Firefox */

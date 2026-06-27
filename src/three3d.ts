@@ -21,6 +21,8 @@ let builtFor: World | null = null
 let builtEra = -1 // rebuild the town when the era (architecture) changes
 let walkT = 0 // real-time clock for the fake walk animation
 let ready = false
+let gfxHigh = false // high-graphics aesthetic: warmer/softer light + more atmospheric depth (Ghibli vibe)
+export function setGfx3D(high: boolean) { gfxHigh = high; if (ready && scene.fog) (scene.fog as THREE.Fog).far = high ? 480 : 360 }
 
 export function init3D(canvas: HTMLCanvasElement, _creatureImgs: HTMLImageElement[]) {
   if (ready) return

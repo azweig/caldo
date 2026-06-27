@@ -17,7 +17,7 @@ import { LangCode, WRITE_LANG, langName, heard } from "./i18n"
 import { CivConfig, RELIGIONS, buildCountries, foodSystem, transportOf, climateOf } from "./civconfig"
 import { ethosOf, cultureReligions } from "./cultures"
 import { innerLine, EMO } from "./life"
-import { init3D, resize3D, render3D, renderInterior, ROOM, pick3D, project3D } from "./three3d"
+import { init3D, resize3D, render3D, renderInterior, ROOM, pick3D, project3D, setGfx3D } from "./three3d"
 import { wealthStats, influentialByGen } from "./society"
 import { composeWork, cachedWork } from "./works"
 
@@ -26,6 +26,7 @@ const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v
 // come from a crafted save; LLM output is fully untrusted). Defined early so every template can use it.
 const esc = (s: string) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;")
 
+let gfxMode: "low" | "high" = localStorage.getItem("caldo_gfx") === "high" ? "high" : "low" // chosen aesthetic, persisted
 const canvas = document.getElementById("world") as HTMLCanvasElement
 const ctx = canvas.getContext("2d")!
 const canvas3d = document.getElementById("world3d") as HTMLCanvasElement
@@ -230,6 +231,15 @@ document.getElementById("cfg")!.addEventListener("click", () => {
   settings.classList.remove("hidden")
 })
 document.getElementById("cfg-close")!.addEventListener("click", () => settings.classList.add("hidden"))
+// ── graphics mode: low (procedural, original) vs high (illustrated 2.5D Ghibli, in progress) ──
+function applyGfx() {
+  document.body.classList.toggle("gfx-high", gfxMode === "high")
+  setGfx3D(gfxMode === "high") // tell the 3D engine to go warm/soft in high mode
+  const lo = document.getElementById("gfx-low"), hi = document.getElementById("gfx-high")
+  lo?.classList.toggle("on", gfxMode === "low"); hi?.classList.toggle("on", gfxMode === "high")
+}
+document.getElementById("gfx-low")!.addEventListener("click", () => { gfxMode = "low"; localStorage.setItem("caldo_gfx", "low"); applyGfx() })
+document.getElementById("gfx-high")!.addEventListener("click", () => { gfxMode = "high"; localStorage.setItem("caldo_gfx", "high"); applyGfx() })
 document.getElementById("cfg-save")!.addEventListener("click", () => {
   if (!setLlm(cfgUrl.value, cfgModel.value)) { cfgStatus.textContent = "✗ usá una URL https:// (o localhost) — http inseguro rechazado"; cfgStatus.style.color = "#ff8c6a"; return }
   settings.classList.add("hidden")
@@ -1064,4 +1074,5 @@ document.getElementById("nc-back")!.addEventListener("click", () => { newcivEl.c
 
 let assets: Awaited<ReturnType<typeof loadAssets>>
 // boot — never let a failure here leave the page "initializing"; always reach the menu
+applyGfx() // apply the saved aesthetic before anything renders
 loadAssets().then((a) => { assets = a; spriteCount = a.creatures.length; autoDetect().catch(() => {}); showMenu() }).catch((e) => { console.error("boot", e); try { showMenu() } catch { /* last resort */ } })
