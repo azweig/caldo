@@ -1,135 +1,164 @@
-# Prompts — ESCENA 2.5D Ghibli (SPRING / primavera)
+# Prompts — SIGUIENTE NIVEL (vida · nubes · profundidad · calidez)
 
-Set completo para lograr **profundidad por capas + color + calidez** estilo Ghibli, manteniendo por ahora
-las personas y casas procedurales feas. La idea: el FONDO + la VEGETACIÓN + los SUELOS hacen el 90% del look.
+La base (pasto, colinas, cielo, árboles) ya está y se ve genial. Esto es lo que le falta para que **respire**:
+nubes que derivan, pétalos cayendo, pájaros, mariposas, luz cálida, agua, y props de primer plano.
 
-Generá cada uno con su prompt COMPLETO (copiá el bloque `> ...` tal cual). Dejalos con el NOMBRE DE ARCHIVO
-exacto en la carpeta indicada.
-
-**Estilo común (ya incluido en cada prompt):** *Studio-Ghibli-meets-Stardew-Valley, soft hand-painted, warm
+**Estilo común (incluido en cada prompt):** *Studio-Ghibli-meets-Stardew-Valley, soft hand-painted, warm
 cohesive palette, gentle cel-shading, soft outlines, dreamy daylight.*
 
-**3 tipos de asset (OJO con esto):**
-- 🟦 **Panorámicos** (cielo, fondo de colinas) → SIN transparencia, wrap horizontal (borde izq = der).
-- 🟩 **Suelos tileables** → SIN transparencia, tilean en las 4 direcciones (sin costura).
-- 🟨 **Props/sprites** (árboles, rocas, etc.) → **fondo TRANSPARENTE (PNG alpha)**, 1 solo objeto, vista 3/4,
-  base/raíz centrada abajo (punto de apoyo).
+**Formato:**
+- 🟨 **Sprites** (nubes, pájaros, props, animales, partículas) → **fondo TRANSPARENTE (PNG alpha REAL)**, 1 objeto,
+  sin escena, sin texto, sin marca de agua. *(Yo les limpio el fondo con rembg si hace falta — no te preocupes por eso.)*
+- 🟩 **Tileables** (agua) → sin transparencia, tilean sin costura.
+
+Carpeta: dejá TODO en `public/art/scene/`.
 
 ---
 
-# A · CAPAS DE FONDO (lo que da la PROFUNDIDAD) → `public/art/scene/`
+# A · CIELO CON VIDA (nubes + sol + luz) — lo que más calidez/profundidad agrega
 
-## sky.png  🟦
-> Hand-painted Studio-Ghibli sky panorama, soft blue gradient with gentle fluffy cream-colored clouds, warm dreamy daylight, peaceful, no ground, no horizon line, no characters, no objects, no text, seamless horizontal wrap (left edge matches right edge), 2048x512.
+## cloud_1.png  🟨
+> Single soft hand-painted Studio-Ghibli fluffy white cumulus cloud, gentle cream highlights and soft blue-grey shadows, dreamy, isolated, transparent background (PNG alpha), no sky, no scene, no text, wide format ~1024x512.
 
-**Para qué:** la cúpula del cielo. Capa más lejana.
+## cloud_2.png  🟨
+> Single soft hand-painted Studio-Ghibli wispy stretched cloud, thin and elongated, very soft edges, transparent background (PNG alpha), no sky, no scene, no text, wide ~1024x384.
 
-## backdrop_hills.png  🟦  ← EL MÁS IMPORTANTE PARA LA PROFUNDIDAD
-> Hand-painted Studio-Ghibli distant landscape backdrop, soft rolling green hills and faraway misty blue mountains, layered depth with atmospheric haze (far layers paler and bluer), a few tiny distant trees on the ridges, spring countryside, no foreground, no characters, no big buildings, no text, seamless horizontal panorama (left edge matches right edge), 4096x1024.
+## cloud_3.png  🟨
+> Single soft hand-painted Studio-Ghibli small puffy cloud cluster, a few rounded puffs together, soft warm light, transparent background (PNG alpha), no sky, no scene, no text, ~768x512.
 
-**Para qué:** el anillo de colinas detrás del pueblo. Reemplaza la pared de troncos fea. Crea las capas (pueblo → colinas → cielo).
+**Para qué (A clouds):** nubes individuales que el motor hace **derivar lento** por el cielo a distintas alturas/velocidades → vida + capas + profundidad en el cielo.
 
-## midground_trees.png  🟦
-> Hand-painted Studio-Ghibli treeline band, a soft row of distant spring trees and bushes with light morning haze, pale and slightly blue from distance, transparent background above and below (PNG alpha) so it sits as a middle layer, no characters, no buildings, no text, seamless horizontal, 4096x512.
+## sun_glow.png  🟨
+> Soft hand-painted Studio-Ghibli warm sun with a gentle radiant glow and soft lens halo, pale gold and cream, dreamy, transparent background (PNG alpha), no sky, no scene, no text, ~768x768.
 
-**Para qué:** una franja de árboles a media distancia, ENTRE las colinas y el pueblo. Suma una capa más de profundidad (opcional pero potente).
+**Para qué:** el sol con halo cálido en el cielo → da la calidez y un punto de luz.
 
----
+## light_rays.png  🟨
+> Soft hand-painted Studio-Ghibli volumetric light rays / god rays beaming down diagonally, very soft and translucent pale gold, dreamy atmosphere, transparent background (PNG alpha), no scene, no text, ~1024x1024.
 
-# B · SUELOS (tileables) → `public/art/scene/`
-
-## ground_grass.png  🟩  ✅ YA GENERADO (spring)
-*(ya está)*
-
-## ground_dirt.png  🟩
-> Seamless tileable hand-painted Studio-Ghibli ground texture, packed earth dirt path, warm brown soil with small scattered pebbles and faint footpath wear, top-down, even flat lighting, no shadows, no objects, no characters, no text, edges tile perfectly, 1024x1024.
-
-**Para qué:** los caminos de tierra por donde camina la gente.
-
-## ground_cobble.png  🟩
-> Seamless tileable hand-painted Studio-Ghibli ground texture, old cobblestone paving of rounded grey-brown stones with little tufts of grass in the cracks, top-down, even flat lighting, no shadows, no objects, no characters, no text, edges tile perfectly, 1024x1024.
-
-**Para qué:** las calles empedradas de eras más avanzadas.
-
-## field_crop.png  🟩
-> Seamless tileable hand-painted Studio-Ghibli farm field texture, tilled brown soil with neat parallel rows of small green spring crop sprouts, top-down, even flat lighting, no shadows, no characters, no text, edges tile perfectly, 1024x1024.
-
-**Para qué:** los jardines/campos de cultivo (parches). Da el toque de pueblo agrícola.
+**Para qué:** rayos de luz suaves que bajan → atmósfera y profundidad (capa translúcida encima de la escena).
 
 ---
 
-# C · VEGETACIÓN (sprites — reemplazan los conos verdes feos) → `public/art/props/`
-Todos 🟨 **fondo transparente**, 1 árbol/planta, vista 3/4, tronco/base centrado abajo. ~1024x1024.
+# B · PARTÍCULAS DE VIDA (el toque mágico Ghibli)
 
-## tree_pine.png
-> Soft hand-painted Studio-Ghibli tall pine/conifer tree, lush layered green needles, warm sunlight, gentle painterly style, 3/4 view, full tree with trunk base centered at bottom, transparent background (PNG alpha), single tree, no scene, no ground, no text.
+## petal.png  🟨
+> A few soft hand-painted Studio-Ghibli pink cherry blossom petals, 3 or 4 individual petals, delicate, transparent background (PNG alpha), no scene, no text, small ~256x256.
 
-**Para qué:** el pino alto (como el grande de la referencia). Árbol principal.
+**Para qué:** el motor las hace **caer y flotar** desde los cerezos → la lluvia de pétalos, súper Ghibli.
 
-## tree_blossom.png
-> Soft hand-painted Studio-Ghibli cherry blossom tree in full pink bloom, delicate petals, warm spring light, dreamy, 3/4 view, trunk base centered at bottom, transparent background (PNG alpha), single tree, no scene, no ground, no text.
+## firefly.png  🟨
+> A soft glowing hand-painted Studio-Ghibli firefly light, tiny warm yellow-green glowing orb with a soft halo, transparent background (PNG alpha), no scene, no text, small ~128x128.
 
-**Para qué:** el cerezo en flor — súper Ghibli, da el color rosa de primavera.
+**Para qué:** luciérnagas que flotan **de noche** → magia y vida nocturna.
 
-## tree_broadleaf.png
-> Soft hand-painted Studio-Ghibli round broadleaf tree, full green canopy, soft warm light, 3/4 view, trunk base centered at bottom, transparent background (PNG alpha), single tree, no scene, no ground, no text.
+## sparkle.png  🟨
+> A soft hand-painted Studio-Ghibli glowing pollen mote / light speck, tiny warm white-gold soft dot with faint glow, transparent background (PNG alpha), no scene, no text, small ~96x96.
 
-**Para qué:** árbol frondoso redondo, para variar el bosque.
-
-## bush.png
-> Soft hand-painted Studio-Ghibli small leafy bush/shrub with a few tiny flowers, warm light, 3/4 view, base centered at bottom, transparent background (PNG alpha), single bush, no scene, no text.
-
-**Para qué:** arbustos sueltos entre las casas, llenan el suelo.
-
-## flowers.png
-> Soft hand-painted Studio-Ghibli cluster of wildflowers (white daisies, yellow buttercups, blue forget-me-nots) with green leaves, warm light, 3/4 view, base centered at bottom, transparent background (PNG alpha), small clump, no scene, no text.
-
-**Para qué:** matas de flores para el primer plano y los bordes — detalle y calidez.
-
-## grass_tuft.png
-> Soft hand-painted Studio-Ghibli tuft of tall lush spring grass and reeds, warm light, 3/4 view, base centered at bottom, transparent background (PNG alpha), single clump, no scene, no text.
-
-**Para qué:** matas de pasto alto, rompen la planicie del suelo y dan textura/volumen.
+**Para qué:** motas de polen/luz flotando en el aire de día → ambiente vivo (las hace flotar el motor).
 
 ---
 
-# D · ROCAS Y DETALLES → `public/art/props/`
-🟨 transparente, 3/4, base abajo. ~512x512.
+# C · FAUNA DEL AIRE (movimiento que cruza)
+
+## bird.png  🟨
+> A small soft hand-painted Studio-Ghibli bird in flight seen from the side, wings spread, simple and clean silhouette with soft color, transparent background (PNG alpha), no scene, no text, ~256x256.
+
+**Para qué:** pájaros (o bandadas) que **cruzan el cielo** cada tanto → vida en el aire.
+
+## butterfly.png  🟨
+> A soft hand-painted Studio-Ghibli butterfly with gentle pastel wings, top/3-4 view, delicate, transparent background (PNG alpha), no scene, no text, ~192x192.
+
+**Para qué:** mariposas que **revolotean cerca de las flores** → vida en el primer plano.
+
+---
+
+# D · AGUA (profundidad de paisaje + calidez de reflejo)
+
+## water.png  🟩
+> Seamless tileable hand-painted Studio-Ghibli calm water surface, soft blue-green with gentle ripples and warm light reflections, top-down, no shadows, no objects, no characters, no text, edges tile perfectly, 1024x1024.
+
+**Para qué:** estanques/ríos. El motor le agrega un brillo animado → un espejo de agua da muchísima vida y profundidad al paisaje.
+
+---
+
+# E · PROPS DE PRIMER PLANO (riqueza y framing) → todos 🟨 transparentes, vista 3/4, base abajo
 
 ## rock_big.png
-> Soft hand-painted Studio-Ghibli large mossy grey boulder, warm light, 3/4 view, base centered at bottom, transparent background (PNG alpha), single rock, no scene, no text.
-
-**Para qué:** rocas grandes que acentúan el primer plano (como en la referencia).
+> Soft hand-painted Studio-Ghibli large mossy grey boulder, warm light, 3/4 view, base centered at bottom, transparent background (PNG alpha), single rock, no scene, no text, ~768x768.
 
 ## rock_small.png
-> Soft hand-painted Studio-Ghibli small cluster of grey pebbles and stones, warm light, 3/4 view, transparent background (PNG alpha), no scene, no text.
-
-**Para qué:** piedritas sueltas en los caminos.
+> Soft hand-painted Studio-Ghibli small cluster of grey pebbles and stones, warm light, 3/4 view, transparent background (PNG alpha), no scene, no text, ~512x512.
 
 ## log.png
-> Soft hand-painted Studio-Ghibli fallen mossy wooden log, warm light, 3/4 view, transparent background (PNG alpha), single log, no scene, no text.
+> Soft hand-painted Studio-Ghibli fallen mossy wooden log, warm light, 3/4 view, transparent background (PNG alpha), single log, no scene, no text, ~768x512.
 
-**Para qué:** tronco caído, detalle natural del bosque.
+## stump.png
+> Soft hand-painted Studio-Ghibli old tree stump with moss and a few mushrooms, warm light, 3/4 view, base centered at bottom, transparent background (PNG alpha), no scene, no text, ~512x512.
+
+## mushrooms.png
+> Soft hand-painted Studio-Ghibli small cluster of red-cap and brown forest mushrooms, warm light, 3/4 view, base centered at bottom, transparent background (PNG alpha), no scene, no text, ~384x384.
+
+## fern.png
+> Soft hand-painted Studio-Ghibli lush green fern plant, soft fronds, warm light, 3/4 view, base centered at bottom, transparent background (PNG alpha), single plant, no scene, no text, ~512x512.
+
+## reeds.png
+> Soft hand-painted Studio-Ghibli cluster of tall water reeds and cattails, warm light, 3/4 view, base centered at bottom, transparent background (PNG alpha), no scene, no text, ~512x768.
 
 ## lantern.png
-> Soft hand-painted Studio-Ghibli hanging paper lantern, soft warm glow, 3/4 view, transparent background (PNG alpha), single lantern, no scene, no text.
+> Soft hand-painted Studio-Ghibli hanging paper lantern with a soft warm glow, 3/4 view, transparent background (PNG alpha), single lantern, no scene, no text, ~384x512.
 
-**Para qué:** farolito colgante (como los de la casa japonesa) — calidez y detalle de pueblo.
-
----
-
-# RESUMEN — qué generar para el test de profundidad (spring)
-**Fondo (3):** sky · backdrop_hills · midground_trees
-**Suelos (3):** ground_dirt · ground_cobble · field_crop   *(grass ya está)*
-**Vegetación (6):** tree_pine · tree_blossom · tree_broadleaf · bush · flowers · grass_tuft
-**Detalles (4):** rock_big · rock_small · log · lantern
-
-Total: **~16 sprites**. Con esto armo la escena 2.5D con profundidad real (capas + neblina + vegetación pintada),
-manteniendo casas y personas procedurales. Si funciona, escalamos a las otras estaciones/eras y después a casas y personas.
+**Para qué (E):** rocas, troncos, tocones, hongos, helechos y juncos sueltos rompen la planicie y dan **detalle de
+primer plano + framing** (como en las referencias). Los juncos van lindos al borde del agua.
 
 ---
 
-# (Después — NO generar todavía)
-- **Casas ilustradas:** `public/art/buildings/` — por era × familia cultural.
-- **Personas ilustradas:** `public/art/people/` — por era × familia × rol × sexo × edad.
-- Plan completo: `/ART_PLAN.md`.
+# F · ANIMALES ILUSTRADOS (vida en el suelo) → 🟨 transparentes, vista 3/4 de costado, patas abajo
+*(reemplazan los cuadrúpedos-cubo actuales — el juego ya tiene estas especies)*
+
+## animal_deer.png
+> Soft hand-painted Studio-Ghibli deer standing in profile 3/4 view, gentle brown coat, calm, transparent background (PNG alpha), single animal, no scene, no text, ~512x512.
+
+## animal_rabbit.png
+> Soft hand-painted Studio-Ghibli small rabbit sitting, 3/4 view, soft fur, transparent background (PNG alpha), single animal, no scene, no text, ~384x384.
+
+## animal_wolf.png
+> Soft hand-painted Studio-Ghibli grey wolf standing in profile 3/4 view, alert, transparent background (PNG alpha), single animal, no scene, no text, ~512x512.
+
+## animal_bear.png
+> Soft hand-painted Studio-Ghibli brown bear standing on four legs, profile 3/4 view, transparent background (PNG alpha), single animal, no scene, no text, ~640x512.
+
+## animal_sheep.png
+> Soft hand-painted Studio-Ghibli fluffy white sheep, profile 3/4 view, transparent background (PNG alpha), single animal, no scene, no text, ~448x448.
+
+## animal_goat.png
+> Soft hand-painted Studio-Ghibli goat, profile 3/4 view, transparent background (PNG alpha), single animal, no scene, no text, ~448x448.
+
+## animal_cow.png
+> Soft hand-painted Studio-Ghibli brown-and-white cow, profile 3/4 view, transparent background (PNG alpha), single animal, no scene, no text, ~640x512.
+
+## animal_horse.png
+> Soft hand-painted Studio-Ghibli horse standing, profile 3/4 view, transparent background (PNG alpha), single animal, no scene, no text, ~640x512.
+
+## animal_dog.png
+> Soft hand-painted Studio-Ghibli friendly dog standing, profile 3/4 view, transparent background (PNG alpha), single animal, no scene, no text, ~448x448.
+
+---
+
+# RESUMEN — qué generar para el siguiente nivel
+- **Cielo/luz (5):** cloud_1 · cloud_2 · cloud_3 · sun_glow · light_rays
+- **Partículas (3):** petal · firefly · sparkle
+- **Aire (2):** bird · butterfly
+- **Agua (1):** water
+- **Props (8):** rock_big · rock_small · log · stump · mushrooms · fern · reeds · lantern
+- **Animales (9):** deer · rabbit · wolf · bear · sheep · goat · cow · horse · dog
+
+Con esto el motor arma: nubes derivando + pétalos cayendo + luciérnagas de noche + pájaros cruzando + mariposas
+en las flores + agua con brillo + props de primer plano + animales pintados. Eso es el salto a "vivo".
+
+**Prioridad si querés ver el cambio rápido:** generá primero **cloud_1/2/3 + petal + sun_glow** — esos 5 solos ya
+agregan muchísima vida y calidez al cielo.
+
+---
+
+# (Después) Casas + personas ilustradas → ver `/ART_PLAN.md`. Plan: cuando la escena viva esté redonda.
