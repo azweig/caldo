@@ -77,7 +77,7 @@ function showNpcCard(c: Creature | null) {
     ${relsRow}
     <div class="nc-row">💰 ${Math.round(c.money)} · ${c.money > 800 ? "🎩 rico/a" : c.money > 200 ? "acomodado/a" : c.money > 15 ? "clase media" : "pobre"}${c.home.landlord && c.home.landlord !== c.id && c.home.surname !== c.surname ? " · 🔑 inquilino/a" : ""}${world.houses.some((h) => h.landlord === c.id) ? " · 🏘 propietario/a" : ""}</div>
     <div class="nc-row">🧠 ${Math.round(c.mental)} · 😤 ${Math.round(c.irritability * 100)}% · 🍔 ${Math.round(c.energy)}${L && L.condition ? ` · <b style="color:#d68">${L.condition}</b>` : ""}</div>
-    <div class="nc-acts"><button id="nc-talk">💬 Hablar</button>${possessed.items?.length ? `<button id="nc-gift">🎁 Regalar ${itemEmoji(possessed.items[0])}</button>` : ""}${canCourt ? '<button id="nc-court">💘 Cortejar</button>' : ""}<button id="nc-x">✕</button></div>`
+    <div class="nc-acts"><button id="nc-talk">💬 Hablar</button>${possessed.items?.length ? `<button id="nc-gift">🎁 Regalar ${itemEmoji(possessed.items[0])}</button>` : ""}${canCourt ? '<button id="nc-court">💘 Cortejar</button>' : ""}${isMature(c) ? '<button id="nc-possess">🎭 Ser</button>' : ""}<button id="nc-x">✕</button></div>`
   npccard.classList.remove("hidden")
   document.getElementById("nc-talk")!.onclick = () => { showNpcCard(null); openChat(c) }
   document.getElementById("nc-x")!.onclick = () => showNpcCard(null)
@@ -92,6 +92,8 @@ function showNpcCard(c: Creature | null) {
     world.chronicle.push({ day: world.clockDays, text: `${possessed.name} le regaló ${itemEmoji(k)} a ${c.name} 🎁` })
     flash(`le regalaste ${itemEmoji(k)} a ${c.name} 🎁`); showNpcCard(c)
   }
+  const pb = document.getElementById("nc-possess") // jump into THIS body (possess the one you clicked, not the nearest)
+  if (pb) pb.onclick = () => { if (possessed) possessed.controlled = false; possessed = c; c.controlled = true; possessTarget = null; possessBusy = null; insideHouse = null; chatTarget = null; showNpcCard(null); flash(`ahora sos ${c.name} 🎭`); renderPossess() }
 }
 // drag the 3D view to look around (yaw + pitch); a CLICK (no drag) on a person talks to them
 let dragging = false, dragX = 0, dragY = 0, dragDist = 0
@@ -442,6 +444,9 @@ const ITEMS: Record<string, { emoji: string; use: (c: Creature) => void; msg: st
   concha: { emoji: "🐚", use: (c) => { c.mental = Math.min(100, c.mental + 6) }, msg: "admiraste la concha 🐚" },
   amuleto: { emoji: "🪬", use: (c) => { c.mental = Math.min(100, c.mental + 9) }, msg: "el amuleto te dio ánimo 🪬" },
   piedra: { emoji: "🪨", use: (c) => { c.mental = Math.min(100, c.mental + 3) }, msg: "una piedra curiosa 🪨" },
+  miel: { emoji: "🍯", use: (c) => { c.energy = Math.min(150, c.energy + 26); c.mental = Math.min(100, c.mental + 5) }, msg: "la miel te endulzó el día 🍯" },
+  raiz: { emoji: "🥕", use: (c) => { c.energy = Math.min(150, c.energy + 22); c.health = Math.min(100, c.health + 4) }, msg: "comiste una raíz nutritiva 🥕" },
+  pluma: { emoji: "🪶", use: (c) => { c.mental = Math.min(100, c.mental + 7) }, msg: "guardaste la pluma como talismán 🪶" },
 }
 const itemEmoji = (k: string) => ITEMS[k]?.emoji || "❔"
 function nearGarden(c: Creature): boolean { return world.gardens.some((g) => dist2(g.x, g.y, c.x, c.y) < 120 * 120) }
@@ -453,6 +458,8 @@ function actionState(act: string): ActState {
   const h = hourOf(), AT = 130 * 130
   if (act === "gather") return (c.items?.length || 0) >= 12 ? { ok: false, reason: "no podés cargar más" } : { ok: true, reason: "buscar algo por los alrededores 🔎" }
   if (act === "use") return c.items?.length ? { ok: true, reason: `usar ${itemEmoji(c.items[0])} ${c.items[0]}` } : { ok: false, reason: "no tenés nada que usar" }
+  if (act === "harvest") return world.nearestFood(c, 85) ? { ok: true, reason: "cosechar el cultivo de acá 🌾" } : { ok: false, reason: "acercate a un cultivo (los brotes verdes)" }
+  if (act === "rest") return c.energy > 135 ? { ok: false, reason: "no estás cansado" } : { ok: true, reason: "descansar un rato (recupera energía + ánimo) 😴" }
   if (act === "eat") return { ok: true, reason: "comer (recupera energía)" }
   if (act === "home") return { ok: true, reason: "caminar a tu casa" }
   if (act === "talk") return chatTarget ? { ok: true, reason: `hablar con ${chatTarget.name}` } : { ok: false, reason: "no hay nadie cerca" }
@@ -536,9 +543,11 @@ function doAction(act: string) {
   if (act === "eat") { c.energy = Math.min(150, c.energy + 50); c.money = Math.max(0, c.money - 4); flash("comiste 🍎") }
   else if (act === "gather") { // search the surroundings — gardens yield food/herbs, the wilds trinkets
     if (rand() < 0.18) { flash("buscaste pero no encontraste nada 🤷") }
-    else { const pool = nearGarden(c) ? ["fruta", "baya", "hierba", "flor"] : ["flor", "concha", "piedra", "amuleto", "hierba"]; const k = pool[Math.floor(rand() * pool.length)]; c.items = [...(c.items || []), k].slice(-12); flash(`encontraste ${itemEmoji(k)} ${k}`) }
+    else { const pool = nearGarden(c) ? ["fruta", "baya", "hierba", "flor", "raiz", "miel"] : ["flor", "concha", "piedra", "amuleto", "hierba", "pluma"]; const k = pool[Math.floor(rand() * pool.length)]; c.items = [...(c.items || []), k].slice(-12); flash(`encontraste ${itemEmoji(k)} ${k}`) }
   }
   else if (act === "use") { if (c.items?.length) { const k = c.items[0]; ITEMS[k]?.use(c); c.items = c.items.slice(1); flash(ITEMS[k]?.msg || "lo usaste") } }
+  else if (act === "harvest") { const f = world.nearestFood(c, 85); if (f) { world.food.splice(world.food.indexOf(f), 1); c.items = [...(c.items || []), "fruta"].slice(-12); flash("cosechaste 🌾🍎") } }
+  else if (act === "rest") { c.energy = Math.min(150, c.energy + 35); c.mental = Math.min(100, c.mental + 12); c.health = Math.min(100, c.health + 3); flash("descansaste 😴") }
   else if (act === "home") { possessTarget = { x: c.home.x + c.home.w / 2, y: c.home.y + c.home.h }; flash("yendo a casa 🏠") }
   else if (act === "talk") openChat()
   else if (act === "work") startBusy("work", 480, "trabajando 💼")
