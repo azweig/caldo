@@ -286,7 +286,7 @@ function buildTown(world: World) {
   const ground = new THREE.Mesh(new THREE.PlaneGeometry(WORLD_W * S, WORLD_H * S), new THREE.MeshLambertMaterial({ map: groundMap(world) }))
   ground.rotation.x = -Math.PI / 2; ground.position.set(WORLD_W * S / 2, 0, WORLD_H * S / 2); town.add(ground)
   // streets: actual road strips along the block grid (so they READ at ground level)
-  const roadMat = new THREE.MeshBasicMaterial({ color: world.era >= 15 ? 0x18324e : 0x33291d })
+  const roadMat = gfxHigh ? new THREE.MeshLambertMaterial({ map: artTex(world.era >= 9 ? "ground_cobble" : "ground_dirt", world.era >= 9 ? "ground_cobble" : "ground_dirt", 6) }) : new THREE.MeshBasicMaterial({ color: world.era >= 15 ? 0x18324e : 0x33291d })
   const roadW = 66 * S
   for (let x = BLOCK; x < WORLD_W; x += BLOCK) { const q = new THREE.Mesh(new THREE.PlaneGeometry(roadW, WORLD_H * S), roadMat); q.rotation.x = -Math.PI / 2; q.position.set(x * S, 0.02, WORLD_H * S / 2); town.add(q) }
   for (let y = BLOCK; y < WORLD_H; y += BLOCK) { const q = new THREE.Mesh(new THREE.PlaneGeometry(WORLD_W * S, roadW), roadMat); q.rotation.x = -Math.PI / 2; q.position.set(WORLD_W * S / 2, 0.02, y * S); town.add(q) }
@@ -298,7 +298,7 @@ function buildTown(world: World) {
     town.add(new THREE.LineSegments(gg, new THREE.LineBasicMaterial({ color: 0x3a9bff, transparent: true, opacity: 0.5 })))
   }
   // GARDENS: tilled soil with orderly ROWS of crop tufts you can actually see growing
-  const soilMat = new THREE.MeshLambertMaterial({ color: 0x6a4a2f })
+  const soilMat = gfxHigh ? new THREE.MeshLambertMaterial({ map: artTex("field_crop", "ground_dirt", 3) }) : new THREE.MeshLambertMaterial({ color: 0x6a4a2f })
   const cropMat = new THREE.MeshLambertMaterial({ color: world.era >= 15 ? 0x4ab0a0 : 0x569a3c })
   const cropGeo = new THREE.ConeGeometry(0.34, 0.8, 5)
   for (const gd of world.gardens) {
@@ -356,6 +356,9 @@ function buildTown(world: World) {
     const R = Math.max(WW, WH) * 0.98
     const ring = new THREE.Mesh(new THREE.CylinderGeometry(R, R, 64, 56, 1, true), new THREE.MeshBasicMaterial({ map: artTexPlain("backdrop_hills"), side: THREE.BackSide, fog: false }))
     ring.position.set(WW / 2, 22, WH / 2); town.add(ring)
+    const R2 = Math.max(WW, WH) * 0.72 // closer treeline band → an extra depth layer between hills and town
+    const mid = new THREE.Mesh(new THREE.CylinderGeometry(R2, R2, 26, 56, 1, true), new THREE.MeshBasicMaterial({ map: artTexPlain("midground_trees"), side: THREE.BackSide, transparent: true }))
+    mid.position.set(WW / 2, 9, WH / 2); town.add(mid)
     const treeNames = ["tree_pine", "tree_blossom", "tree_broadleaf"]
     for (let i = 0; i < 90; i++) { // a ring of painted trees framing the town
       const a = hashf(i * 3.1) * Math.PI * 2, rad = WW * 0.5 + hashf(i * 7.7) * WW * 0.55
