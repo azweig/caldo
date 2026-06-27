@@ -438,8 +438,9 @@ export function render3D(world: World, me: Creature, yaw: number, pitch = 0, dis
   // DAY/NIGHT: light + haze follow the in-world hour so dusk darkens + night cools the whole 3D scene
   const hr = (world.clockMinutes % 1440) / 60
   const bright = hr < 5 || hr >= 21 ? 0.32 : hr < 7 ? 0.6 : hr < 18 ? 1 : hr < 20 ? 0.6 : 0.42
-  if (ambient) ambient.intensity = 0.9 + bright * 1.3
-  if (sun) sun.intensity = 0.15 + bright * 1.0
+  const warm = gfxHigh ? 1.12 : 1 // high graphics: softer, warmer fill light (Ghibli daylight)
+  if (ambient) { ambient.intensity = (0.9 + bright * 1.3) * warm; ambient.color.setHex(gfxHigh ? 0xfff3e2 : 0xffffff) }
+  if (sun) sun.intensity = (0.15 + bright * 1.0) * warm
   if (scene.fog) (scene.fog as THREE.Fog).color.setHex(hr < 5 || hr >= 21 ? 0x141d3a : hr < 7 ? 0xc99060 : hr < 18 ? 0xaebdd2 : hr < 20 ? 0xb88a5a : 0x5a4d72)
   if (builtFor !== world || builtEra !== world.era) buildTown(world)
   if (town) town.visible = true; if (intGroup) intGroup.visible = false
