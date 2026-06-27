@@ -399,8 +399,12 @@ function togglePossess() {
     possessEl.classList.add("hidden"); hud.classList.remove("hidden"); canvas3d.classList.add("hidden")
     return
   }
-  const me = possessed || avatar // possess a grown villager nearby (not a baby — they can't work/court/etc.)
-  const t = me ? world.nearestCreature(me, CHAT_RANGE * 1.6, (o) => !o.isAvatar && o !== possessed && isMature(o)) : null
+  const me = possessed || avatar
+  if (!me) return
+  // prefer a grown villager nearby, but FALL BACK to anyone in range so P always takes you into 3D (was failing
+  // silently when the closest person was a child or just outside the tight radius)
+  const t = world.nearestCreature(me, CHAT_RANGE * 3, (o) => !o.isAvatar && o !== possessed && isMature(o))
+    || world.nearestCreature(me, CHAT_RANGE * 3, (o) => !o.isAvatar && o !== possessed)
   if (!t) return
   possessed = t; t.controlled = true; possessTarget = null; possessBusy = null; insideHouse = null; camYaw3d = Math.PI / 2
   init3D(canvas3d, assets.creatures); resize3D(canvas.width, canvas.height) // real 3D, only while possessing
