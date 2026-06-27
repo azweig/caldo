@@ -22,9 +22,11 @@ let builtEra = -1 // rebuild the town when the era (architecture) changes
 let walkT = 0 // real-time clock for the fake walk animation
 let ready = false
 let gfxHigh = false // high-graphics aesthetic: warmer/softer light + more atmospheric depth (Ghibli vibe)
+let _skyMat: THREE.MeshBasicMaterial | null = null, _skyGrad: THREE.Texture | null = null // sky dome (gradient ↔ painted)
 export function setGfx3D(high: boolean) {
   gfxHigh = high; builtFor = null // builtFor=null → town rebuilds with the new ground
   if (ready && scene.fog) { const f = scene.fog as THREE.Fog; f.near = high ? 55 : 110; f.far = high ? 240 : 360 } // high: stronger atmospheric haze → depth
+  if (_skyMat && _skyGrad) { _skyMat.map = high ? artTexPlain("sky") : _skyGrad; _skyMat.needsUpdate = true } // painted sky in high
 }
 
 export function init3D(canvas: HTMLCanvasElement, _creatureImgs: HTMLImageElement[]) {
@@ -43,7 +45,8 @@ export function init3D(canvas: HTMLCanvasElement, _creatureImgs: HTMLImageElemen
   grad.addColorStop(0, "#3f6fb5"); grad.addColorStop(0.55, "#8fb0d8"); grad.addColorStop(1, "#cdd9e6")
   sg.fillStyle = grad; sg.fillRect(0, 0, 4, 256)
   const skyTex = new THREE.CanvasTexture(sc); skyTex.colorSpace = THREE.SRGBColorSpace
-  scene.add(new THREE.Mesh(new THREE.SphereGeometry(500, 20, 16), new THREE.MeshBasicMaterial({ map: skyTex, side: THREE.BackSide, fog: false })))
+  _skyGrad = skyTex; _skyMat = new THREE.MeshBasicMaterial({ map: skyTex, side: THREE.BackSide, fog: false })
+  scene.add(new THREE.Mesh(new THREE.SphereGeometry(500, 20, 16), _skyMat))
   const ringGeo = new THREE.RingGeometry(0.5, 0.74, 22)
   const shadowGeo = new THREE.CircleGeometry(0.5, 18)
   for (let i = 0; i < 64; i++) {
@@ -97,6 +100,15 @@ function artTex(artName: string, fallback: string, repeat: number): THREE.Textur
   }
   return t
 }
+// plain illustrated texture (no tiling) for backdrops/sprites; tracks aspect ratio for correct sprite proportions
+const artAspect = new Map<string, number>()
+function artTexPlain(artName: string): THREE.Texture {
+  const key = `artp:${artName}`
+  let t = texCache.get(key)
+  if (!t) { t = loader.load(`/art/scene/${artName}.png`, (tx) => { const im = tx.image as { width: number; height: number } | undefined; if (im?.width) artAspect.set(artName, im.width / im.height) }); t.colorSpace = THREE.SRGBColorSpace; texCache.set(key, t) }
+  return t
+}
+
 // the ground texture for the world plane — seasonal illustrated grass in high mode, else the procedural one
 function groundMap(world: World): THREE.Texture {
   const E = eraTex(world.era)
@@ -309,31 +321,54 @@ function buildTown(world: World) {
   const WW = WORLD_W * S, WH = WORLD_H * S
   const outer = new THREE.Mesh(new THREE.PlaneGeometry(WW * 3, WH * 3), new THREE.MeshLambertMaterial({ map: tex("ground_grass", 60) }))
   outer.rotation.x = -Math.PI / 2; outer.position.set(WW / 2, -0.06, WH / 2); town.add(outer)
-  const wmat = matFor(walls[0]); const wallH = 7, wallT = 1.5
-  const boundary = (w: number, x: number, z: number, ry: number) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w, wallH, wallT), wmat); m.position.set(x, wallH / 2, z); m.rotation.y = ry; town!.add(m) }
-  boundary(WW + wallT, WW / 2, 0, 0); boundary(WW + wallT, WW / 2, WH, 0)
-  boundary(WH + wallT, 0, WH / 2, Math.PI / 2); boundary(WH + wallT, WW, WH / 2, Math.PI / 2)
-  const trunkMat = new THREE.MeshLambertMaterial({ color: 0x5a4028 }), leafMat = new THREE.MeshLambertMaterial({ color: world.era >= 15 ? 0x335a6a : 0x2f6a32 })
-  const trunkGeo = new THREE.CylinderGeometry(0.3, 0.45, 2, 6), leafGeo = new THREE.ConeGeometry(1.7, 3.6, 7)
-  for (let i = 0; i < 90; i++) { // a forest ringing the town, outside the wall
-    const a = hashf(i * 3.1) * Math.PI * 2, rad = (WW * 0.6) + hashf(i * 7.7) * WW * 0.7
-    const x = WW / 2 + Math.cos(a) * rad, z = WH / 2 + Math.sin(a) * rad * (WH / WW)
-    const tree = new THREE.Group()
-    const trunk = new THREE.Mesh(trunkGeo, trunkMat); trunk.position.y = 1
-    const leaf = new THREE.Mesh(leafGeo, leafMat); leaf.position.y = 3.6
-    tree.add(trunk, leaf); tree.position.set(x, 0, z); tree.scale.setScalar(1 + hashf(i) * 0.8); town.add(tree)
+  if (gfxHigh) {
+    // HIGH: painted hills backdrop at the horizon (the depth) + a forest of illustrated tree SPRITES
+    const R = Math.max(WW, WH) * 0.98
+    const ring = new THREE.Mesh(new THREE.CylinderGeometry(R, R, 64, 56, 1, true), new THREE.MeshBasicMaterial({ map: artTexPlain("backdrop_hills"), side: THREE.BackSide, fog: false }))
+    ring.position.set(WW / 2, 22, WH / 2); town.add(ring)
+    const treeNames = ["tree_pine", "tree_blossom", "tree_broadleaf"]
+    for (let i = 0; i < 90; i++) { // a ring of painted trees framing the town
+      const a = hashf(i * 3.1) * Math.PI * 2, rad = WW * 0.5 + hashf(i * 7.7) * WW * 0.55
+      const x = WW / 2 + Math.cos(a) * rad, z = WH / 2 + Math.sin(a) * rad * (WH / WW)
+      const name = treeNames[i % 3], sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: artTexPlain(name), transparent: true }))
+      const sc = 7 + hashf(i) * 5, asp = artAspect.get(name) ?? 1
+      sp.scale.set(sc * asp, sc, 1); sp.position.set(x, sc / 2, z); town.add(sp)
+    }
+  } else {
+    const wmat = matFor(walls[0]); const wallH = 7, wallT = 1.5
+    const boundary = (w: number, x: number, z: number, ry: number) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w, wallH, wallT), wmat); m.position.set(x, wallH / 2, z); m.rotation.y = ry; town!.add(m) }
+    boundary(WW + wallT, WW / 2, 0, 0); boundary(WW + wallT, WW / 2, WH, 0)
+    boundary(WH + wallT, 0, WH / 2, Math.PI / 2); boundary(WH + wallT, WW, WH / 2, Math.PI / 2)
+    const trunkMat = new THREE.MeshLambertMaterial({ color: 0x5a4028 }), leafMat = new THREE.MeshLambertMaterial({ color: world.era >= 15 ? 0x335a6a : 0x2f6a32 })
+    const trunkGeo = new THREE.CylinderGeometry(0.3, 0.45, 2, 6), leafGeo = new THREE.ConeGeometry(1.7, 3.6, 7)
+    for (let i = 0; i < 90; i++) { // a forest ringing the town, outside the wall
+      const a = hashf(i * 3.1) * Math.PI * 2, rad = (WW * 0.6) + hashf(i * 7.7) * WW * 0.7
+      const x = WW / 2 + Math.cos(a) * rad, z = WH / 2 + Math.sin(a) * rad * (WH / WW)
+      const tree = new THREE.Group()
+      const trunk = new THREE.Mesh(trunkGeo, trunkMat); trunk.position.y = 1
+      const leaf = new THREE.Mesh(leafGeo, leafMat); leaf.position.y = 3.6
+      tree.add(trunk, leaf); tree.position.set(x, 0, z); tree.scale.setScalar(1 + hashf(i) * 0.8); town.add(tree)
+    }
   }
   // INNER greenery so the town isn't bare grass — scattered trees, bushes + rocks between the houses
-  const bushMat = new THREE.MeshLambertMaterial({ color: world.era >= 15 ? 0x3a6a6a : 0x3f7a3a }), rockMat = new THREE.MeshLambertMaterial({ color: 0x8a857c })
-  const bushGeo = new THREE.SphereGeometry(0.9, 7, 6), rockGeo = new THREE.DodecahedronGeometry(0.6)
+  // INNER scatter between houses — illustrated sprites in high mode, procedural shapes in low
   for (let i = 0; i < 46; i++) {
     const px = hashf(i * 5.7 + 1) * WW, pz = hashf(i * 9.3 + 4) * WH
     const onRoad = Math.abs((px / S % BLOCK) - BLOCK / 2) > BLOCK / 2 - 40 || Math.abs((pz / S % BLOCK) - BLOCK / 2) > BLOCK / 2 - 40
     if (onRoad) continue // keep streets clear
     const k = hashf(i * 2.1)
-    if (k < 0.5) { const t = new THREE.Group(); t.add(new THREE.Mesh(trunkGeo, trunkMat), meshAt(leafGeo, leafMat, 0, 2.6, 0)); (t.children[0] as THREE.Mesh).position.y = 1; t.position.set(px, 0, pz); t.scale.setScalar(0.8 + hashf(i * 3) * 0.5); town.add(t) }
-    else if (k < 0.8) { const b = new THREE.Mesh(bushGeo, bushMat); b.position.set(px, 0.6, pz); b.scale.set(1, 0.8, 1); town.add(b) }
-    else { const r = new THREE.Mesh(rockGeo, rockMat); r.position.set(px, 0.4, pz); r.scale.setScalar(0.7 + hashf(i * 4) * 0.8); town.add(r) }
+    if (gfxHigh) {
+      const isTree = k < 0.32
+      const name = isTree ? ["tree_broadleaf", "tree_blossom", "tree_pine"][i % 3] : k < 0.58 ? "bush" : k < 0.8 ? "grass_tuft" : "flowers"
+      const sc = isTree ? 6 + hashf(i * 3) * 4 : 1.5 + hashf(i * 3) * 1.1, asp = artAspect.get(name) ?? 1
+      const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: artTexPlain(name), transparent: true }))
+      sp.scale.set(sc * asp, sc, 1); sp.position.set(px, sc / 2, pz); town.add(sp)
+    } else {
+      const tMat = new THREE.MeshLambertMaterial({ color: 0x5a4028 }), lMat = new THREE.MeshLambertMaterial({ color: 0x2f6a32 })
+      if (k < 0.5) { const t = new THREE.Group(); t.add(meshAt(new THREE.CylinderGeometry(0.3, 0.45, 2, 6), tMat, 0, 1, 0), meshAt(new THREE.ConeGeometry(1.7, 3.6, 7), lMat, 0, 2.6, 0)); t.position.set(px, 0, pz); t.scale.setScalar(0.8 + hashf(i * 3) * 0.5); town.add(t) }
+      else if (k < 0.8) { const b = new THREE.Mesh(new THREE.SphereGeometry(0.9, 7, 6), new THREE.MeshLambertMaterial({ color: 0x3f7a3a })); b.position.set(px, 0.6, pz); b.scale.set(1, 0.8, 1); town.add(b) }
+      else { const r = new THREE.Mesh(new THREE.DodecahedronGeometry(0.6), new THREE.MeshLambertMaterial({ color: 0x8a857c })); r.position.set(px, 0.4, pz); r.scale.setScalar(0.7 + hashf(i * 4) * 0.8); town.add(r) }
+    }
   }
   // CLOUDS drifting high above (a few flattened white puffs) so the sky isn't an empty plane
   const cloudMat = new THREE.MeshBasicMaterial({ color: 0xf2f4f8, transparent: true, opacity: 0.82, fog: false })
