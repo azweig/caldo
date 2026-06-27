@@ -42,6 +42,16 @@ Tamaño sugerido: suelos 1024×1024, cielo 2048×512. Sin texto, sin marca de ag
 
 ---
 
+## 5) backdrop_hills.png  ← ESTE ES EL QUE DA LA PROFUNDIDAD 2.5D
+**Prompt completo:**
+> Hand-painted Studio-Ghibli distant landscape backdrop, soft rolling green hills and faraway misty blue mountains under a gentle sky, layered depth with atmospheric haze (far layers paler and bluer), peaceful countryside, no foreground, no characters, no buildings, no text, seamless horizontal panorama (left edge matches right edge), 4096x1024.
+
+**Para qué:** el **anillo de fondo** detrás del pueblo (reemplaza la pared de troncos fea). Las colinas lejanas + la
+neblina dan la sensación de **capas y distancia** — eso es lo que hace que se vea "2.5D" como las referencias.
+ESTE es el que más cambia la profundidad. Generalo junto con el cielo.
+
+---
+
 # (Próximos lotes — todavía NO generar, primero validamos la escena)
 - **Lote Casas:** `public/art/buildings/` — casas ilustradas por era × familia cultural.
 - **Lote Biomas/Objetos:** `public/art/scene/` + `public/art/props/` — fondos por bioma/estación, animales, cultivos, cestas, cercas, fuego, mercado, árboles, rocas.
