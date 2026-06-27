@@ -130,6 +130,8 @@ function eraRoofs(era: number): string[] {
 // ── real 3D character meshes (TripoSR GLBs) with a billboard fallback while a model loads ──
 const modelPool: THREE.Group[] = []
 const _near: { c: Creature; d: number }[] = [] // reused scratch for the nearest-N selection (no per-frame allocation)
+// helper: a mesh with its position set — Object3D.position is READ-ONLY in three (must .set, never reassign)
+const meshAt = (geo: THREE.BufferGeometry, mat: THREE.Material, x: number, y: number, z: number): THREE.Mesh => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); return m }
 
 // pools for the DYNAMIC props (they move/spawn) so 3D shows the same wild animals + harvestable crops as 2D
 const animPool: THREE.Group[] = []
@@ -188,14 +190,14 @@ function buildRig(grp: THREE.Group) {
   // LEGS pivot at the HIP (geometry hangs below the origin) so the walk swing bends from the joint, not the middle
   const legGeo = new THREE.BoxGeometry(0.15, 0.4, 0.15); legGeo.translate(0, -0.2, 0)
   const footGeo = new THREE.BoxGeometry(0.16, 0.1, 0.26)
-  const ll = new THREE.Mesh(legGeo, legMat); ll.position.set(-0.1, 0.44, 0); ll.add(Object.assign(new THREE.Mesh(footGeo, legMat), { position: new THREE.Vector3(0, -0.4, 0.05) }))
-  const rl = new THREE.Mesh(legGeo, legMat); rl.position.set(0.1, 0.44, 0); rl.add(Object.assign(new THREE.Mesh(footGeo, legMat), { position: new THREE.Vector3(0, -0.4, 0.05) }))
+  const ll = new THREE.Mesh(legGeo, legMat); ll.position.set(-0.1, 0.44, 0); ll.add(meshAt(footGeo, legMat, 0, -0.4, 0.05))
+  const rl = new THREE.Mesh(legGeo, legMat); rl.position.set(0.1, 0.44, 0); rl.add(meshAt(footGeo, legMat, 0, -0.4, 0.05))
   const torso = new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.54, 0.27), clothMat); torso.position.set(0, 0.72, 0)
   // ARMS pivot at the SHOULDER, with a little skin hand at the end
   const armGeo = new THREE.BoxGeometry(0.11, 0.44, 0.13); armGeo.translate(0, -0.22, 0)
   const handGeo = new THREE.SphereGeometry(0.075, 8, 6)
-  const la = new THREE.Mesh(armGeo, clothMat); la.position.set(-0.31, 0.9, 0); la.add(Object.assign(new THREE.Mesh(handGeo, skinMat), { position: new THREE.Vector3(0, -0.44, 0) }))
-  const ra = new THREE.Mesh(armGeo, clothMat); ra.position.set(0.31, 0.9, 0); ra.add(Object.assign(new THREE.Mesh(handGeo, skinMat), { position: new THREE.Vector3(0, -0.44, 0) }))
+  const la = new THREE.Mesh(armGeo, clothMat); la.position.set(-0.31, 0.9, 0); la.add(meshAt(handGeo, skinMat, 0, -0.44, 0))
+  const ra = new THREE.Mesh(armGeo, clothMat); ra.position.set(0.31, 0.9, 0); ra.add(meshAt(handGeo, skinMat, 0, -0.44, 0))
   const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.09, 0.12, 8), skinMat); neck.position.set(0, 1.04, 0)
   const head = new THREE.Mesh(new THREE.SphereGeometry(0.21, 14, 12), skinMat); head.position.set(0, 1.24, 0); head.scale.set(1, 1.08, 0.96)
   const hair = new THREE.Mesh(new THREE.SphereGeometry(0.225, 14, 12, 0, Math.PI * 2, 0, Math.PI * 0.6), hairMat); hair.position.set(0, 1.27, 0)
@@ -303,7 +305,7 @@ function buildTown(world: World) {
     const onRoad = Math.abs((px / S % BLOCK) - BLOCK / 2) > BLOCK / 2 - 40 || Math.abs((pz / S % BLOCK) - BLOCK / 2) > BLOCK / 2 - 40
     if (onRoad) continue // keep streets clear
     const k = hashf(i * 2.1)
-    if (k < 0.5) { const t = new THREE.Group(); t.add(new THREE.Mesh(trunkGeo, trunkMat), Object.assign(new THREE.Mesh(leafGeo, leafMat), { position: new THREE.Vector3(0, 2.6, 0) })); (t.children[0] as THREE.Mesh).position.y = 1; t.position.set(px, 0, pz); t.scale.setScalar(0.8 + hashf(i * 3) * 0.5); town.add(t) }
+    if (k < 0.5) { const t = new THREE.Group(); t.add(new THREE.Mesh(trunkGeo, trunkMat), meshAt(leafGeo, leafMat, 0, 2.6, 0)); (t.children[0] as THREE.Mesh).position.y = 1; t.position.set(px, 0, pz); t.scale.setScalar(0.8 + hashf(i * 3) * 0.5); town.add(t) }
     else if (k < 0.8) { const b = new THREE.Mesh(bushGeo, bushMat); b.position.set(px, 0.6, pz); b.scale.set(1, 0.8, 1); town.add(b) }
     else { const r = new THREE.Mesh(rockGeo, rockMat); r.position.set(px, 0.4, pz); r.scale.setScalar(0.7 + hashf(i * 4) * 0.8); town.add(r) }
   }
