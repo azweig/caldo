@@ -62,6 +62,7 @@ const CAT_COLOR: Record<string, string> = {
 
 // PERF: the ground/trees/gardens/streets only change by (region, season, era cobble) — render them ONCE to an
 // offscreen canvas (full world size) and blit each frame, instead of redrawing ~80 trees + the grid every frame.
+const _folk: Creature[] = [] // reused scratch for the per-frame depth sort (avoids a fresh array each frame)
 let _staticCache: { key: string; canvas: CanvasImageSource } | null = null
 function makeOffscreen(w: number, h: number): { canvas: CanvasImageSource; ctx: CanvasRenderingContext2D } | null {
   try {
@@ -280,7 +281,10 @@ export function drawWorld(
 
   // creatures
   // DEPTH: draw people sorted front-to-back by their feet (y), so those in front overlap those behind
-  const folk = world.creatures.filter((c) => !c.isAvatar).sort((a, b) => a.y - b.y)
+  _folk.length = 0 // reuse a scratch array — no new array allocated every frame, just refilled + sorted in place
+  for (const c of world.creatures) if (!c.isAvatar) _folk.push(c)
+  _folk.sort((a, b) => a.y - b.y)
+  const folk = _folk
   for (const c of folk) {
     // if they've reached the spot they claimed, they're at their station → a working / seated pose
     let atSpot: string | null = null
