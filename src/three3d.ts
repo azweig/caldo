@@ -176,6 +176,8 @@ const meshAt = (geo: THREE.BufferGeometry, mat: THREE.Material, x: number, y: nu
 
 // pools for the DYNAMIC props (they move/spawn) so 3D shows the same wild animals + harvestable crops as 2D
 const animPool: THREE.Group[] = []
+const animSpritePool: THREE.Sprite[] = []
+const ANIM_ART: Record<string, string> = { ciervo: "animal_deer", conejo: "animal_rabbit" } // species → painted sprite (rest fall back to the low-poly cube)
 const foodPool: THREE.Group[] = []
 function ensureProps() {
   if (animPool.length) return
@@ -188,6 +190,7 @@ function ensureProps() {
     for (const [lx, lz] of [[0.26, 0.13], [0.26, -0.13], [-0.26, 0.13], [-0.26, -0.13]]) { const lg = new THREE.Mesh(legGeo, mat); lg.position.set(lx, 0.15, lz); g.add(lg) }
     g.visible = false; g.userData.mat = mat; scene.add(g); animPool.push(g)
   }
+  for (let i = 0; i < 16; i++) { const s = new THREE.Sprite(new THREE.SpriteMaterial({ transparent: true })); s.visible = false; scene.add(s); animSpritePool.push(s) } // painted animals
   const stemGeo = new THREE.CylinderGeometry(0.04, 0.05, 0.4, 5), berryGeo = new THREE.SphereGeometry(0.16, 7, 6)
   const stemMat = new THREE.MeshLambertMaterial({ color: 0x4f8a3a }), berryMat = new THREE.MeshLambertMaterial({ color: 0xd8472f })
   for (let i = 0; i < 56; i++) { // a little plant: green stem + a fruit on top (was a bare red ball)
@@ -600,12 +603,22 @@ export function render3D(world: World, me: Creature, yaw: number, pitch = 0, dis
   for (const a of world.animals) {
     if (ai >= animPool.length) break
     const dx = a.x - me.x, dy = a.y - me.y; if (dx * dx + dy * dy > 620 * 620) continue
-    const sp = SPECIES[a.kind], m = animPool[ai++]; m.visible = true
-    ;(m.userData.mat as THREE.MeshLambertMaterial).color.setHex(a.tame ? 0xbfe3a0 : sp?.hostile ? 0xcc5533 : 0xcaa869)
-    const sc = 0.7 + (sp?.danger || 0) * 0.5; m.scale.setScalar(sc); m.position.set(a.x * S, 0, a.y * S)
-    if (Math.abs(a.vx) + Math.abs(a.vy) > 0.04) m.rotation.y = -Math.atan2(a.vy, a.vx) // face where it's heading
+    const sp = SPECIES[a.kind], art = gfxHigh ? ANIM_ART[a.kind] : undefined
+    if (art) { // painted animal sprite (faces left/right via x-flip)
+      animPool[ai].visible = false
+      const m = animSpritePool[ai]; m.visible = true; m.material.map = artTexPlain(art)
+      const asp = artAspect.get(art) ?? 1, sc = 2 + (sp?.danger || 0) * 0.6
+      m.scale.set((a.vx > 0.04 ? -1 : 1) * sc * asp, sc, 1); m.position.set(a.x * S, sc / 2 - 0.2, a.y * S)
+    } else {
+      animSpritePool[ai].visible = false
+      const m = animPool[ai]; m.visible = true
+      ;(m.userData.mat as THREE.MeshLambertMaterial).color.setHex(a.tame ? 0xbfe3a0 : sp?.hostile ? 0xcc5533 : 0xcaa869)
+      const sc = 0.7 + (sp?.danger || 0) * 0.5; m.scale.setScalar(sc); m.position.set(a.x * S, 0, a.y * S)
+      if (Math.abs(a.vx) + Math.abs(a.vy) > 0.04) m.rotation.y = -Math.atan2(a.vy, a.vx)
+    }
+    ai++
   }
-  for (; ai < animPool.length; ai++) animPool[ai].visible = false
+  for (; ai < animPool.length; ai++) { animPool[ai].visible = false; animSpritePool[ai].visible = false }
   let fi = 0
   for (const f of world.food) {
     if (fi >= foodPool.length) break
