@@ -172,6 +172,7 @@ const _sway: { s: THREE.Sprite; amp: number; ph: number }[] = [] // vegetation s
 const _clouds: { s: THREE.Sprite; v: number }[] = [] // cloud sprites drifting across the sky (high mode)
 const WWU = WORLD_W * 0.045 // world width in 3D units (for wrapping the clouds)
 let _water: THREE.Texture | null = null // lake surface — its UV drifts for a gentle shimmer
+let _backdrop: THREE.Mesh | null = null // hills horizon ring — recentered on the player so it's always around you
 // helper: a mesh with its position set — Object3D.position is READ-ONLY in three (must .set, never reassign)
 const meshAt = (geo: THREE.BufferGeometry, mat: THREE.Material, x: number, y: number, z: number): THREE.Mesh => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); return m }
 
@@ -354,12 +355,11 @@ function buildTown(world: World) {
   outer.rotation.x = -Math.PI / 2; outer.position.set(WW / 2, -0.06, WH / 2); town.add(outer)
   if (gfxHigh) {
     // HIGH: painted hills backdrop at the horizon (the depth) + a forest of illustrated tree SPRITES
-    const R = Math.max(WW, WH) * 0.98
-    const ring = new THREE.Mesh(new THREE.CylinderGeometry(R, R, 64, 56, 1, true), new THREE.MeshBasicMaterial({ map: artTexPlain("backdrop_hills"), side: THREE.BackSide, fog: false }))
-    ring.position.set(WW / 2, 22, WH / 2); town.add(ring)
-    const R2 = Math.max(WW, WH) * 0.72 // closer treeline band → an extra depth layer between hills and town
-    const mid = new THREE.Mesh(new THREE.CylinderGeometry(R2, R2, 26, 56, 1, true), new THREE.MeshBasicMaterial({ map: artTexPlain("midground_trees"), side: THREE.BackSide, transparent: true }))
-    mid.position.set(WW / 2, 9, WH / 2); town.add(mid)
+    // backdrop hills ring — FIXED radius (not scaled to the huge world) so it reads as a near horizon, taller + lower
+    // so the green hills sit at eye level (not just the misty top), fog:false so the haze doesn't wash it out
+    const R = 200
+    const ring = new THREE.Mesh(new THREE.CylinderGeometry(R, R, 130, 64, 1, true), new THREE.MeshBasicMaterial({ map: artTexPlain("backdrop_hills"), side: THREE.BackSide, fog: false }))
+    ring.position.set(WW / 2, 30, WH / 2); town.add(ring); _backdrop = ring // bottom at -35; follows the camera each frame
     // a LAKE in the open land (natural zone) with a shimmering water texture + reeds around the shore
     const lakeR = 620 * S, lkx = WW * 0.78, lkz = WH * 0.26
     const wtex = artTex("water", "water", 4); const lakeMat = new THREE.MeshLambertMaterial({ map: wtex, transparent: true, opacity: 0.92 })
@@ -372,9 +372,9 @@ function buildTown(world: World) {
       sp.scale.set(sc * asp, sc, 1); sp.position.set(lkx + Math.cos(a) * rr, sc / 2, lkz + Math.sin(a) * rr); town.add(sp); _sway.push({ s: sp, amp: 0.07, ph: a })
     }
     const treeNames = ["tree_pine", "tree_blossom", "tree_broadleaf"]
-    for (let i = 0; i < 90; i++) { // a ring of painted trees framing the town
-      const a = hashf(i * 3.1) * Math.PI * 2, rad = WW * 0.5 + hashf(i * 7.7) * WW * 0.55
-      const x = WW / 2 + Math.cos(a) * rad, z = WH / 2 + Math.sin(a) * rad * (WH / WW)
+    for (let i = 0; i < 90; i++) { // a ring of painted trees framing the town (fixed radius, in front of the backdrop)
+      const a = hashf(i * 3.1) * Math.PI * 2, rad = 95 + hashf(i * 7.7) * 75
+      const x = WW / 2 + Math.cos(a) * rad, z = WH / 2 + Math.sin(a) * rad
       const name = treeNames[i % 3], sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: artTexPlain(name), transparent: true }))
       const sc = 7 + hashf(i) * 5, asp = artAspect.get(name) ?? 1
       sp.scale.set(sc * asp, sc, 1); sp.position.set(x, sc / 2, z); town.add(sp)
@@ -574,6 +574,7 @@ export function render3D(world: World, me: Creature, yaw: number, pitch = 0, dis
   } else for (const p of petalPool) p.visible = false
   for (const c of _clouds) { c.s.position.x += c.v; if (c.s.position.x > WWU * 1.5) c.s.position.x = -WWU * 0.5 } // clouds drift
   if (_water) { _water.offset.x = Math.sin(walkT * 0.25) * 0.03; _water.offset.y = walkT * 0.012 } // water shimmer
+  if (_backdrop) { _backdrop.position.x = me.x * S; _backdrop.position.z = me.y * S } // horizon follows you
   if (gfxHigh) { // butterflies by day / fireflies by night + birds crossing
     ensureFly(); const hh = (world.clockMinutes % 1440) / 60, night = hh < 6 || hh >= 20, cx = me.x * S, cz = me.y * S
     for (let i = 0; i < flyPool.length; i++) {
