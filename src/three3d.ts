@@ -129,6 +129,7 @@ function eraRoofs(era: number): string[] {
 
 // ── real 3D character meshes (TripoSR GLBs) with a billboard fallback while a model loads ──
 const modelPool: THREE.Group[] = []
+const _near: { c: Creature; d: number }[] = [] // reused scratch for the nearest-N selection (no per-frame allocation)
 
 // pools for the DYNAMIC props (they move/spawn) so 3D shows the same wild animals + harvestable crops as 2D
 const animPool: THREE.Group[] = []
@@ -439,11 +440,18 @@ export function render3D(world: World, me: Creature, yaw: number, pitch = 0) {
   if (builtFor !== world || builtEra !== world.era) buildTown(world)
   if (town) town.visible = true; if (intGroup) intGroup.visible = false
 
-  const near = world.creatures
-    .filter((c) => c !== me && !c.isAvatar)
-    .map((c) => ({ c, d: (c.x - me.x) ** 2 + (c.y - me.y) ** 2 }))
-    .sort((a, b) => a.d - b.d)
-    .slice(0, pool.length - 1)
+  // PERF: pick the nearest N by radius-filter (no full filter→map→sort→slice over ~280 creatures every frame).
+  // A coarse 600px gate then a partial insertion keeps only what's visible, with no per-frame intermediate arrays.
+  const cap = pool.length - 1
+  _near.length = 0
+  for (const c of world.creatures) {
+    if (c === me || c.isAvatar) continue
+    const d = (c.x - me.x) ** 2 + (c.y - me.y) ** 2
+    if (d > 600 * 600) continue
+    if (_near.length < cap) { _near.push({ c, d }) } // fill, then replace the farthest when full
+    else { let mx = 0; for (let k = 1; k < _near.length; k++) if (_near[k].d > _near[mx].d) mx = k; if (d < _near[mx].d) _near[mx] = { c, d } }
+  }
+  const near = _near
   let i = 0
   const place = (c: Creature, scale: number, ringCol: number) => {
     const r = rings[i]; r.visible = true; (r.material as THREE.MeshBasicMaterial).color.setHex(ringCol)
