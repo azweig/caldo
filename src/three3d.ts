@@ -430,7 +430,7 @@ export function pick3D(world: World, me: Creature, sx: number, sy: number, w: nu
   return best
 }
 
-export function render3D(world: World, me: Creature, yaw: number, pitch = 0) {
+export function render3D(world: World, me: Creature, yaw: number, pitch = 0, dist = 8.5) {
   if (!ready) return
   walkT += 0.016
   // DAY/NIGHT: light + haze follow the in-world hour so dusk darkens + night cools the whole 3D scene
@@ -507,7 +507,7 @@ export function render3D(world: World, me: Creature, yaw: number, pitch = 0) {
 
   // THIRD-PERSON camera — pulled back + raised so you see your character + the world around (not glued behind the head)
   const mx = me.x * S, mz = me.y * S
-  const dist = 8.5, cy = 5.2
+  const cy = 1.4 + dist * 0.45 // height scales with the wheel-controlled distance, so zooming out also lifts the view
   const cx = mx - Math.cos(yaw) * dist, cz = mz - Math.sin(yaw) * dist
   camera.position.set(cx, cy, cz)
   const cp = Math.cos(pitch)

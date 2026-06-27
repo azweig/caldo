@@ -134,7 +134,8 @@ window.addEventListener("resize", resize)
 let zoom = 1, targetZoom = 1 // zoom eases toward targetZoom for a cinematic possess zoom-in
 window.addEventListener("wheel", (e) => {
   e.preventDefault()
-  targetZoom = clamp(targetZoom * (e.deltaY < 0 ? 1.12 : 0.89), 0.35, 2.8)
+  if (possessed) camDist3d = clamp(camDist3d * (e.deltaY < 0 ? 0.9 : 1.11), 3.5, 26) // 3D: wheel pulls the camera in/out
+  else targetZoom = clamp(targetZoom * (e.deltaY < 0 ? 1.12 : 0.89), 0.35, 2.8) // 2D: wheel zooms the map
 }, { passive: false })
 
 // time scale = in-world MINUTES per real second. Default 1 s = 1 min (calm, conversational world);
@@ -175,6 +176,7 @@ let possessBusy: { until: number; label: string; reward: "work" | "study" } | nu
 let flashMsg = "", flashUntil = 0 // transient toast in the possession panel
 let camYaw3d = Math.PI / 2 // 3rd-person camera facing (A/D turn it; W/S walk along it)
 let camPitch3d = 0 // vertical look (drag the mouse up/down)
+let camDist3d = 8.5 // 3rd-person camera distance — the mouse wheel pulls it in/out (like 2D zoom)
 let insideHouse: House | null = null // the house you've entered (interior view)
 let roomX = 0, roomZ = 0 // your position inside the room (3D units)
 let chatTarget: Creature | null = null
@@ -913,7 +915,7 @@ function loop() {
 
   if (possessed) {
     if (insideHouse) renderInterior(world, possessed, insideHouse, roomX, roomZ, camYaw3d, camPitch3d)
-    else render3D(world, possessed, camYaw3d, camPitch3d) // immersive 3D while you live a life
+    else render3D(world, possessed, camYaw3d, camPitch3d, camDist3d) // immersive 3D while you live a life
     // floating speech bubble for overheard chatter
     let shown = false
     if (ambient && !insideHouse) {
