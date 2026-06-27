@@ -400,8 +400,8 @@ export function renderInterior(world: World, me: Creature, h: House, rx: number,
   occ.forEach((c, k) => put(c, -RW / 2 + 2 + (k % 3) * 2.5, -RD / 2 + 2 + Math.floor(k / 3) * 2.5, 1.5, relColor(me, c)))
   for (; i < pool.length; i++) { pool[i].visible = false; rings[i].visible = false; shadows[i].visible = false; modelPool[i].visible = false; labelPool[i].visible = false }
   const cp = Math.cos(pitch)
-  const cx = rx - Math.cos(yaw) * 3.0, cy = 2.0, cz = rz - Math.sin(yaw) * 3.0
-  camera.position.set(cx, cy, cz); camera.lookAt(cx + Math.cos(yaw) * 9 * cp, cy + Math.sin(pitch) * 9, cz + Math.sin(yaw) * 9 * cp)
+  const cx = rx - Math.cos(yaw) * 4.2, cy = 3.0, cz = rz - Math.sin(yaw) * 4.2 // a touch further back so you see the room
+  camera.position.set(cx, cy, cz); camera.lookAt(rx + Math.cos(yaw) * 2 * cp, 1.4 + Math.sin(pitch) * 8, rz + Math.sin(yaw) * 2 * cp)
   renderer.render(scene, camera)
 }
 export const ROOM = { W: RW, D: RD }
@@ -505,11 +505,12 @@ export function render3D(world: World, me: Creature, yaw: number, pitch = 0) {
   }
   for (; fi < foodPool.length; fi++) foodPool[fi].visible = false
 
-  // GROUND-LEVEL over-the-shoulder camera — yaw from A/D + mouse, pitch from dragging the mouse up/down
+  // THIRD-PERSON camera — pulled back + raised so you see your character + the world around (not glued behind the head)
   const mx = me.x * S, mz = me.y * S
-  const cx = mx - Math.cos(yaw) * 3.4, cy = 2.0, cz = mz - Math.sin(yaw) * 3.4
+  const dist = 8.5, cy = 5.2
+  const cx = mx - Math.cos(yaw) * dist, cz = mz - Math.sin(yaw) * dist
   camera.position.set(cx, cy, cz)
   const cp = Math.cos(pitch)
-  camera.lookAt(cx + Math.cos(yaw) * 10 * cp, cy + Math.sin(pitch) * 10, cz + Math.sin(yaw) * 10 * cp)
+  camera.lookAt(mx + Math.cos(yaw) * 3 * cp, 1.8 + Math.sin(pitch) * 8, mz + Math.sin(yaw) * 3 * cp) // look at the character + a bit ahead
   renderer.render(scene, camera)
 }
