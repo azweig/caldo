@@ -345,8 +345,8 @@ function buildTown(world: World) {
     const wallMat = matFor(walls[Math.floor(hashf(h.x * 1.7 + 3) * 997) % walls.length])
     const roofMat = matFor(roofs[Math.floor(hashf(h.y * 2.3 + 7) * 997) % roofs.length])
     // TYPE shows in scale: choza modest, casa/casona/mansión bigger, edificio towers — all clearly above head height
-    const bh = tier === 4 ? 12 + r * 5 : 4.2 + tier * 1.7 + r * 1.6
-    const w = h.w * S * (1.2 + hashf(h.x) * 0.4), d = h.h * S * (1.2 + hashf(h.y) * 0.4)
+    const bh = tier === 4 ? 12 + r * 5 : 3.4 + tier * 1.4 + r * 1.0 // a touch shorter so they're not narrow towers
+    const w = h.w * S * (2.1 + hashf(h.x) * 0.5), d = h.h * S * (2.1 + hashf(h.y) * 0.5) // WIDER → read as houses, not posts
     const cx = (h.x + h.w / 2) * S, cz = (h.y + h.h / 2) * S, fz = cz + d / 2 // south face = the front (door side)
     const body = new THREE.Mesh(new THREE.BoxGeometry(w, bh, d), wallMat)
     body.position.set(cx, bh / 2, cz); town.add(body)
