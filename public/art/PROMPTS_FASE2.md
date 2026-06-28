@@ -1,125 +1,129 @@
-# FASE 2 — Casas + Personas + Animales (todos los prompts)
+# FASE 2 — Casas + Personas + Animales (PROMPTS COMPLETOS)
 
-## 🎯 Decisión de ángulos (la pensé, esto es lo que conviene)
+Cada prompt está COMPLETO: copiás el bloque `> …` entero y lo pegás en Gemini. Dejá el PNG con el NOMBRE exacto
+en la carpeta indicada. **No te preocupes por el fondo** — yo hago rembg + compresión.
 
-Los sprites son **billboards** (siempre miran a la cámara). Entonces:
-
-- **Personas → 1 vista 3/4 FRONTAL.** El motor la **espeja** para izquierda/derecha. NO hace falta vista de
-  espalda para empezar — en las referencias los personajes miran de frente y se ve perfecto. Si más adelante
-  molesta cuando caminan "hacia el norte", sumamos una vista de espalda como 2da tanda. **Por ahora: 1 ángulo.**
-- **Animales → 1 vista de PERFIL (costado).** Espejo para izq/der. El perfil es lo natural para un cuadrúpedo
-  (de frente se ven raros). **1 ángulo.**
-- **Casas → 1 vista 3/4** (frente + un lado). No rotan. **1 ángulo.**
-
-→ **1 ángulo por asset.** Mantiene la cantidad manejable y se ve bien en 2.5D. (Si querés calidad máxima después,
-la 2da tanda sería: personas de espalda + animales de frente. Pero arrancá con 1.)
-
-**No te preocupes por el fondo:** yo les hago rembg (recorte) + compresión automática. Solo pedí "transparent background".
+Ángulos (decidido): **personas** 1 vista 3/4 frontal (el motor la espeja izq/der) · **animales** 1 perfil de
+costado (espejo izq/der) · **casas** texturas tileables sobre la caja 3D (funcionan en 360°, no son sprites).
 
 ---
 
-## 🎨 ESTILO BASE (pegá esto al inicio de TODOS)
-> Soft hand-painted Studio-Ghibli-meets-Stardew-Valley game art, warm cohesive palette, gentle cel-shading with
-> soft outlines, clean cutout, transparent background (PNG alpha), single subject centered, no scene, no ground,
-> no text, no watermark.
+# A · ANIMALES (7) → carpeta `public/art/scene/`  ·  perfil, fondo transparente
+
+### animal_wolf.png
+> Soft hand-painted Studio-Ghibli-meets-Stardew-Valley game art, a grey wolf standing in side profile, alert, warm cohesive palette, gentle cel-shading with soft outlines, single animal centered, full body, transparent background PNG alpha, no scene, no ground, no text, no watermark.
+
+### animal_bear.png
+> Soft hand-painted Studio-Ghibli-meets-Stardew-Valley game art, a brown bear standing on four legs in side profile, warm cohesive palette, gentle cel-shading with soft outlines, single animal centered, full body, transparent background PNG alpha, no scene, no ground, no text, no watermark.
+
+### animal_sheep.png
+> Soft hand-painted Studio-Ghibli-meets-Stardew-Valley game art, a fluffy white sheep in side profile, warm cohesive palette, gentle cel-shading with soft outlines, single animal centered, full body, transparent background PNG alpha, no scene, no ground, no text, no watermark.
+
+### animal_goat.png
+> Soft hand-painted Studio-Ghibli-meets-Stardew-Valley game art, a goat with horns in side profile, warm cohesive palette, gentle cel-shading with soft outlines, single animal centered, full body, transparent background PNG alpha, no scene, no ground, no text, no watermark.
+
+### animal_cow.png
+> Soft hand-painted Studio-Ghibli-meets-Stardew-Valley game art, a brown-and-white cow in side profile, warm cohesive palette, gentle cel-shading with soft outlines, single animal centered, full body, transparent background PNG alpha, no scene, no ground, no text, no watermark.
+
+### animal_horse.png
+> Soft hand-painted Studio-Ghibli-meets-Stardew-Valley game art, a horse standing in side profile, warm cohesive palette, gentle cel-shading with soft outlines, single animal centered, full body, transparent background PNG alpha, no scene, no ground, no text, no watermark.
+
+### animal_dog.png
+> Soft hand-painted Studio-Ghibli-meets-Stardew-Valley game art, a friendly dog standing in side profile, warm cohesive palette, gentle cel-shading with soft outlines, single animal centered, full body, transparent background PNG alpha, no scene, no ground, no text, no watermark.
 
 ---
 
-# A · ANIMALES que faltan (7) → `public/art/scene/`
-Perfil de costado, parado, patas abajo. *(deer + rabbit ya están)*. ~512px.
+# B · CASAS = TEXTURAS → carpeta `public/art/tex/`  ·  tileables, SIN transparencia, sin costura, ~512×512
 
-| Archivo | Agregar al estilo base |
-|---|---|
-| `animal_wolf.png` | *…a grey wolf standing in side profile, alert* |
-| `animal_bear.png` | *…a brown bear standing on four legs, side profile* |
-| `animal_sheep.png` | *…a fluffy white sheep, side profile* |
-| `animal_goat.png` | *…a goat with horns, side profile* |
-| `animal_cow.png` | *…a brown-and-white cow, side profile* |
-| `animal_horse.png` | *…a horse standing, side profile* |
-| `animal_dog.png` | *…a friendly dog standing, side profile* |
+### wall_mud.png  (prehist — PRIORIDAD)
+> Seamless tileable hand-painted Studio-Ghibli-meets-Stardew-Valley rough mud-and-wattle wall texture, warm earthy tones, flat even lighting, top-down, no shadows, no objects, no characters, no text, edges tile perfectly with no seam, 512x512.
 
----
+### roof_thatch.png  (prehist — PRIORIDAD)
+> Seamless tileable hand-painted Studio-Ghibli-meets-Stardew-Valley straw thatch roof texture, warm golden straw, flat even lighting, top-down, no shadows, no objects, no text, edges tile perfectly with no seam, 512x512.
 
-# B · CASAS → `public/art/tex/`  (TEXTURAS, no sprites)
+### wall_wood.png  (bronce)
+> Seamless tileable hand-painted Studio-Ghibli-meets-Stardew-Valley timber log wall texture, warm wood tones, flat even lighting, top-down, no shadows, no objects, no text, edges tile perfectly with no seam, 512x512.
 
-**Las casas NO son sprites** — son cajas 3D que rodeás. Así que en vez de 4 lados, generás **texturas pintadas
-de PARED y TECHO** (tileables) que yo aplico sobre la geometría 3D que ya existe. Funciona en 360°, igual que el
-pasto. Mucho menos trabajo, mejor resultado.
+### wall_stone.png  (hierro/clásico)
+> Seamless tileable hand-painted Studio-Ghibli-meets-Stardew-Valley stone block wall texture, soft grey-brown stones, flat even lighting, top-down, no shadows, no objects, no text, edges tile perfectly with no seam, 512x512.
 
-**🟩 Tileables, SIN transparencia, sin costura** (como los suelos). ~512×512. Nombre: `{material}.png`.
+### roof_clay.png  (hierro/clásico)
+> Seamless tileable hand-painted Studio-Ghibli-meets-Stardew-Valley clay tile roof texture, warm terracotta rows of tiles, flat even lighting, top-down, no shadows, no objects, no text, edges tile perfectly with no seam, 512x512.
 
-**Plantilla pared:** estilo base + *seamless tileable [PARED] wall texture, top-down flat lighting, no shadows, no
-objects, no text, edges tile perfectly.*
-**Plantilla techo:** igual pero *…[TECHO] roof texture…*
+### wall_plaster.png  (medieval)
+> Seamless tileable hand-painted Studio-Ghibli-meets-Stardew-Valley plaster-and-timber wall texture, cream plaster with dark wooden beams, flat even lighting, top-down, no shadows, no objects, no text, edges tile perfectly with no seam, 512x512.
 
-| Tier | PARED (archivo) | TECHO (archivo) |
-|---|---|---|
-| **prehist** | rough mud-and-wattle wall → `wall_mud.png` | thatch / straw roof → `roof_thatch.png` |
-| **bronze** | timber log wall → `wall_wood.png` | thatch roof → *(reusa roof_thatch)* |
-| **iron/clásico** | stone block wall → `wall_stone.png` | clay tile roof → `roof_clay.png` |
-| **medieval** | plaster-and-timber wall → `wall_plaster.png` | wooden shingle roof → `roof_shingle.png` |
-| **renacimiento** | brick wall → `wall_brick.png` | slate roof → `roof_slate.png` |
-| **industrial** | concrete wall → `wall_concrete.png` | metal roof → `roof_metal.png` |
-| **futuro** | glass-panel wall → `wall_glass.png` / neon → `wall_neon.png` | metal roof → *(reusa roof_metal)* |
+### roof_shingle.png  (medieval)
+> Seamless tileable hand-painted Studio-Ghibli-meets-Stardew-Valley wooden shingle roof texture, overlapping warm brown shingles, flat even lighting, top-down, no shadows, no objects, no text, edges tile perfectly with no seam, 512x512.
 
-**Prioridad:** generá primero **`wall_mud.png` + `roof_thatch.png`** (prehist). Con eso ya ves las casas ilustradas.
+### wall_brick.png  (renacimiento)
+> Seamless tileable hand-painted Studio-Ghibli-meets-Stardew-Valley brick wall texture, warm red-brown bricks, flat even lighting, top-down, no shadows, no objects, no text, edges tile perfectly with no seam, 512x512.
 
-> Estos nombres son los MISMOS que el motor ya usa (`/tex/wall_mud.png`, etc.) — los tuyos, pintados a mano,
-> **reemplazan** los actuales. Dejalos en `public/art/tex/` y yo hago que high mode los prefiera (fallback al actual).
+### roof_slate.png  (renacimiento)
+> Seamless tileable hand-painted Studio-Ghibli-meets-Stardew-Valley slate roof texture, soft blue-grey slate tiles, flat even lighting, top-down, no shadows, no objects, no text, edges tile perfectly with no seam, 512x512.
 
-> (Opcional, más adelante) Si querés casas con FORMA distinta por cultura — techo japonés curvo, longhouse vikinga —
-> eso es geometría 3D nueva, lo vemos en otra fase. Por ahora la textura pintada ya da el salto Ghibli.
+### wall_concrete.png  (industrial)
+> Seamless tileable hand-painted Studio-Ghibli-meets-Stardew-Valley concrete wall texture, soft warm grey, flat even lighting, top-down, no shadows, no objects, no text, edges tile perfectly with no seam, 512x512.
+
+### roof_metal.png  (industrial/futuro)
+> Seamless tileable hand-painted Studio-Ghibli-meets-Stardew-Valley corrugated metal roof texture, soft muted blue-grey, flat even lighting, top-down, no shadows, no objects, no text, edges tile perfectly with no seam, 512x512.
+
+### wall_glass.png  (futuro)
+> Seamless tileable hand-painted Studio-Ghibli-meets-Stardew-Valley glass-panel wall texture, soft reflective blue-teal panels with thin frames, flat even lighting, top-down, no shadows, no objects, no text, edges tile perfectly with no seam, 512x512.
+
+### wall_neon.png  (futuro)
+> Seamless tileable hand-painted Studio-Ghibli-meets-Stardew-Valley futuristic neon panel wall texture, dark surface with soft glowing teal and pink neon lines, flat even lighting, top-down, no shadows, no objects, no text, edges tile perfectly with no seam, 512x512.
 
 ---
 
-# C · PERSONAS → `public/art/people/`
-Cuerpo entero, vista 3/4 FRONTAL, pies centrados abajo. ~512×768 (vertical). Nombre: `{tier}_{rol}_{sexo}_{edad}.png`.
+# C · PERSONAS → carpeta `public/art/people/`  ·  cuerpo entero, 3/4 frontal, fondo transparente, ~512×768
 
-**Plantilla:** estilo base + *…a [EDAD+SEXO] [ROL] of the [ÉPOCA], wearing [ROPA], full body, 3/4 front view standing, feet centered at bottom, single character.*
+## TANDA 1 — PREHIST (generá estos 7 primero)
 
-### Variables para llenar:
+### prehist_aldeano_m_adulto.png
+> Soft hand-painted Studio-Ghibli-meets-Stardew-Valley game art, a ~30 year old male prehistoric hunter-gatherer wearing rough fur and hide clothing and fur boots, weathered tan skin, short dark hair, calm expression, standing relaxed, full body, 3/4 front view, feet centered at bottom, warm palette, soft outlines, single character, transparent background PNG alpha, no scene, no ground, no text, no watermark.
 
-**ÉPOCA + ROPA por tier:**
-| Tier (prefijo) | época + ropa base |
-|---|---|
-| **prehist_** | prehistoric era, wearing rough furs and hide |
-| **bronze_** | neolithic/bronze-age, wearing woven linen tunic |
-| **iron_** | iron-age/classical, wearing draped tunic or simple robe |
-| **medieval_** | medieval, wearing wool tunic and cloak |
-| **early_** | renaissance/early-modern, wearing a coat and breeches |
-| **industrial_** | industrial era, wearing simple work clothes |
-| **future_** | futuristic, wearing a sleek bodysuit |
+### prehist_aldeano_f_adulto.png
+> Soft hand-painted Studio-Ghibli-meets-Stardew-Valley game art, a ~30 year old female prehistoric gatherer wearing a fur-and-hide wrap dress and hide boots, dark hair tied back, calm expression, standing relaxed, full body, 3/4 front view, feet centered at bottom, warm palette, soft outlines, single character, transparent background PNG alpha, no scene, no ground, no text, no watermark.
 
-**ROL (cambia la ROPA/accesorio):**
-| rol (en archivo) | añadir |
-|---|---|
-| `aldeano` | (la ropa base del tier, simple) |
-| `guerrero` | + armed with a spear/weapon, tougher gear |
-| `erudito` | + as a shaman/scholar/priest with robes and trinkets |
-| `mercader` | + as a well-dressed merchant/noble, finer clothes |
+### prehist_guerrero_m_adulto.png
+> Soft hand-painted Studio-Ghibli-meets-Stardew-Valley game art, a ~35 year old prehistoric hunter-warrior in thick furs holding a stone-tipped wooden spear, rugged, standing, full body, 3/4 front view, feet centered at bottom, warm palette, soft outlines, single character, transparent background PNG alpha, no scene, no ground, no text, no watermark.
 
-**SEXO:** `m` (male) / `f` (female) · **EDAD:** `nino` (child ~8yo) / `adulto` (~30yo) / `anciano` (elder ~65yo, grey hair)
+### prehist_erudito_m_adulto.png
+> Soft hand-painted Studio-Ghibli-meets-Stardew-Valley game art, a ~50 year old prehistoric tribal shaman in furs decorated with bones and feathers, a bone necklace, wise expression, standing, full body, 3/4 front view, feet centered at bottom, warm palette, soft outlines, single character, transparent background PNG alpha, no scene, no ground, no text, no watermark.
 
-### TANDA 1 (PREHIST — generá estos 7 primero):
-1. `prehist_aldeano_m_adulto.png` → *…a ~30yo male prehistoric hunter-gatherer, wearing rough furs and hide…*
-2. `prehist_aldeano_f_adulto.png` → *…a ~30yo female prehistoric gatherer, wearing fur-and-hide wrap…*
-3. `prehist_guerrero_m_adulto.png` → *…a ~35yo prehistoric hunter-warrior in thick furs, holding a stone-tipped spear…*
-4. `prehist_erudito_m_adulto.png` → *…a ~50yo prehistoric tribal shaman, furs with bones and feathers, bone necklace…*
-5. `prehist_nino.png` → *…a ~8yo prehistoric child in a small fur tunic, barefoot…*
-6. `prehist_anciano_m_adulto.png` → *…a ~65yo prehistoric elder man, grey hair and beard, worn furs…*
-7. `prehist_anciana_f_adulto.png` → *…a ~65yo prehistoric elder woman, grey hair, fur wrap…*
+### prehist_nino.png
+> Soft hand-painted Studio-Ghibli-meets-Stardew-Valley game art, a ~8 year old prehistoric child in a small simple fur tunic, barefoot, curious expression, standing, full body, 3/4 front view, feet centered at bottom, warm palette, soft outlines, single character, transparent background PNG alpha, no scene, no ground, no text, no watermark.
 
-Con esos 7 + las 2 casas prehist, **yo cableo el sistema completo de personas + casas** (elige el sprite por
-era/rol/sexo/edad, espeja por dirección, fallback al procedural si falta). Lo probás, y si funciona escalás a los
-otros tiers con la plantilla.
+### prehist_anciano_m_adulto.png
+> Soft hand-painted Studio-Ghibli-meets-Stardew-Valley game art, a ~65 year old prehistoric elder man with grey hair and beard and worn furs, leaning slightly, full body, 3/4 front view, feet centered at bottom, warm palette, soft outlines, single character, transparent background PNG alpha, no scene, no ground, no text, no watermark.
+
+### prehist_anciana_f_adulto.png
+> Soft hand-painted Studio-Ghibli-meets-Stardew-Valley game art, a ~65 year old prehistoric elder woman with grey hair and a fur wrap, gentle expression, standing, full body, 3/4 front view, feet centered at bottom, warm palette, soft outlines, single character, transparent background PNG alpha, no scene, no ground, no text, no watermark.
 
 ---
 
-# RESUMEN de cantidades (con 1 ángulo)
-- **Animales:** 7 que faltan (+ 2 ya)
-- **Casas:** 7 tiers × ~3 tamaños = ~21 (mínimo; más si hacés variantes culturales)
-- **Personas:** 7 tiers × 7 (rol/sexo/edad) = ~49 para cobertura total
-- **Total fase 2:** ~77 sprites para TODO. Pero **arrancá con la Tanda 1 (7 personas + 2 casas prehist + 7 animales)**
-  para validar, y después escalás tier por tier.
+## OTROS TIERS (mismos 7 roles por tier — generá cuando subas de era)
 
-Cuando tengas la Tanda 1 lista en las carpetas, avisame y cableo casas + personas + animales completos.
+Para cada tier de abajo, los 7 archivos son: `{tier}_aldeano_m_adulto`, `{tier}_aldeano_f_adulto`,
+`{tier}_guerrero_m_adulto`, `{tier}_erudito_m_adulto`, `{tier}_nino`, `{tier}_anciano_m_adulto`,
+`{tier}_anciana_f_adulto`. El prompt es idéntico al de prehist pero cambiando la ÉPOCA + ROPA. Acá la frase exacta
+a usar en cada uno (reemplazá la parte de "prehistoric … wearing …"):
+
+- **bronze_** → *neolithic/bronze-age villager wearing a woven linen tunic* (guerrero: *with a bronze spear*; erudito: *as a robed priest with amulets*)
+- **iron_** → *iron-age classical person wearing a draped tunic* (guerrero: *as a soldier with armor and a spear*; erudito: *as a scholar in a toga-like robe*)
+- **medieval_** → *medieval villager wearing a wool tunic and cloak* (guerrero: *as a knight in chainmail with a sword*; erudito: *as a monk in a hooded robe*)
+- **early_** → *renaissance/early-modern person wearing a coat and breeches* (guerrero: *as a musketeer*; erudito: *as a scholar with books*)
+- **industrial_** → *industrial-era person wearing simple work clothes and a cap* (guerrero: *as a soldier in a uniform*; erudito: *as a bespectacled scholar*)
+- **future_** → *futuristic person wearing a sleek bodysuit* (guerrero: *with light power-armor*; erudito: *as a scientist with a holo-visor*)
+
+**Ejemplo armado** (bronze_aldeano_m_adulto.png):
+> Soft hand-painted Studio-Ghibli-meets-Stardew-Valley game art, a ~30 year old male neolithic/bronze-age villager wearing a woven linen tunic, calm expression, standing relaxed, full body, 3/4 front view, feet centered at bottom, warm palette, soft outlines, single character, transparent background PNG alpha, no scene, no ground, no text, no watermark.
+
+---
+
+# RESUMEN
+- **Animales:** 7 (sección A)
+- **Texturas de casa:** 13 (sección B) — prioridad `wall_mud` + `roof_thatch`
+- **Personas:** 7 por tier × 7 tiers = 49 (sección C) — prioridad la TANDA 1 prehist
+- **Arrancá con: TANDA 1 (7 personas) + wall_mud + roof_thatch + 7 animales.** Avisame y cableo todo junto.
