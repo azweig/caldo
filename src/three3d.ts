@@ -204,6 +204,7 @@ function ensureProps() {
     g.visible = false; g.userData.mat = mat; scene.add(g); animPool.push(g)
   }
   for (let i = 0; i < 16; i++) { const s = new THREE.Sprite(new THREE.SpriteMaterial({ transparent: true })); s.visible = false; scene.add(s); animSpritePool.push(s) } // painted animals
+  for (let i = 0; i < 64; i++) { const s = new THREE.Sprite(new THREE.SpriteMaterial({ transparent: true })); s.visible = false; scene.add(s); personSpritePool.push(s) } // painted people
   const stemGeo = new THREE.CylinderGeometry(0.04, 0.05, 0.4, 5), berryGeo = new THREE.SphereGeometry(0.16, 7, 6)
   const stemMat = new THREE.MeshLambertMaterial({ color: 0x4f8a3a }), berryMat = new THREE.MeshLambertMaterial({ color: 0xd8472f })
   for (let i = 0; i < 56; i++) { // a little plant: green stem + a fruit on top (was a bare red ball)
@@ -261,6 +262,17 @@ function appear3D(c: Creature) {
   const greyT = Math.max(0, Math.min(1, (ay - 46) / 32))
   const hair = greyT > 0.62 ? 0xd6cfc4 : greyT > 0.28 ? 0x9a948a : HAIR3D[Math.floor(r(2) * HAIR3D.length)]
   return { skin: SKIN3D[Math.floor(r(1) * SKIN3D.length)], hair, clothH: ((g.hue % 360) + 360) % 360 / 360, ay }
+}
+const personSpritePool: THREE.Sprite[] = [] // painted character billboards (high mode)
+// pick the painted person sprite for this creature (only prehistoric art exists for now → other eras use the rig)
+function personArtName(c: Creature, era: number): string | null {
+  if (era > 1) return null
+  const ay = c.ageDays / 360, sex = Math.abs(c.id) % 2 ? "m" : "f", cat = c.profCat
+  if (ay < 14) return "prehist_nino"
+  if (ay > 60) return sex === "f" ? "prehist_anciana_f_adulto" : "prehist_anciano_m_adulto"
+  if (cat === "defensa") return "prehist_guerrero_m_adulto"
+  if (cat === "saber" || cat === "enseñanza" || cat === "espíritu" || cat === "salud") return "prehist_erudito_m_adulto"
+  return sex === "f" ? "prehist_aldeano_f_adulto" : "prehist_aldeano_m_adulto"
 }
 function buildRig(grp: THREE.Group) {
   const legMat = new THREE.MeshLambertMaterial({ color: 0x473828 })
@@ -520,6 +532,7 @@ export function renderInterior(world: World, me: Creature, h: House, rx: number,
   if (intFor !== h || !intGroup) buildInterior(world, h)
   if (town) town.visible = false; intGroup!.visible = true
   for (const lb of labelPool) lb.visible = false // no floating names indoors
+  for (const s of personSpritePool) s.visible = false // interior uses the rig, hide outdoor person sprites
   let i = 0
   const put = (c: Creature, x: number, z: number, scale: number, ringCol: number) => {
     const slot = modelPool[i] // interior uses the SAME procedural villagers as outside (no more billboards)
@@ -538,7 +551,7 @@ export function renderInterior(world: World, me: Creature, h: House, rx: number,
   put(me, rx, rz, 2.0, 0x46c8ff)
   const occ = world.creatures.filter((c) => c.home === h && c !== me && !c.isAvatar).slice(0, 6)
   occ.forEach((c, k) => put(c, -RW / 2 + 2 + (k % 3) * 2.5, -RD / 2 + 2 + Math.floor(k / 3) * 2.5, 1.5, relColor(me, c)))
-  for (; i < pool.length; i++) { pool[i].visible = false; rings[i].visible = false; shadows[i].visible = false; modelPool[i].visible = false; labelPool[i].visible = false }
+  for (; i < pool.length; i++) { pool[i].visible = false; rings[i].visible = false; shadows[i].visible = false; modelPool[i].visible = false; labelPool[i].visible = false; personSpritePool[i].visible = false; animSpritePool[i] && (animSpritePool[i].visible = false) }
   const cp = Math.cos(pitch)
   const cx = rx - Math.cos(yaw) * 4.2, cy = 3.0, cz = rz - Math.sin(yaw) * 4.2 // a touch further back so you see the room
   camera.position.set(cx, cy, cz); camera.lookAt(rx + Math.cos(yaw) * 2 * cp, 1.4 + Math.sin(pitch) * 8, rz + Math.sin(yaw) * 2 * cp)
@@ -633,12 +646,24 @@ export function render3D(world: World, me: Creature, yaw: number, pitch = 0, dis
     if (!slot.userData.rig) buildRig(slot)
     const rig = slot.userData.rig as { legMat: THREE.MeshLambertMaterial; clothMat: THREE.MeshLambertMaterial; skinMat: THREE.MeshLambertMaterial; hairMat: THREE.MeshLambertMaterial; ll: THREE.Mesh; rl: THREE.Mesh; la: THREE.Mesh; ra: THREE.Mesh }
     const ap = appear3D(c)
+    const ageScale = ap.ay < 2 ? 0.42 : ap.ay < 13 ? 0.62 : ap.ay < 19 ? 0.84 : ap.ay > 60 ? 0.94 : 1
+    const artName = gfxHigh ? personArtName(c, world.era) : null
+    if (artName) { // PAINTED person sprite (faces left/right via x-flip), instead of the procedural rig
+      slot.visible = false; pool[i].visible = false; personSpritePool[i].visible = true
+      const ps = personSpritePool[i]; ps.material.map = artTexPlain(artName, "people")
+      const asp = artAspect.get(artName) ?? 0.45, h = scale * ageScale * 1.75, mv = Math.abs(c.vx) + Math.abs(c.vy) > 0.12
+      ps.scale.set((c.vx > 0.04 ? -1 : 1) * h * asp, h, 1)
+      ps.position.set(c.x * S, h / 2 + (mv ? Math.abs(Math.sin(walkT * 8 + c.id)) * 0.08 : 0), c.y * S)
+      const lb2 = labelPool[i]
+      if (i < 14) { const nm = c.isAvatar ? "vos" : c.name; if (lb2.userData.name !== nm) { lb2.material.map?.dispose(); lb2.material.map = makeLabel(nm); lb2.material.needsUpdate = true; lb2.userData.name = nm } lb2.visible = true; lb2.position.set(c.x * S, h + 0.5, c.y * S) } else lb2.visible = false
+      i++; return
+    }
+    personSpritePool[i].visible = false
     rig.skinMat.color.setHex(ap.skin); rig.hairMat.color.setHex(ap.hair); rig.clothMat.color.setHSL(ap.clothH, 0.42, 0.54)
     pool[i].visible = false; slot.visible = true
     const moving = Math.abs(c.vx) + Math.abs(c.vy) > 0.12
     const ph = walkT * 9 + c.id
     const bob = moving ? Math.abs(Math.sin(ph)) * 0.06 : Math.sin(walkT * 1.6 + c.id) * 0.015
-    const ageScale = ap.ay < 2 ? 0.42 : ap.ay < 13 ? 0.62 : ap.ay < 19 ? 0.84 : ap.ay > 60 ? 0.94 : 1
     slot.position.set(c.x * S, bob, c.y * S); slot.scale.setScalar(scale * ageScale)
     if (moving) slot.rotation.y = -Math.atan2(c.vy, c.vx) - Math.PI / 2
     const swing = moving ? Math.sin(ph) * 0.35 : 0 // legs + arms swing in opposition, a real walk
@@ -653,7 +678,7 @@ export function render3D(world: World, me: Creature, yaw: number, pitch = 0, dis
   }
   place(me, 2.0, 0x46c8ff) // you — cyan ring
   for (const { c } of near) { if (i >= pool.length) break; place(c, 1.3 + c.genome.size * 0.45, relColor(me, c)) }
-  for (; i < pool.length; i++) { pool[i].visible = false; rings[i].visible = false; shadows[i].visible = false; modelPool[i].visible = false; labelPool[i].visible = false }
+  for (; i < pool.length; i++) { pool[i].visible = false; rings[i].visible = false; shadows[i].visible = false; modelPool[i].visible = false; labelPool[i].visible = false; personSpritePool[i].visible = false; animSpritePool[i] && (animSpritePool[i].visible = false) }
 
   // DYNAMIC PROPS — the same wild animals + harvestable crops you see in 2D, now in 3D (nearby only, no per-frame sort)
   ensureProps()
