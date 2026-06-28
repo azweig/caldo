@@ -205,8 +205,8 @@ function ensureProps() {
   }
   for (let i = 0; i < 16; i++) { const s = new THREE.Sprite(new THREE.SpriteMaterial({ transparent: true })); s.visible = false; scene.add(s); animSpritePool.push(s) } // painted animals
   for (let i = 0; i < 64; i++) { const s = new THREE.Sprite(new THREE.SpriteMaterial({ transparent: true })); s.visible = false; scene.add(s); personSpritePool.push(s) } // painted people
-  const dGeo = new THREE.RingGeometry(1.0, 1.8, 22)
-  for (let i = 0; i < 28; i++) { const m = new THREE.Mesh(dGeo, new THREE.MeshBasicMaterial({ transparent: true, opacity: 0.55, side: THREE.DoubleSide })); m.rotation.x = -Math.PI / 2; m.visible = false; scene.add(m); doorMarkers.push(m) } // door entry markers
+  const dGeo = new THREE.SphereGeometry(0.9, 12, 10)
+  for (let i = 0; i < 28; i++) { const m = new THREE.Mesh(dGeo, new THREE.MeshBasicMaterial({ transparent: true, opacity: 0.92, fog: false })); m.visible = false; scene.add(m); doorMarkers.push(m) } // floating entry markers above houses
   const stemGeo = new THREE.CylinderGeometry(0.04, 0.05, 0.4, 5), berryGeo = new THREE.SphereGeometry(0.16, 7, 6)
   const stemMat = new THREE.MeshLambertMaterial({ color: 0x4f8a3a }), berryMat = new THREE.MeshLambertMaterial({ color: 0xd8472f })
   for (let i = 0; i < 56; i++) { // a little plant: green stem + a fruit on top (was a bare red ball)
@@ -662,9 +662,10 @@ export function render3D(world: World, me: Creature, yaw: number, pitch = 0, dis
     let di = 0
     for (const h of world.houses) {
       if (di >= doorMarkers.length) break
-      const doorX = (h.x + h.w / 2) * S, doorZ = (h.y + h.h) * S, ddx = doorX - me.x * S, ddz = doorZ - me.y * S
-      if (ddx * ddx + ddz * ddz > 75 * 75) continue
-      const m = doorMarkers[di++]; m.visible = true; (m.material as THREE.MeshBasicMaterial).color.setHex(entryColor(me, h, world)); m.position.set(doorX, 0.08, doorZ)
+      const cx2 = (h.x + h.w / 2) * S, cz2 = (h.y + h.h / 2) * S, ddx = cx2 - me.x * S, ddz = cz2 - me.y * S
+      if (ddx * ddx + ddz * ddz > 90 * 90) continue
+      const m = doorMarkers[di++]; m.visible = true; (m.material as THREE.MeshBasicMaterial).color.setHex(entryColor(me, h, world))
+      m.position.set(cx2, 9 + Math.sin(walkT * 2 + h.x) * 0.3, cz2) // float above the house, gentle bob
     }
     for (; di < doorMarkers.length; di++) doorMarkers[di].visible = false
   } else for (const m of doorMarkers) m.visible = false
