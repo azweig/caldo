@@ -821,9 +821,14 @@ function houseAtDoor(c: Creature): House | null {
 }
 function mayEnter(c: Creature, h: House): boolean {
   if (c.home === h) return true // your own home
+  if (h.landlord === c.id) return true // you own it (landlord)
   const occ = world.creatures.filter((o) => o.home === h && !o.isAvatar && isMature(o))
-  if (!occ.length) return true // nobody home
-  return occ.some((o) => o.surname === c.surname || o.partner === c.id) // family or partner lets you in
+  if (!occ.length) return true // nobody home → walk in
+  return occ.some((o) => // an occupant lets you in if: family / partner / they KNOW you (relationship or have spoken of you)
+    o.surname === c.surname ||
+    o.partner === c.id ||
+    (!!o.life && o.life.rels[c.id] !== undefined && o.life.rels[c.id] > -0.2) ||
+    (!!o.social && o.social.some((s) => s.includes(c.name))))
 }
 function enterHouse(h: House) { insideHouse = h; roomX = 0; roomZ = ROOM.D / 2 - 1.2; camYaw3d = -Math.PI / 2 }
 function exitHouse() { const h = insideHouse; insideHouse = null; if (h && possessed) { possessed.x = h.x + h.w / 2; possessed.y = h.y + h.h + 24; camYaw3d = Math.PI / 2 } }
