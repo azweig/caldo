@@ -649,7 +649,7 @@ chatInput.addEventListener("keydown", async (e) => {
     const ctx = `Tu pueblo come de ${foodSystem(world.era)}; es una ${world.gov}${world.monarch ? `, gobernada por ${world.monarch.name} ${world.monarch.surname}` : ""}.`
     const info = { era: eraName(world.era), country: countries[active].name, food: foodSystem(world.era), lang: countries[active].lang }
     const reply = await respond(who, msg, session, eraName(world.era), WRITE_LANG, ctx, info)
-    const h = heard(reply, countries[active].lang)
+    const h = heard(reply, countries[active].lang, possessed ? countries[active].lang : undefined)
     setLine(typing, who.name, h.text, h.tag)
     chatLog.scrollTop = chatLog.scrollHeight
     session.push({ role: "assistant", content: reply })
@@ -887,7 +887,7 @@ function loop() {
       if (d > 46) { mvx = (dx / d) * spd; mvy = (dy / d) * spd } // commute toward where the sim wants them
       else if (night && atHome) { /* asleep at home → still */ }
       else { const a = routinePhase * 2 + c.id; mvx = Math.cos(a) * 0.7; mvy = Math.sin(a * 1.4) * 0.7 } // mill / amble in place once arrived
-      if (possessed) { const px = c.x - possessed.x, py = c.y - possessed.y; if (px * px + py * py < 95 * 95) { mvx *= 0.1; mvy *= 0.1 } } // pause near you so you can talk
+      if (possessed) { const px = c.x - possessed.x, py = c.y - possessed.y; if (px * px + py * py < 45 * 45) { mvx *= 0.5; mvy *= 0.5 } } // only ease off when RIGHT next to you (so they don't freeze in a wide radius)
       c.x += mvx; c.y += mvy; c.vx = mvx; c.vy = mvy
       if (mvx > 0.05) c.facing = 1; else if (mvx < -0.05) c.facing = -1 // face where they walk, in real time
     }
@@ -933,7 +933,7 @@ function loop() {
       if (line && (line.who.x - possessed.x) ** 2 + (line.who.y - possessed.y) ** 2 < OVERHEAR * OVERHEAR) {
         const r = canvas3d.getBoundingClientRect(), p = project3D(line.who.x, line.who.y, r.width, r.height)
         if (p.front) {
-          const hd = heard(line.text, countries[active].lang)
+          const hd = heard(line.text, countries[active].lang, possessed ? countries[active].lang : undefined)
           const we = line.who.life && line.who.life.emoInt > 0.25 ? (EMO as Record<string, string>)[line.who.life.emotion] || "" : ""
           speech3d.textContent = `${we} ${line.who.name}: ${hd.text}`.trim(); speech3d.className = hd.understood ? "" : "foreign"
           speech3d.style.left = `${p.x}px`; speech3d.style.top = `${p.y}px`; speech3d.style.display = "block"; shown = true
@@ -955,7 +955,7 @@ function loop() {
     if (ambient && avatar) {
       const line = ambient.lines[ambient.idx]
       if (line && (line.who.x - avatar.x) ** 2 + (line.who.y - avatar.y) ** 2 < OVERHEAR * OVERHEAR) {
-        const h = heard(line.text, countries[active].lang)
+        const h = heard(line.text, countries[active].lang, possessed ? countries[active].lang : undefined)
         speech.push({ x: line.who.x, y: line.who.y, tag: h.tag, text: h.text, understood: h.understood })
       }
     }

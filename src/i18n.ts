@@ -17,7 +17,8 @@ const CANT = BASE_LANG === "en" ? "⟨you don't understand⟩" : "⟨no entendé
 
 export interface Heard { tag: string; text: string; understood: boolean }
 /** wrap an utterance with its in-world language tag + the comprehension barrier */
-export function heard(text: string, spoken: LangCode): Heard {
-  const understood = spoken === BASE_LANG
+export function heard(text: string, spoken: LangCode, alsoKnown?: LangCode): Heard {
+  // you understand your native tongue (BASE_LANG) AND — when you possess a local — their village's language too
+  const understood = spoken === BASE_LANG || spoken === alsoKnown
   return { tag: `(${langName(spoken)})`, text: understood ? text : CANT, understood }
 }
