@@ -529,6 +529,7 @@ function buildInterior(world: World, h: House) {
 export function renderInterior(world: World, me: Creature, h: House, rx: number, rz: number, yaw: number, pitch: number) {
   if (!ready) return
   if (builtFor !== world || builtEra !== world.era) buildTown(world)
+  ensureProps() // build the sprite pools before the cleanup loop indexes into them
   if (intFor !== h || !intGroup) buildInterior(world, h)
   if (town) town.visible = false; intGroup!.visible = true
   for (const lb of labelPool) lb.visible = false // no floating names indoors
@@ -624,6 +625,7 @@ export function render3D(world: World, me: Creature, yaw: number, pitch = 0, dis
   if (scene.fog) (scene.fog as THREE.Fog).color.setHex(hr < 5 || hr >= 21 ? 0x141d3a : hr < 7 ? 0xc99060 : hr < 18 ? 0xaebdd2 : hr < 20 ? 0xb88a5a : 0x5a4d72)
   if (builtFor !== world || builtEra !== world.era) buildTown(world)
   if (town) town.visible = true; if (intGroup) intGroup.visible = false
+  ensureProps() // must run BEFORE place() — it builds the person/animal sprite pools place() indexes into
 
   // PERF: pick the nearest N by radius-filter (no full filter→map→sort→slice over ~280 creatures every frame).
   // A coarse 600px gate then a partial insertion keeps only what's visible, with no per-frame intermediate arrays.
