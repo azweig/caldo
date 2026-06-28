@@ -115,8 +115,19 @@ canvas3d.addEventListener("mousedown", (e) => { dragging = true; dragX = e.clien
 window.addEventListener("mouseup", (e) => {
   if (dragging && dragDist < 7 && possessed && !insideHouse && !chatting) {
     const r = canvas3d.getBoundingClientRect()
-    const t = pick3D(world, possessed, e.clientX - r.left, e.clientY - r.top, r.width, r.height)
+    const cxp = e.clientX - r.left, cyp = e.clientY - r.top
+    const t = pick3D(world, possessed, cxp, cyp, r.width, r.height)
     if (t) { chatTarget = t; showNpcCard(t) } // click a person → show their card (info + actions)
+    else { // no person under the cursor → maybe a house: pick the nearest house whose centre is closest on screen
+      let best: House | null = null, bd = 120 * 120
+      for (const h of world.houses) {
+        const hdx = h.x + h.w / 2 - possessed.x, hdy = h.y + h.h / 2 - possessed.y
+        if (hdx * hdx + hdy * hdy > 800 * 800) continue
+        const p = project3D(h.x + h.w / 2, h.y + h.h / 2, r.width, r.height); if (!p.front) continue
+        const sd = (p.x - cxp) ** 2 + (p.y - cyp) ** 2; if (sd < bd) { bd = sd; best = h }
+      }
+      if (best) clickHouse(best)
+    }
   }
   dragging = false
 })
@@ -831,6 +842,13 @@ function mayEnter(c: Creature, h: House): boolean {
     (!!o.social && o.social.some((s) => s.includes(c.name))))
 }
 function enterHouse(h: House) { insideHouse = h; roomX = 0; roomZ = ROOM.D / 2 - 1.2; camYaw3d = -Math.PI / 2 }
+let pendingEnter: House | null = null // a house you clicked → walk to its door, then auto-enter
+function clickHouse(h: House) {
+  if (!possessed) return
+  if (!mayEnter(possessed, h)) { flash("🔴 la puerta está cerrada"); pendingEnter = null; return }
+  possessTarget = { x: h.x + h.w / 2, y: h.y + h.h + 22 } // walk to the door
+  pendingEnter = h; flash("🚪 yendo a la casa…")
+}
 function exitHouse() { const h = insideHouse; insideHouse = null; if (h && possessed) { possessed.x = h.x + h.w / 2; possessed.y = h.y + h.h + 24; camYaw3d = Math.PI / 2 } }
 
 function loop() {
@@ -851,6 +869,10 @@ function loop() {
     if (!blockedByHouse(me.x, ny, me)) me.y = ny; else me.vy *= 0.2
     if (me.vx > 0.05) me.facing = 1; else if (me.vx < -0.05) me.facing = -1
     me.x = clamp(me.x, 60, WORLD_W - 60); me.y = clamp(me.y, 60, WORLD_H - 60)
+    if (pendingEnter && possessed === me) { // arrived at a clicked house's door → enter
+      const hh = pendingEnter, ex = hh.x + hh.w / 2 - me.x, ey = hh.y + hh.h - me.y
+      if (ex * ex + ey * ey < 70 * 70) { possessTarget = null; if (mayEnter(me, hh)) { enterHouse(hh); flash("entraste 🏠") } else flash("🔴 cerrada"); pendingEnter = null }
+    }
   }
   if (!paused) {
     const rate = possessed ? POSSESS_SPEEDS[possessSpeedIdx] : SCALES[scaleIndex].rate // 3D = near real-time, capped 5x
