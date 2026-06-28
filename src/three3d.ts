@@ -264,6 +264,27 @@ function appear3D(c: Creature) {
   return { skin: SKIN3D[Math.floor(r(1) * SKIN3D.length)], hair, clothH: ((g.hue % 360) + 360) % 360 / 360, ay }
 }
 const personSpritePool: THREE.Sprite[] = [] // painted character billboards (high mode)
+// slice a horizontal 4-frame walk sheet into 4 shared textures (so each villager can show a different frame)
+const walkCache = new Map<string, THREE.Texture[]>()
+const HAS_BLINK = new Set(["prehist_aldeano_m_adulto", "prehist_aldeano_f_adulto"]) // which idles have a blink frame
+function walkFrames(name: string): THREE.Texture[] | null {
+  const fr = walkCache.get(name)
+  if (fr) return fr.length ? fr : null
+  walkCache.set(name, []) // mark loading
+  const img = new Image()
+  img.onload = () => {
+    const fw = Math.floor(img.width / 4), out: THREE.Texture[] = []
+    for (let k = 0; k < 4; k++) {
+      const cv = document.createElement("canvas"); cv.width = fw; cv.height = img.height
+      cv.getContext("2d")!.drawImage(img, k * fw, 0, fw, img.height, 0, 0, fw, img.height)
+      const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace; out.push(t)
+    }
+    walkCache.set(name, out); artAspect.set(name, fw / img.height) // single-frame aspect
+  }
+  img.onerror = () => walkCache.set(name, []) // no sheet → stay on idle
+  img.src = `/art/people/${name}.png`
+  return null
+}
 // pick the painted person sprite for this creature (only prehistoric art exists for now → other eras use the rig)
 function personArtName(c: Creature, era: number): string | null {
   if (era > 1) return null
@@ -652,10 +673,14 @@ export function render3D(world: World, me: Creature, yaw: number, pitch = 0, dis
     const artName = gfxHigh ? personArtName(c, world.era) : null
     if (artName) { // PAINTED person sprite (faces left/right via x-flip), instead of the procedural rig
       slot.visible = false; pool[i].visible = false; personSpritePool[i].visible = true
-      const ps = personSpritePool[i]; ps.material.map = artTexPlain(artName, "people")
-      const asp = artAspect.get(artName) ?? 0.45, h = scale * ageScale * 1.75, mv = Math.abs(c.vx) + Math.abs(c.vy) > 0.12
+      const ps = personSpritePool[i], mv = Math.abs(c.vx) + Math.abs(c.vy) > 0.12
+      let tex2 = artTexPlain(artName, "people"), aspName = artName // idle
+      if (mv) { const fr = walkFrames(artName + "_walk"); if (fr) { tex2 = fr[Math.floor(walkT * 6 + c.id) % 4]; aspName = artName + "_walk" } } // walk cycle
+      else if (HAS_BLINK.has(artName) && Math.sin(walkT * 0.55 + c.id * 2.3) > 0.97) tex2 = artTexPlain(artName + "_blink", "people") // occasional blink
+      ps.material.map = tex2
+      const asp = artAspect.get(aspName) ?? 0.45, h = scale * ageScale * 1.75
       ps.scale.set((c.vx > 0.04 ? -1 : 1) * h * asp, h, 1)
-      ps.position.set(c.x * S, h / 2 + (mv ? Math.abs(Math.sin(walkT * 8 + c.id)) * 0.08 : 0), c.y * S)
+      ps.position.set(c.x * S, h / 2 + (mv ? Math.abs(Math.sin(walkT * 8 + c.id)) * 0.05 : 0), c.y * S)
       const lb2 = labelPool[i]
       if (i < 14) { const nm = c.isAvatar ? "vos" : c.name; if (lb2.userData.name !== nm) { lb2.material.map?.dispose(); lb2.material.map = makeLabel(nm); lb2.material.needsUpdate = true; lb2.userData.name = nm } lb2.visible = true; lb2.position.set(c.x * S, h + 0.5, c.y * S) } else lb2.visible = false
       i++; return
