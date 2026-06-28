@@ -519,6 +519,17 @@ function buildInterior(world: World, h: House) {
   if (intGroup) { scene.remove(intGroup); intGroup.traverse((o) => { const m = o as THREE.Mesh; m.geometry?.dispose(); disposeMat(m.material) }) }
   intGroup = new THREE.Group()
   const E = eraTex(world.era)
+  if (gfxHigh) { // PAINTED interior: a big illustrated room scene as the back wall + a warm floor (furniture is in the art)
+    const era = world.era
+    const name = era <= 1 ? "interior_prehist" : era <= 3 ? "interior_bronze" : era <= 5 ? "interior_iron" : era <= 6 ? "interior_medieval" : era <= 8 ? "interior_early" : era <= 12 ? "interior_industrial" : "interior_future"
+    const bw = 22, bh = bw / 1.79
+    const back = new THREE.Mesh(new THREE.PlaneGeometry(bw, bh), new THREE.MeshBasicMaterial({ map: artTexPlain(name, "interiors") }))
+    back.position.set(0, bh / 2 - 0.5, -RD / 2 - 1.5); intGroup.add(back)
+    const fl = new THREE.Mesh(new THREE.PlaneGeometry(bw, RD + 6), new THREE.MeshLambertMaterial({ color: 0x6a5238 }))
+    fl.rotation.x = -Math.PI / 2; fl.position.set(0, 0, -RD / 2 - 1.5 + (RD + 6) / 2); intGroup.add(fl)
+    const fire = new THREE.PointLight(0xffb060, 1.1, 30); fire.position.set(0, 4, -2); intGroup.add(fire) // warm glow
+    scene.add(intGroup); intFor = h; return
+  }
   const floor = new THREE.Mesh(new THREE.PlaneGeometry(RW, RD), new THREE.MeshLambertMaterial({ map: tex(E.ground === "ground_grass" ? "ground_dirt" : E.ground, 3) }))
   floor.rotation.x = -Math.PI / 2; intGroup.add(floor)
   const ceil = new THREE.Mesh(new THREE.PlaneGeometry(RW, RD), new THREE.MeshLambertMaterial({ color: 0x17130d }))
@@ -557,6 +568,16 @@ export function renderInterior(world: World, me: Creature, h: House, rx: number,
   for (const s of personSpritePool) s.visible = false // interior uses the rig, hide outdoor person sprites
   let i = 0
   const put = (c: Creature, x: number, z: number, scale: number, ringCol: number) => {
+    const artName = gfxHigh ? personArtName(c, world.era) : null
+    if (artName) { // painted person sprite standing in the illustrated room
+      modelPool[i].visible = false; const ps = personSpritePool[i]; ps.visible = true; ps.material.map = artTexPlain(artName, "people")
+      const asp = artAspect.get(artName) ?? 0.45, h2 = scale * 1.6
+      ps.scale.set(h2 * asp, h2, 1); ps.position.set(x, h2 / 2, z)
+      const r2 = rings[i]; r2.visible = true; (r2.material as THREE.MeshBasicMaterial).color.setHex(ringCol); r2.position.set(x, 0.05, z); r2.scale.setScalar(scale * 0.5)
+      shadows[i].visible = true; shadows[i].position.set(x, 0.03, z); shadows[i].scale.setScalar(scale * 0.42)
+      i++; return
+    }
+    personSpritePool[i] && (personSpritePool[i].visible = false)
     const slot = modelPool[i] // interior uses the SAME procedural villagers as outside (no more billboards)
     if (!slot.userData.rig) buildRig(slot)
     const rig = slot.userData.rig as { skinMat: THREE.MeshLambertMaterial; hairMat: THREE.MeshLambertMaterial; clothMat: THREE.MeshLambertMaterial; ll: THREE.Mesh; rl: THREE.Mesh; la: THREE.Mesh; ra: THREE.Mesh }
@@ -574,9 +595,13 @@ export function renderInterior(world: World, me: Creature, h: House, rx: number,
   const occ = world.creatures.filter((c) => c.home === h && c !== me && !c.isAvatar).slice(0, 6)
   occ.forEach((c, k) => put(c, -RW / 2 + 2 + (k % 3) * 2.5, -RD / 2 + 2 + Math.floor(k / 3) * 2.5, 1.5, relColor(me, c)))
   for (; i < pool.length; i++) { pool[i].visible = false; rings[i].visible = false; shadows[i].visible = false; modelPool[i].visible = false; labelPool[i].visible = false; personSpritePool[i].visible = false; animSpritePool[i] && (animSpritePool[i].visible = false) }
-  const cp = Math.cos(pitch)
-  const cx = rx - Math.cos(yaw) * 4.2, cy = 3.0, cz = rz - Math.sin(yaw) * 4.2 // a touch further back so you see the room
-  camera.position.set(cx, cy, cz); camera.lookAt(rx + Math.cos(yaw) * 2 * cp, 1.4 + Math.sin(pitch) * 8, rz + Math.sin(yaw) * 2 * cp)
+  if (gfxHigh) { // fixed stage camera framing the painted room + the people in front of it
+    camera.position.set(rx * 0.35, 4.6, 6.5); camera.lookAt(rx * 0.25, 3.6, -6)
+  } else {
+    const cp = Math.cos(pitch)
+    const cx = rx - Math.cos(yaw) * 4.2, cy = 3.0, cz = rz - Math.sin(yaw) * 4.2 // a touch further back so you see the room
+    camera.position.set(cx, cy, cz); camera.lookAt(rx + Math.cos(yaw) * 2 * cp, 1.4 + Math.sin(pitch) * 8, rz + Math.sin(yaw) * 2 * cp)
+  }
   renderer.render(scene, camera)
 }
 export const ROOM = { W: RW, D: RD }
