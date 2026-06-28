@@ -3,7 +3,7 @@
 // possessed character in third person. The simulation stays in the 2D engine; this only renders.
 
 import * as THREE from "three"
-import { World, Creature, House, WORLD_W, WORLD_H, BLOCK, seasonOf } from "./world"
+import { World, Creature, House, WORLD_W, WORLD_H, BLOCK, seasonOf, isMature } from "./world"
 import { SPECIES } from "./animals"
 
 const S = 0.045 // world px → 3D units
@@ -205,6 +205,8 @@ function ensureProps() {
   }
   for (let i = 0; i < 16; i++) { const s = new THREE.Sprite(new THREE.SpriteMaterial({ transparent: true })); s.visible = false; scene.add(s); animSpritePool.push(s) } // painted animals
   for (let i = 0; i < 64; i++) { const s = new THREE.Sprite(new THREE.SpriteMaterial({ transparent: true })); s.visible = false; scene.add(s); personSpritePool.push(s) } // painted people
+  const dGeo = new THREE.RingGeometry(1.0, 1.8, 22)
+  for (let i = 0; i < 28; i++) { const m = new THREE.Mesh(dGeo, new THREE.MeshBasicMaterial({ transparent: true, opacity: 0.55, side: THREE.DoubleSide })); m.rotation.x = -Math.PI / 2; m.visible = false; scene.add(m); doorMarkers.push(m) } // door entry markers
   const stemGeo = new THREE.CylinderGeometry(0.04, 0.05, 0.4, 5), berryGeo = new THREE.SphereGeometry(0.16, 7, 6)
   const stemMat = new THREE.MeshLambertMaterial({ color: 0x4f8a3a }), berryMat = new THREE.MeshLambertMaterial({ color: 0xd8472f })
   for (let i = 0; i < 56; i++) { // a little plant: green stem + a fruit on top (was a bare red ball)
@@ -264,6 +266,16 @@ function appear3D(c: Creature) {
   return { skin: SKIN3D[Math.floor(r(1) * SKIN3D.length)], hair, clothH: ((g.hue % 360) + 360) % 360 / 360, ay }
 }
 const personSpritePool: THREE.Sprite[] = [] // painted character billboards (high mode)
+const doorMarkers: THREE.Mesh[] = [] // coloured discs at house doors: green=enter · yellow=ask · red=no
+// what colour is this door for the possessed creature? mirrors mayEnter's rules
+function entryColor(me: Creature, h: House, w: World): number {
+  if (me.home === h || h.landlord === me.id) return 0x46e055 // green — yours
+  const occ = w.creatures.filter((o) => !o.isAvatar && o.home === h && isMature(o))
+  if (!occ.length) return 0x46e055 // empty → walk in
+  if (occ.some((o) => o.surname === me.surname || o.partner === me.id)) return 0x46e055 // family
+  if (occ.some((o) => (!!o.life && o.life.rels[me.id] !== undefined && o.life.rels[me.id] > -0.2) || (!!o.social && o.social.some((s) => s.includes(me.name))))) return 0xe8d24a // yellow — they know you
+  return 0xe05050 // red — strangers won't open
+}
 // slice a horizontal 4-frame walk sheet into 4 shared textures (so each villager can show a different frame)
 const walkCache = new Map<string, THREE.Texture[]>()
 const HAS_BLINK = new Set(["prehist_aldeano_m_adulto", "prehist_aldeano_f_adulto"]) // which idles have a blink frame
@@ -646,6 +658,16 @@ export function render3D(world: World, me: Creature, yaw: number, pitch = 0, dis
   for (const c of _clouds) { c.s.position.x += c.v; if (c.s.position.x > WWU * 1.5) c.s.position.x = -WWU * 0.5 } // clouds drift
   if (_water) { _water.offset.x = Math.sin(walkT * 0.25) * 0.03; _water.offset.y = walkT * 0.012 } // water shimmer
   if (_backdrop) { _backdrop.position.x = me.x * S; _backdrop.position.z = me.y * S } // horizon follows you
+  if (gfxHigh) { // coloured entry markers at nearby house doors (green=enter, yellow=ask, red=no)
+    let di = 0
+    for (const h of world.houses) {
+      if (di >= doorMarkers.length) break
+      const doorX = (h.x + h.w / 2) * S, doorZ = (h.y + h.h) * S, ddx = doorX - me.x * S, ddz = doorZ - me.y * S
+      if (ddx * ddx + ddz * ddz > 75 * 75) continue
+      const m = doorMarkers[di++]; m.visible = true; (m.material as THREE.MeshBasicMaterial).color.setHex(entryColor(me, h, world)); m.position.set(doorX, 0.08, doorZ)
+    }
+    for (; di < doorMarkers.length; di++) doorMarkers[di].visible = false
+  } else for (const m of doorMarkers) m.visible = false
   if (gfxHigh) { // butterflies by day / fireflies by night + birds crossing
     ensureFly(); const hh = (world.clockMinutes % 1440) / 60, night = hh < 6 || hh >= 20, cx = me.x * S, cz = me.y * S
     for (let i = 0; i < flyPool.length; i++) {
