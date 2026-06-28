@@ -692,12 +692,11 @@ function driveControlled(me: Creature) {
     if (left) camYaw3d -= 0.05
     if (right) camYaw3d += 0.05
     const fwd = (up ? 1 : 0) - (down ? 1 : 0)
-    if (insideHouse) { // moving inside a room (local coords); walk out the front door to leave
+    if (insideHouse) { // walk around the room (local coords); use the 🚪 Salir button to leave (no accidental exits)
       me.vx = me.vy = 0
       if (fwd) {
-        roomX = clamp(roomX + Math.cos(camYaw3d) * fwd * 0.26, -ROOM.W / 2 + 0.6, ROOM.W / 2 - 0.6)
-        roomZ = clamp(roomZ + Math.sin(camYaw3d) * fwd * 0.26, -ROOM.D / 2 + 0.6, ROOM.D / 2 - 0.6)
-        if (roomZ > ROOM.D / 2 - 0.75 && Math.abs(roomX) < 1.1) exitHouse()
+        roomX = clamp(roomX + Math.cos(camYaw3d) * fwd * 0.22, -ROOM.W / 2 + 0.6, ROOM.W / 2 - 0.6)
+        roomZ = clamp(roomZ + Math.sin(camYaw3d) * fwd * 0.22, -ROOM.D / 2 + 0.6, ROOM.D / 2 - 0.6)
       }
       return
     }
@@ -841,7 +840,7 @@ function mayEnter(c: Creature, h: House): boolean {
     (!!o.life && o.life.rels[c.id] !== undefined && o.life.rels[c.id] > -0.2) ||
     (!!o.social && o.social.some((s) => s.includes(c.name))))
 }
-function enterHouse(h: House) { insideHouse = h; roomX = 0; roomZ = ROOM.D / 2 - 1.2; camYaw3d = -Math.PI / 2 }
+function enterHouse(h: House) { insideHouse = h; roomX = 0; roomZ = 0; camYaw3d = -Math.PI / 2 } // start centred, facing the painted wall
 let pendingEnter: House | null = null // a house you clicked → walk to its door, then auto-enter
 function clickHouse(h: House) {
   if (!possessed) return

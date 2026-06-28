@@ -607,8 +607,10 @@ export function renderInterior(world: World, me: Creature, h: House, rx: number,
   const occ = world.creatures.filter((c) => c.home === h && c !== me && !c.isAvatar).slice(0, 6)
   occ.forEach((c, k) => put(c, -RW / 2 + 2 + (k % 3) * 2.5, -RD / 2 + 2 + Math.floor(k / 3) * 2.5, 1.5, relColor(me, c)))
   for (; i < pool.length; i++) { pool[i].visible = false; rings[i].visible = false; shadows[i].visible = false; modelPool[i].visible = false; labelPool[i].visible = false; personSpritePool[i].visible = false; animSpritePool[i] && (animSpritePool[i].visible = false) }
-  if (gfxHigh) { // fixed stage camera framing the painted room + the people in front of it
-    camera.position.set(rx * 0.35, 4.6, 6.5); camera.lookAt(rx * 0.25, 3.6, -6)
+  if (gfxHigh) { // orbit the painted room: A/D (yaw) turns the view, the painted wall stays the focus
+    const ccx = 0, ccz = -2.5, dist = 7.5 // room centre
+    camera.position.set(ccx - Math.cos(yaw) * dist, 4.6, ccz - Math.sin(yaw) * dist)
+    camera.lookAt(ccx, 3.4, ccz)
   } else {
     const cp = Math.cos(pitch)
     const cx = rx - Math.cos(yaw) * 4.2, cy = 3.0, cz = rz - Math.sin(yaw) * 4.2 // a touch further back so you see the room
