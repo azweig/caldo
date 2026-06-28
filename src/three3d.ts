@@ -102,10 +102,20 @@ function artTex(artName: string, fallback: string, repeat: number): THREE.Textur
 }
 // plain illustrated texture (no tiling) for backdrops/sprites; tracks aspect ratio for correct sprite proportions
 const artAspect = new Map<string, number>()
-function artTexPlain(artName: string): THREE.Texture {
-  const key = `artp:${artName}`
+function artTexPlain(artName: string, dir = "scene"): THREE.Texture {
+  const key = `artp:${dir}:${artName}`
   let t = texCache.get(key)
-  if (!t) { t = loader.load(`/art/scene/${artName}.png`, (tx) => { const im = tx.image as { width: number; height: number } | undefined; if (im?.width) artAspect.set(artName, im.width / im.height) }); t.colorSpace = THREE.SRGBColorSpace; texCache.set(key, t) }
+  if (!t) { t = loader.load(`/art/${dir}/${artName}.png`, (tx) => { const im = tx.image as { width: number; height: number } | undefined; if (im?.width) artAspect.set(artName, im.width / im.height) }); t.colorSpace = THREE.SRGBColorSpace; texCache.set(key, t) }
+  return t
+}
+// painted wall/roof texture from /art/tex (high mode), tiled, with onError fallback to the procedural /tex one
+function artWallTex(name: string): THREE.Texture {
+  const key = `artw:${name}`
+  let t = texCache.get(key)
+  if (!t) {
+    t = loader.load(`/art/tex/${name}.png`, undefined, undefined, () => { const f = tex(name, 2); t!.image = f.image; t!.needsUpdate = true })
+    t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(2, 2); t.colorSpace = THREE.SRGBColorSpace; texCache.set(key, t)
+  }
   return t
 }
 
@@ -142,7 +152,8 @@ function disposeMat(mat: THREE.Material | THREE.Material[] | undefined): void {
   for (const m of arr) if (m && !shared.has(m)) m.dispose()
 }
 function matFor(name: string): THREE.MeshLambertMaterial {
-  let m = matCache.get(name); if (!m) { m = new THREE.MeshLambertMaterial({ map: tex(name, 2) }); matCache.set(name, m) }
+  const key = gfxHigh ? "art:" + name : name // high mode uses the hand-painted wall/roof textures
+  let m = matCache.get(key); if (!m) { m = new THREE.MeshLambertMaterial({ map: gfxHigh ? artWallTex(name) : tex(name, 2) }); matCache.set(key, m) }
   return m
 }
 function eraWalls(era: number): string[] {
@@ -179,7 +190,7 @@ const meshAt = (geo: THREE.BufferGeometry, mat: THREE.Material, x: number, y: nu
 // pools for the DYNAMIC props (they move/spawn) so 3D shows the same wild animals + harvestable crops as 2D
 const animPool: THREE.Group[] = []
 const animSpritePool: THREE.Sprite[] = []
-const ANIM_ART: Record<string, string> = { ciervo: "animal_deer", conejo: "animal_rabbit" } // species → painted sprite (rest fall back to the low-poly cube)
+const ANIM_ART: Record<string, string> = { ciervo: "animal_deer", conejo: "animal_rabbit", lobo: "animal_wolf", oso: "animal_bear", oveja: "animal_sheep", cabra: "animal_goat", vaca: "animal_cow", caballo: "animal_horse", perro: "animal_dog" } // species → painted sprite
 const foodPool: THREE.Group[] = []
 function ensureProps() {
   if (animPool.length) return
