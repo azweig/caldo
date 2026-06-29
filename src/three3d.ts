@@ -278,6 +278,7 @@ function entryColor(me: Creature, h: House, w: World): number {
 }
 // slice a horizontal 4-frame walk sheet into 4 shared textures (so each villager can show a different frame)
 const walkCache = new Map<string, THREE.Texture[]>()
+const WALK_N = 16 // frames per walk sheet (interpolated from 4 originals to 16 for smooth motion)
 const HAS_BLINK = new Set(["prehist_aldeano_m_adulto", "prehist_aldeano_f_adulto"]) // which idles have a blink frame
 function walkFrames(name: string): THREE.Texture[] | null {
   const fr = walkCache.get(name)
@@ -285,8 +286,8 @@ function walkFrames(name: string): THREE.Texture[] | null {
   walkCache.set(name, []) // mark loading
   const img = new Image()
   img.onload = () => {
-    const fw = Math.floor(img.width / 4), out: THREE.Texture[] = []
-    for (let k = 0; k < 4; k++) {
+    const fw = Math.floor(img.width / WALK_N), out: THREE.Texture[] = []
+    for (let k = 0; k < WALK_N; k++) {
       const cv = document.createElement("canvas"); cv.width = fw; cv.height = img.height
       cv.getContext("2d")!.drawImage(img, k * fw, 0, fw, img.height, 0, 0, fw, img.height)
       const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace; out.push(t)
@@ -725,7 +726,7 @@ export function render3D(world: World, me: Creature, yaw: number, pitch = 0, dis
       slot.visible = false; pool[i].visible = false; personSpritePool[i].visible = true
       const ps = personSpritePool[i], mv = Math.abs(c.vx) + Math.abs(c.vy) > 0.12
       let tex2 = artTexPlain(artName, "people"), aspName = artName // idle
-      if (mv) { const fr = walkFrames(artName + "_walk"); if (fr) { tex2 = fr[Math.floor(walkT * 6 + c.id) % 4]; aspName = artName + "_walk" } } // walk cycle
+      if (mv) { const fr = walkFrames(artName + "_walk"); if (fr) { tex2 = fr[Math.floor(walkT * 22 + c.id) % WALK_N]; aspName = artName + "_walk" } } // walk cycle (16 frames)
       else if (HAS_BLINK.has(artName) && Math.sin(walkT * 0.55 + c.id * 2.3) > 0.97) tex2 = artTexPlain(artName + "_blink", "people") // occasional blink
       ps.material.map = tex2
       const asp = artAspect.get(aspName) ?? 0.45, h = scale * ageScale * 1.75
